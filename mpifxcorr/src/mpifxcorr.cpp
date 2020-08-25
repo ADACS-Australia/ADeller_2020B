@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2019 by Adam Deller                                *
+ *   Copyright (C) 2006-2020 by Adam Deller                                *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mpifxcorr.cpp 9305 2019-11-15 03:25:26Z AdamDeller $
+// $Id: mpifxcorr.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mpifxcorr.cpp $
-// $LastChangedRevision: 9305 $
-// $Author: AdamDeller $
-// $LastChangedDate: 2019-11-15 14:25:26 +1100 (Fri, 15 Nov 2019) $
+// $LastChangedRevision: 9674 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 //
 //============================================================================
 
@@ -45,7 +45,6 @@
 #include "vdiffile.h"
 #include "vdifnetwork.h"
 #include "vdiffake.h"
-#include "vdifmark5.h"
 #ifdef HAVE_MARK6SG
 #include "mark5bmark6_datastream.h"
 #include "vdifmark6_datastream.h"
@@ -441,9 +440,6 @@ int main(int argc, char *argv[])
         stream = new Mark5BMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening Mark5BMark6DataStream" << endl;
 #endif
-      } else if(config->isVDIFMark5(datastreamnum)) {
-        stream = new VDIFMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
-        cverbose << startl << "Opening VDIFMark5DataStream" << endl;
       } else if(config->isVDIFNetwork(datastreamnum)) {
         stream = new VDIFNetworkDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
         cverbose << startl << "Opening VDIFNetworkDataStream" << endl;

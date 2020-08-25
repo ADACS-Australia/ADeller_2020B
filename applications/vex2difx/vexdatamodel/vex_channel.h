@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2018 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_channel.h 8270 2018-05-03 20:43:00Z WalterBrisken $
+ * $Id: vex_channel.h 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 8270 $
+ * $LastChangedRevision: 9673 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2018-05-04 06:43:00 +1000 (Fri, 04 May 2018) $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -41,6 +41,7 @@ public:
 	VexChannel() : recordChan(-1), subbandId(-1), bbcFreq(0.0), bbcBandwidth(0.0), bbcSideBand(' '), threadId(0) {}
 	void selectTones(float toneIntervalMHz, float toneBaseMHz, enum ToneSelection selection, double guardBandMHz);
 	char bandCode() const;
+	double centerFreq() const;		// returns Hz
 	friend bool operator ==(const VexChannel &c1, const VexChannel &c2);
 	friend bool operator <(const VexChannel &c1, const VexChannel &c2);
 	friend bool sameTuning(const VexChannel &c1, const VexChannel &c2);

@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bmark6_datastream.cpp 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: mark5bmark6_datastream.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 9674 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 //
 //============================================================================
 #include <cmath>
@@ -271,7 +271,10 @@ int Mark5BMark6DataStream::dataRead(int buffersegment)
 	// execute the file read
 	bytestoread = bytes;
 	bytes = mark6Gather(mark6gather, reinterpret_cast<char *>(readbuffer) + readbufferleftover, bytestoread);
-cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes << " received." << endl;
+	if(bytestoread != bytes)
+	{
+		cinfo << startl << "Mark6 Gather: " << bytestoread << " requested, " << bytes << " received." << endl;
+	}
 	if(bytes < bytestoread)
 	{
 		// file ran out

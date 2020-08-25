@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_setup.cpp 9637 2020-07-31 02:14:27Z LeonidPetrov $
+ * $Id: vex_setup.cpp 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9637 $
- * $Author: LeonidPetrov $
- * $LastChangedDate: 2020-07-31 12:14:27 +1000 (Fri, 31 Jul 2020) $
+ * $LastChangedRevision: 9673 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -94,6 +94,30 @@ double VexSetup::firstTuningForIF(const std::string &ifName) const	// return Hz
 	}
 
 	return tune;
+}
+
+double VexSetup::averageTuningForIF(const std::string &ifName) const      // return Hz
+{
+	double sum = 0.0;
+	int n = 0;
+
+	for(std::vector<VexChannel>::const_iterator ch=channels.begin(); ch != channels.end(); ++ch)
+	{
+		if(ch->ifName == ifName)
+		{
+			sum += ch->centerFreq();
+			++n;
+		}
+	}
+
+	if(n == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		return sum/n;
+	}
 }
 
 double VexSetup::dataRateMbps() const

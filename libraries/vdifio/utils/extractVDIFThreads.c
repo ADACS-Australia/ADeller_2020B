@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: extractVDIFThreads.c 7121 2015-11-29 16:41:34Z WalterBrisken $
+ * $Id: extractVDIFThreads.c 9672 2020-08-19 05:27:55Z ChrisPhillips $
  * $HeadURL:  $
- * $LastChangedRevision: 7121 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2015-11-30 03:41:34 +1100 (Mon, 30 Nov 2015) $
+ * $LastChangedRevision: 9672 $
+ * $Author: ChrisPhillips $
+ * $LastChangedDate: 2020-08-19 15:27:55 +1000 (Wed, 19 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -54,7 +54,7 @@ static void usage()
 int main(int argc, char **argv)
 {
   char buffer[MAX_VDIF_FRAME_BYTES*2];
-  char writebuffer[MAX_VDIF_FRAME_BYTES*(VDIF_MAX_THREAD_ID+1)];
+  char *writebuffer;
   char * pch;
   int threadids[VDIF_MAX_THREAD_ID+1];
   int writefull[VDIF_MAX_THREAD_ID+1];
@@ -76,6 +76,13 @@ int main(int argc, char **argv)
     verbose = 1;
   else
     verbose = 0;
+
+
+  writebuffer = malloc(MAX_VDIF_FRAME_BYTES*(VDIF_MAX_THREAD_ID+1));
+  if (writebuffer==NULL) {
+    fprintf(stderr, "Could not allocate %d kBytes\n", MAX_VDIF_FRAME_BYTES*(VDIF_MAX_THREAD_ID+1)/1024);
+    exit(EXIT_FAILURE);
+  }
 
   input = fopen(argv[1], "r");
   if(input == NULL)

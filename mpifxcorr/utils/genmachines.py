@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #**************************************************************************
-#   Copyright (C) 2008-2013 by Walter Brisken & Helge Rottmann            *
+#   Copyright (C) 2008-2020 by Walter Brisken & Helge Rottmann            *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -21,11 +21,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: genmachines.py 9318 2019-11-15 05:21:57Z HelgeRottmann $
+# $Id: genmachines.py 9674 2020-08-22 21:37:21Z WalterBrisken $
 # $HeadURL: $
-# $LastChangedRevision: 9318 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-15 16:21:57 +1100 (Fri, 15 Nov 2019) $
+# $LastChangedRevision: 9674 $
+# $Author: WalterBrisken $
+# $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 #
 #============================================================================
 
@@ -53,7 +53,7 @@ except ImportError:
 
 author  = 'Walter Brisken and Helge Rottmann'
 version = '2.5.0'
-verdate = '20160112'
+verdate = '20200822'
 minMachinefileVersion = "1.0"   # cluster definition file must have at least this version
 
 defaultDifxMessagePort = 50200
@@ -63,8 +63,8 @@ defaultDifxMessageGroup = '224.2.2.1'
 MARK6_VSN_IDS = ['%']
 
 def getmonthdate(daynumber, yearnumber):
-    md = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
-    mdl = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+    md = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+    mdl = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366]
     if yearnumber % 4 == 0:
         dl = mdl
     else:

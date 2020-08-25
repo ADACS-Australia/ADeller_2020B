@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_data.h 9382 2019-12-25 15:51:10Z WalterBrisken $
+ * $Id: vex_data.h 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vex_data.h $
- * $LastChangedRevision: 9382 $
+ * $LastChangedRevision: 9673 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-12-26 02:51:10 +1100 (Thu, 26 Dec 2019) $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -113,6 +113,7 @@ public:
 	bool hasData(const std::string &antName, const VexScan &scan) const;
 	int getPolarizations() const;
 	int getConvertedPolarizations() const;
+	bool isSX() const;
 
 	double obsStart() const { return exper.mjdStart; }
 	double obsStop() const { return exper.mjdStop; }

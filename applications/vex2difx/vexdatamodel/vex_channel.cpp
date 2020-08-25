@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_channel.cpp 8009 2017-09-25 15:05:40Z JanWagner $
+ * $Id: vex_channel.cpp 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 8009 $
- * $Author: JanWagner $
- * $LastChangedDate: 2017-09-26 01:05:40 +1000 (Tue, 26 Sep 2017) $
+ * $LastChangedRevision: 9673 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -232,6 +232,19 @@ char VexChannel::bandCode() const
 	}
 
 	return '?';
+}
+
+// returns Hz
+double VexChannel::centerFreq() const
+{
+	if(bbcSideBand == 'U')
+	{
+		return bbcFreq + 0.5*bbcBandwidth;
+	}
+	else
+	{
+		return bbcFreq - 0.5*bbcBandwidth;
+	}
 }
 
 bool operator ==(const VexChannel &c1, const VexChannel &c2)
