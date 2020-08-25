@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_setup.h 8036 2017-10-18 15:09:20Z WalterBrisken $
+ * $Id: vex_setup.h 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 8036 $
+ * $LastChangedRevision: 9673 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2017-10-19 02:09:20 +1100 (Thu, 19 Oct 2017) $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -49,6 +49,7 @@ public:
 	bool hasUniqueRecordChans() const;		// true if each channel's recordChan parameter is unique
 	void assignRecordChans();
 	double firstTuningForIF(const std::string &ifName) const;	// returns Hz
+	double averageTuningForIF(const std::string &ifName) const;	// returns Hz
 	double dataRateMbps() const;
 	void setPhaseCalInterval(float phaseCalIntervalMHz);
 	void setPhaseCalBase(float phaseCalBaseMHz);

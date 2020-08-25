@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: pcList.pl 7669 2017-03-03 18:14:06Z HelgeRottmann $
+# $Id: pcList.pl 9669 2020-08-18 17:23:48Z GeoffreyCrew $
 # $HeadURL: $
-# $LastChangedRevision: 7669 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2017-03-04 05:14:06 +1100 (Sat, 04 Mar 2017) $
+# $LastChangedRevision: 9669 $
+# $Author: GeoffreyCrew $
+# $LastChangedDate: 2020-08-19 03:23:48 +1000 (Wed, 19 Aug 2020) $
 #
 #============================================================================
 
@@ -64,7 +64,7 @@ my  $vexScanCount = 0;
 #----------------------------------------------------------------------
 
 
-&GetOptions("help" => \$help, "mode=s" => \$mode,  "skip_empty" => \$skipEmpty, "exclude=s" => \$exclude, "vexfile=s" => \$VEXFILE, "jobmatrix=s" => \$MATRIXFILE) or &pirintUsage(); 
+&GetOptions("help" => \$help, "mode=s" => \$mode,  "skip_empty" => \$skipEmpty, "exclude=s" => \$exclude, "vexfile=s" => \$VEXFILE, "jobmatrix=s" => \$MATRIXFILE) or &printUsage(); 
 
 if ($help || $VEXFILE eq "" || $MATRIXFILE eq "")
 {

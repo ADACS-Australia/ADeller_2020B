@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller and Walter Brisken             *
+ *   Copyright (C) 2006-2020 by Adam Deller and Walter Brisken             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,17 +17,18 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffile.h 8414 2018-09-05 14:41:08Z WalterBrisken $
+// $Id: vdiffile.h 9674 2020-08-22 21:37:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.h $
-// $LastChangedRevision: 8414 $
+// $LastChangedRevision: 9674 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2018-09-06 00:41:08 +1000 (Thu, 06 Sep 2018) $
+// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 //
 //============================================================================
 #ifndef __VDIFFILE_H__
 #define __VDIFFILE_H__
 
 #include <vdifio.h>
+#include <pthread.h>
 #include "datastream.h"
 
 /**
@@ -56,8 +57,6 @@ public:
   VDIFDataStream(const Configuration * conf, int snum, int id, int ncores, int * cids, int bufferfactor, int numsegments);
   virtual ~VDIFDataStream();
 
-  virtual void initialise();
-
 protected:
  /** 
   * Calculates the correct offset from the start of the databuffer for a given time in the correlation, 
@@ -83,20 +82,28 @@ protected:
   */
   virtual void initialiseFile(int configindex, int fileindex);
 
+  virtual void startReaderThread();
+
   virtual int dataRead(int buffersegment);
+
+  static void *launchreadthreadfunction(void *self);
+
+  void readthreadfunction();
 
   virtual void diskToMemory(int buffersegment);
 
   virtual int testForSync(int configindex, int buffersegment);
 
-  virtual void loopfileread();
-
-  int lastconfig;
+  void lockSlot(int slot, int processNum = 1);
+  void unlockSlot(int slot, int processNum = 1);
+  void unlockAllSlots(int processNum = 1);
 
   char formatname[64];
 
   unsigned char *readbuffer;
   int readbuffersize;
+  int readbufferslots;
+  unsigned int readbufferslotsize;
   int readbufferleftover;
   int minleftoverdata;
   int nSort, nGap;  // muxer tuning parameters
@@ -104,12 +111,25 @@ protected:
   struct vdif_mux_statistics vstats;
   long long startOutputFrameNumber;
   int invalidtime;
+  double jobEndMJD;
 
   int nbits, framespersecond, nthreads, inputframebytes;
   const int *threads;
 
   Configuration::datasampling samplingtype;
   Configuration::filechecklevel filecheck;
+
+  pthread_t readthread;
+  pthread_mutex_t *readthreadmutex;
+  int *slotMutexOwner;
+  int lockstart, lockend, lastslot, lockmod;
+  unsigned int endindex, muxindex;
+  int readbufferwriteslot;
+  bool readfail;
+  double vdifmjd;
+
+  int nGapWarn;
+  int nExcessWarn;
 };
 
 #endif

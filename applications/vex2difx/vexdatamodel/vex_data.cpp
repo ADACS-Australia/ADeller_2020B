@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_data.cpp 9382 2019-12-25 15:51:10Z WalterBrisken $
+ * $Id: vex_data.cpp 9673 2020-08-20 14:58:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vex_data.cpp $
- * $LastChangedRevision: 9382 $
+ * $LastChangedRevision: 9673 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-12-26 02:51:10 +1100 (Thu, 26 Dec 2019) $
+ * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
  *
  *==========================================================================*/
 
@@ -1429,6 +1429,57 @@ int VexData::getConvertedPolarizations() const
 	}
 
 	return rv;
+}
+
+bool VexData::isSX() const
+{
+	bool hasSX = false;
+	bool hasOther = false;
+
+	for(unsigned int modeNum = 0; modeNum < nMode(); ++modeNum)
+	{
+		const VexMode *mode = getMode(modeNum);
+
+		for(std::map<std::string,VexSetup>::const_iterator ssi = mode->setups.begin(); ssi != mode->setups.end(); ++ssi)
+		{
+			const VexSetup &setup = ssi->second;
+			bool hasS, hasX, hasElse;
+
+			hasS = hasX = hasElse = false;
+
+			for(std::map<std::string,VexIF>::const_iterator it = setup.ifs.begin(); it != setup.ifs.end(); ++it)
+			{
+				const VexIF &i = it->second;
+				double averageTune;	// (Hz)
+				
+				averageTune = setup.averageTuningForIF(i.name);
+
+				if(averageTune > 2.0e9 && averageTune < 3.9e9)
+				{
+					hasS = true;
+				}
+				else if(averageTune > 7.9e9 && averageTune < 11.9e9)
+				{
+					hasX = true;
+				}
+				else
+				{
+					hasElse = true;
+				}
+			}
+
+			if(hasX && hasS && !hasElse)
+			{
+				hasSX = true;
+			}
+			else
+			{
+				hasOther = true;
+			}
+		}
+	}
+
+	return hasSX & (!hasOther);
 }
 
 std::ostream& operator << (std::ostream &os, const VexData &x)

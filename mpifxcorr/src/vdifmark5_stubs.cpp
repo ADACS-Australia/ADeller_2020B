@@ -1,11 +1,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifmark5_stubs.cpp 5735 2013-11-12 19:00:31Z WalterBrisken $
+// $Id: vdifmark5_stubs.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 5735 $
+// $LastChangedRevision: 9674 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2013-11-13 06:00:31 +1100 (Wed, 13 Nov 2013) $
+// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 //
 //============================================================================
 #include <mpi.h>
@@ -19,6 +19,10 @@ VDIFMark5DataStream::VDIFMark5DataStream(const Configuration * conf, int snum, i
 }
 
 VDIFMark5DataStream::~VDIFMark5DataStream()
+{
+}
+
+void VDIFMark5DataStream::startReaderThread()
 {
 }
 

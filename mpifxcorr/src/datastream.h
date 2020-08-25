@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2016 by Adam Deller                                *
+ *   Copyright (C) 2006-2020 by Adam Deller                                *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: datastream.h 9613 2020-07-14 00:30:18Z JanWagner $
+// $Id: datastream.h 9674 2020-08-22 21:37:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/datastream.h $
-// $LastChangedRevision: 9613 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-07-14 10:30:18 +1000 (Tue, 14 Jul 2020) $
+// $LastChangedRevision: 9674 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
 //
 //============================================================================
 
@@ -197,6 +197,11 @@ protected:
   * @param fileindex The number of the file to be opened
   */
   virtual void openfile(int configindex, int fileindex);
+
+ /**
+  * Attempts to close the active file, if open
+  */
+  virtual void closefile();
 
  /** 
   * Attempts to open the specified file and peeks at what scan it belongs to
