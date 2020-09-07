@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input.c 9650 2020-08-05 14:06:57Z JanWagner $
+// $Id: difx_input.c 9689 2020-08-28 10:36:46Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input.c $
-// $LastChangedRevision: 9650 $
+// $LastChangedRevision: 9689 $
 // $Author: JanWagner $
-// $LastChangedDate: 2020-08-06 00:06:57 +1000 (Thu, 06 Aug 2020) $
+// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
 //
 //============================================================================
 
@@ -405,6 +405,26 @@ int polMaskValue(char polName)
 	}
 }
 
+int isMixedPolMask(const int polmask)
+{
+	int poltypeCount = 0;
+
+	if (polmask & DIFXIO_POL_RL)
+	{
+		poltypeCount++;
+	}
+	if (polmask & DIFXIO_POL_XY)
+	{
+		poltypeCount++;
+	}
+	if (polmask & DIFXIO_POL_HV)
+	{
+		poltypeCount++;
+	}
+
+	return (poltypeCount > 1);
+}
+
 /* This function populates the DifxFreqSet array
  * @param D DifxInput object
  * @return -1 in case of error, 0 otherwise
@@ -550,13 +570,13 @@ static int generateFreqSets(DifxInput *D)
 
 		if(dc->polMask & DIFXIO_POL_ERROR || dc->polMask == 0)
 		{
-			fprintf(stderr, "Error: generateFreqSets: polMask = 0x%03x is unsupported!\n", dc->polMask);
+			fprintf(stderr, "Error: generateFreqSets: polMask = 0x%03x is unsupported by FITS-IDI!\n", dc->polMask);
 
 			return -1;
 		}
-		else if((dc->polMask & DIFXIO_POL_RL) && (dc->polMask & DIFXIO_POL_XY)  && D->AntPol ==  0 )
+		else if(isMixedPolMask(dc->polMask & DIFXIO_POL_RL) && D->AntPol == 0)
 		{
-			fprintf(stderr, "Warning: generateFreqSets: polMask = 0x%03x is unsupported!\n", dc->polMask);
+			fprintf(stderr, "Warning: generateFreqSets: polMask = 0x%03x is unsupported by FITS-IDI!\n", dc->polMask);
 		}
 
 		/* populate polarization matrix for this configuration */
