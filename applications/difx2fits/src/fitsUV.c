@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsUV.c 9636 2020-07-31 02:13:03Z LeonidPetrov $
+// $Id: fitsUV.c 9689 2020-08-28 10:36:46Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsUV.c $
-// $LastChangedRevision: 9636 $
-// $Author: LeonidPetrov $
-// $LastChangedDate: 2020-07-31 12:13:03 +1000 (Fri, 31 Jul 2020) $
+// $LastChangedRevision: 9689 $
+// $Author: JanWagner $
+// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
 //
 //============================================================================
 #include "fits.h"
@@ -356,16 +356,17 @@ DifxVis *newDifxVis(const DifxInput *D, int jobId, int pulsarBin, int phaseCentr
 	dv->mjdLastRecord = (double *)calloc(D->nAntenna, sizeof(double));
 
 	/* check for polarization confusion */
-        if ( D->AntPol == 0 ){
-   	     if( ( (polMask & DIFXIO_POL_RL) != 0 && (polMask & DIFXIO_POL_XY) != 0 ) || 
-	           (polMask & DIFXIO_POL_ERROR) != 0 ||
-	           (polMask == 0) )
-	      {
-		fprintf(stderr, "Error: bad polarization combinations : %x\n", polMask);
-		deleteDifxVis(dv);
+	if(D->AntPol == 0)
+	{
+		if(isMixedPolMask(polMask) ||
+			(polMask & DIFXIO_POL_ERROR) != 0 ||
+			(polMask == 0))
+		{
+			fprintf(stderr, "Error: bad polarization combinations : %x\n", polMask);
+			deleteDifxVis(dv);
 
-		return 0;
-	      }
+			return 0;
+		}
 
 	      if(polMask & DIFXIO_POL_R)
 	      {

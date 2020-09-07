@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx2fits.c 9642 2020-08-03 12:12:46Z JanWagner $
+// $Id: difx2fits.c 9689 2020-08-28 10:36:46Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/difx2fits.c $
-// $LastChangedRevision: 9642 $
+// $LastChangedRevision: 9689 $
 // $Author: JanWagner $
-// $LastChangedDate: 2020-08-03 22:12:46 +1000 (Mon, 03 Aug 2020) $
+// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
 //
 //============================================================================
 #include <stdio.h>
@@ -1095,20 +1095,21 @@ static int convertFits(const struct CommandLineOptions *opts, DifxInput **Dset, 
 
 	for(c = 0; c < D->nConfig; ++c)
 	{
-	        if ( D->AntPol == 0 ){
-		   if((D->config[c].polMask & DIFXIO_POL_RL) && (D->config[c].polMask & DIFXIO_POL_XY))
-		   {
-			fprintf(stderr, "Error: both linear and circular polarizations are present.  This combination is still experimental. Use option --antpol if you need.\n");
+		if (D->AntPol == 0)
+		{
+			if(isMixedPolMask(D->config[c].polMask))
+			{
+				fprintf(stderr, "Error: both linear and circular polarizations are present. This combination is still experimental. Use option --antpol if you need.\n");
 
-			return 0;
-		   }
+				return 0;
+			}
 
-		   if(D->config[c].polMask & DIFXIO_POL_ERROR)
-		   {
-			fprintf(stderr, "Error: polarization ather than R, L, X or Y is present. Use option --antpol.\n");
+			if(D->config[c].polMask & DIFXIO_POL_ERROR)
+			{
+				fprintf(stderr, "Error: polarization ather than R, L, X or Y is present. Use option --antpol.\n");
 
-			return 0;
-		   }
+				return 0;
+			}
 		}
 	}
 

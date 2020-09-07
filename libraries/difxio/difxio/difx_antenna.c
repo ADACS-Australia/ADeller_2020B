@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_antenna.c 9636 2020-07-31 02:13:03Z LeonidPetrov $
+// $Id: difx_antenna.c 9688 2020-08-28 10:18:09Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_antenna.c $
-// $LastChangedRevision: 9636 $
-// $Author: LeonidPetrov $
-// $LastChangedDate: 2020-07-31 12:13:03 +1000 (Fri, 31 Jul 2020) $
+// $LastChangedRevision: 9688 $
+// $Author: JanWagner $
+// $LastChangedDate: 2020-08-28 20:18:09 +1000 (Fri, 28 Aug 2020) $
 //
 //============================================================================
 
@@ -148,8 +148,8 @@ DifxAntenna *newDifxAntennaArray(int nAntenna)
 	for(a = 0; a < nAntenna; ++a)
 	{
 		da[a].spacecraftId = -1;
-		da[a].pol[0] = " ";
-		da[a].pol[1] = " ";
+		da[a].pol[0] = ' ';
+		da[a].pol[1] = ' ';
 		for(i = 0;  i <MAX_MODEL_ORDER; ++i)
 		{
 			da[a].clockcoeff[i] = 0.0;

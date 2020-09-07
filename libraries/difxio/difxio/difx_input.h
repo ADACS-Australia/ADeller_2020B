@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input.h 9649 2020-08-05 13:04:32Z JanWagner $
+// $Id: difx_input.h 9689 2020-08-28 10:36:46Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input.h $
-// $LastChangedRevision: 9649 $
+// $LastChangedRevision: 9689 $
 // $Author: JanWagner $
-// $LastChangedDate: 2020-08-05 23:04:32 +1000 (Wed, 05 Aug 2020) $
+// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
 //
 //============================================================================
 
@@ -72,6 +72,7 @@
 #define DIFXIO_POL_ERROR		0x1000
 #define DIFXIO_POL_RL			(DIFXIO_POL_R | DIFXIO_POL_L)
 #define DIFXIO_POL_XY			(DIFXIO_POL_X | DIFXIO_POL_Y)
+#define DIFXIO_POL_HV			(DIFXIO_POL_H | DIFXIO_POL_V)
 
 #define DIFXIO_DEFAULT_POLY_ORDER	5
 #define DIFXIO_DEFAULT_POLY_INTERVAL	120
@@ -1040,6 +1041,7 @@ void DifxInputSetThreads(DifxInput *D, int nThread);
 int DifxInputLoadThreads(DifxInput *D);
 int DifxInputWriteThreads(const DifxInput *D);
 int polMaskValue(char polName);
+int isMixedPolMask(const int polmask);
 void resetDifxInputCompatibilityStatistics();
 unsigned int printDifxInputCompatibilityStatistics(int verbose);
 
