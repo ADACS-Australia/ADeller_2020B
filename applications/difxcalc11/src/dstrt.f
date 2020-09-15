@@ -383,7 +383,7 @@
        Go to 101
   99   Continue
        Write(6,'(" Error opening external EOP file. Quitting! ")')
-       Call TERMINATE_CALC ( 'GETEOP', int2(1), Ios)
+       Call TERMINATE_CALC ( 'GETEOP', int2(1), int2(IOS))
  101   Continue
 !
 !  Read new EOP mod file format. 2000.12.29
@@ -408,7 +408,7 @@
 !
 !  If here, UT1type not properly defined. ?????
        Write(6,'(" Illegal UT1type in EOP mod file! Quitting! ")')
-       Call TERMINATE_CALC ( 'GETEOP', int2(1), Ios)
+       Call TERMINATE_CALC ( 'GETEOP', int2(1), int2(IOS))
 !
   88   Continue
 !  Old format, just in case
@@ -426,14 +426,14 @@
        IF(Utflag .eq. 'UT1R') Then
          ISHRTFL = -1
          Write(6,'(" Cannot use UT1R data! Quitting! ")')
-         Call TERMINATE_CALC ('GETEOP', int2(1), Ios)
+         Call TERMINATE_CALC ('GETEOP', int2(1), int2(Ios))
        ENDIF
 !
 !**   Write(6,'(" ISHRTFL = ",I3)') ISHRTFL
        Go to 102
   89   Continue
        Write(6,'(" Cannot read EOP file! Quitting! ")')
-       Call TERMINATE_CALC ('GETEOP', int2(1), Ios)
+       Call TERMINATE_CALC ('GETEOP', int2(1), int2(Ios))
 !
  102  Continue
 !
