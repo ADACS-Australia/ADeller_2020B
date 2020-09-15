@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: mk5daemon.h 8379 2018-07-18 19:18:16Z MarkWainright $
+ * $Id: mk5daemon.h 9722 2020-09-11 10:22:24Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/mk5daemon/trunk/src/mk5daemon.h $
- * $LastChangedRevision: 8379 $
- * $Author: MarkWainright $
- * $LastChangedDate: 2018-07-19 05:18:16 +1000 (Thu, 19 Jul 2018) $
+ * $LastChangedRevision: 9722 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2020-09-11 20:22:24 +1000 (Fri, 11 Sep 2020) $
  *
  *==========================================================================*/
 
@@ -59,8 +59,8 @@ const int MaxConnections = 8;
 
 #define MAX_COMMAND_SIZE		768
 #define MAX_FILENAME_SIZE		PATH_MAX
-#define N_BANK				2
-#define N_DRIVE				8
+#define N_BANK				4 /* max number of banks(slots); 2 in Mark5, 4 in Mark6 */
+#define N_DRIVE				8 /* max number of drives per slot */
 #define MAX_MACLIST_LENGTH		16
 #define MAX_USERID_LENGTH		32
 #define MK5DAEMON_HOSTNAME_LENGTH	32

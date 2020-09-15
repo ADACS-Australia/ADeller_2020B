@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # =======================================================================
 # Copyright (C) 2016 Cormac Reynolds
 #
@@ -23,9 +23,10 @@
 # Takes dates in MJD, VEX, ISO8601 or VLBA format.
 # October 2017: change to use requests module. Optional vex output.
 # May 2019: New download site.
+# Sep 2020: Use encrypted ftp.
 #
 # EOP/ut1 data from:
-# "ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori"
+# ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/
 #
 
 from __future__ import print_function, division
@@ -33,9 +34,14 @@ import sys
 import time
 import os
 import optparse
-import urllib2
 #import requests
+import ftplib
 import espressolib
+#try:
+#    import urllib2
+#except:
+#    sys.stderr.write(
+#            "urllib2 module not available, you must use local (-l) mode\n")
 
 
 def get_leapsec(leapsec_page, target_jd):
@@ -51,6 +57,19 @@ def get_leapsec(leapsec_page, target_jd):
     return tai_utc
 
 
+def ftpget(url, directory, filename):
+    """Return contents of a file on an ftp-ssl site"""
+    contents = []
+    ftps = ftplib.FTP_TLS(url)
+    # login and encrypt connection
+    ftps.login()
+    ftps.prot_p()
+    ftps.cwd(directory)
+    ftps.retrlines("RETR {:s}".format(filename), contents.append)
+
+    return contents
+
+
 usage = """%prog <date>
 <date> can either be in MJD, VEX, ISO8601 or VLBA format
 Returns 5 days of EOPs around <date> in .v2d format"""
@@ -64,10 +83,10 @@ parser.add_option(
         dest="local", action="store_true", default=False,
         help="Take EOPs from local $DIFX_EOPS and $DIFX_UT1LS files instead of"
         " web")
-parser.add_option(
-        "--noverify",
-        dest="verify", action="store_false", default=True,
-        help="Disable HTTPS certificate checking (at own risk!)")
+#parser.add_option(
+#        "--noverify",
+#        dest="verify", action="store_false", default=True,
+#        help="Disable HTTPS certificate checking (at own risk!)")
 
 (options, args) = parser.parse_args()
 
@@ -95,19 +114,25 @@ if (target_jd < 2444055.5):
 # fetch EOP data
 leapsec_page = None
 if not options.local:
-    gsfc_url = "ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/"
-    eop_url = gsfc_url + "usno_finals.erp"
-    leapsec_url = gsfc_url + "ut1ls.dat"
+    #gsfc_url = "ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/"
+    #eop_url = gsfc_url + "usno_finals.erp"
+    #leapsec_url = gsfc_url + "ut1ls.dat"
+    gsfc_url = "gdc.cddis.eosdis.nasa.gov"
+    eop_dir = "vlbi/gsfc/ancillary/solve_apriori/"
+    eop_filename = "usno_finals.erp"
+    leapsec_filename = "ut1ls.dat"
 
-    sys.stderr.write("Fetching EOP data from {:s}\n".format(eop_url))
+    sys.stderr.write("Fetching EOP data from {:s}\n".format(gsfc_url))
     #eop_page = requests.get(eop_url, verify=options.verify).content.split("\n")
-    eop_page = urllib2.urlopen(eop_url).readlines()
+    #eop_page = urllib2.urlopen(eop_url).readlines()
+    eop_page = ftpget(gsfc_url, eop_dir, eop_filename)
 
     sys.stderr.write(
-            "Fetching leap second data from {:s}\n".format(leapsec_url))
+            "Fetching leap second data from {:s}\n".format(gsfc_url))
     #leapsec_page = requests.get(
-    #        leapsec_url, verify=options.verify).content.split("\n")
-    leapsec_page = urllib2.urlopen(leapsec_url).readlines()
+    #       leapsec_url, verify=options.verify).content.split("\n")
+    #leapsec_page = urllib2.urlopen(leapsec_url).readlines()
+    leapsec_page = ftpget(gsfc_url, eop_dir, leapsec_filename)
     print ("{:s} EOPs downloaded at {:s}".format(
             comment, time.strftime("%Y-%m-%d %H:%M:%S (%z)")))
 else:
@@ -160,8 +185,7 @@ for nlines, line in enumerate(eop_page):
     if (line[0] == "#"):
         continue
     # split the line on whitespace and convert to floats
-    eop_fields = line.split()
-    eop_fields = [float(field) for field in eop_fields]
+    eop_fields = [float(field) for field in line.split()]
     # print an EOP line if we're within 3 days of the target day
     if (abs(eop_fields[0] - target_jd) < 3):
         neop += 1
