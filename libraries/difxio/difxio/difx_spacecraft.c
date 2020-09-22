@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_spacecraft.c 7020 2015-09-25 14:38:50Z WalterBrisken $
+// $Id: difx_spacecraft.c 9729 2020-09-19 17:57:50Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_spacecraft.c $
-// $LastChangedRevision: 7020 $
+// $LastChangedRevision: 9729 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2015-09-26 00:38:50 +1000 (Sat, 26 Sep 2015) $
+// $LastChangedDate: 2020-09-20 03:57:50 +1000 (Sun, 20 Sep 2020) $
 //
 //============================================================================
 
@@ -253,12 +253,12 @@ static int computeDifxSpacecraftEphemeris_bsp(DifxSpacecraft *ds, double mjd0, d
 	{
 		double state[6], range;
 		long double jd;
-		char jdstr[24];
+		char jdstr[28];
 		double et;
 		
 		/* time to evaluate ephemeris */
 		jd = 2400000.5 + ds->pos[p].mjd + ds->pos[p].fracDay + ephemClockError/86400.0;
-		sprintf(jdstr, "JD %18.12Lf", jd);
+		sprintf(jdstr, "JD %18.12Lf UTC", jd);
 		str2et_c(jdstr, &et);
 
 		/* 399 is the earth geocenter */

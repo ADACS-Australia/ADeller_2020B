@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2019 by Walter Brisken & Helge Rottmann            *
+ *   Copyright (C) 2008-2020 by Walter Brisken & Helge Rottmann            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx2fits.c 9689 2020-08-28 10:36:46Z JanWagner $
+// $Id: difx2fits.c 9733 2020-09-21 20:48:05Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/difx2fits.c $
-// $LastChangedRevision: 9689 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
+// $LastChangedRevision: 9733 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-09-22 06:48:05 +1000 (Tue, 22 Sep 2020) $
 //
 //============================================================================
 #include <stdio.h>
@@ -48,6 +48,7 @@ const double DefaultDifxPCalInterval = 30.0;	/* sec */
 const int    DefaultDifxAntPol       = 0;	
 const int    DefaultDifxPolXY2HV     = 0;	
 const int    DefaultDifxLocalDir     = 0;	
+const int    DefaultAllPcalTones     = 0;	
 
 /* FIXME: someday add option to specify EOP merge mode from command line */
 
@@ -156,6 +157,9 @@ static void usage(const char *pgm)
 	fprintf(stderr, "  --localdir\n");
 	fprintf(stderr, "  -l                  *.calc, *.im, and *.difx are sought in the same directory as *.input files\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --all-pcal-tones\n");
+	fprintf(stderr, "  -A                  Extract all phase calibration tones\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "  --primary-band <pb> Add PRIBAND keyword with value <pb> to FITS file\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "%s responds to the following environment variables:\n", program);
@@ -166,6 +170,9 @@ static void usage(const char *pgm)
 	fprintf(stderr, "    TCAL_PATH                 Path where switched power T_cal values are found.\n");
 	fprintf(stderr, "    TCAL_FILE                 Path to single specific T_cal file.\n");
 	fprintf(stderr, "    DIFX_MAX_SNIFFER_MEMORY   Max number of bytes to allow for sniffing.\n");
+	fprintf(stderr, "    DIFX2FITS_UVFITS_DUMP         Prints in stdout the ascii dump of records from the binary visilibity file. Warning: the output may be huge.\n");
+	fprintf(stderr, "    DIFX2FITS_UVFITS_DUMP_UTCMIN  Sets the minimum UTC time tag for the visibility dump. Units are seconds. Default is zero.\n");
+	fprintf(stderr, "    DIFX2FITS_UVFITS_DUMP_UTCMAX  Sets the maximum UTC time tag for the visibility dump. Units are seconds. Default is 86400.\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "PLEASE file all bug reports at http://svn.atnf.csiro.au/trac/difx .\n");
 	fprintf(stderr, "Include at a minimum the output of difx2fits with extra verbosity\n");
@@ -187,6 +194,7 @@ struct CommandLineOptions *newCommandLineOptions()
 	opts->antpol             = DefaultDifxAntPol; 
 	opts->polxy2hv           = DefaultDifxPolXY2HV; 
 	opts->localdir           = DefaultDifxLocalDir; 
+	opts->allpcaltones       = DefaultAllPcalTones;
 
 	return opts;
 }
@@ -356,6 +364,11 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 			        strcmp(argv[i], "-l") == 0)
 			{
 				opts->localdir = 1;
+			}
+			else if(strcmp(argv[i], "--all-pcal-tones") == 0 ||
+			        strcmp(argv[i], "-A") == 0)
+			{
+				opts->allpcaltones = 1;
 			}
 			else if(i+1 < argc) /* one parameter arguments */
 			{
@@ -940,8 +953,9 @@ static DifxInput **loadDifxInputSet(const struct CommandLineOptions *opts)
 
 			return 0;
 		}
-                Dset[i]->AntPol   = opts->antpol;
-                Dset[i]->polxy2hv = opts->polxy2hv;
+                Dset[i]->AntPol       = opts->antpol;
+                Dset[i]->polxy2hv     = opts->polxy2hv;
+                Dset[i]->AllPcalTones = opts->allpcaltones;
 
 		Dset[i] = updateDifxInput(Dset[i], &opts->mergeOptions);
 

@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input.c 9689 2020-08-28 10:36:46Z JanWagner $
+// $Id: difx_input.c 9729 2020-09-19 17:57:50Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input.c $
-// $LastChangedRevision: 9689 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-08-28 20:36:46 +1000 (Fri, 28 Aug 2020) $
+// $LastChangedRevision: 9729 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-09-20 03:57:50 +1000 (Sun, 20 Sep 2020) $
 //
 //============================================================================
 
@@ -432,8 +432,10 @@ int isMixedPolMask(const int polmask)
 static int generateFreqSets(DifxInput *D)
 {
 	int configId;
+	int verbose;
 	int *freqIsUsed;
 
+	difxioGetOption(DIFXIO_OPT_VERBOSITY, &verbose);
 	freqIsUsed = (int *)calloc(D->nFreq+1, sizeof(int));
 	freqIsUsed[D->nFreq] = -1;
 
@@ -626,14 +628,23 @@ static int generateFreqSets(DifxInput *D)
 		/* Then actually build it */
 		dfs->IF = newDifxIFArray(dfs->nIF);
 		dfs->nIF = 0;	/* zero and recount */
+		if(verbose > 3)
+		{
+			printf("difx_input(generateFreqSets): D->nFreq= %d\n", D->nFreq);
+		}
 		for(fqId = 0; fqId < D->nFreq; ++fqId)
 		{
 			int i;
 
 			if(freqIsUsed[fqId] <= 0)
 			{
+				if(verbose > 3)
+				{
+					printf("difx_input(generateFreqSets):  frId= %4d  not used        \n", fqId);
+				}
 				continue;
 			}
+
 			for(i = 0; i < dfs->nIF; ++i)
 			{
 				if(D->freq[fqId].bw == dfs->IF[i].bw && (
@@ -664,10 +675,15 @@ static int generateFreqSets(DifxInput *D)
 				dfs->IF[i].nPol     = dc->nPol;
 				dfs->IF[i].pol[0]   = dc->pol[0];
 				dfs->IF[i].pol[1]   = dc->pol[1];
+
 				strncpy(dfs->IF[i].rxName, D->freq[fqId].rxName, DIFXIO_RX_NAME_LENGTH);
 				dfs->IF[i].rxName[DIFXIO_RX_NAME_LENGTH-1] = 0;
 
 				++dfs->nIF;
+			}
+			if(verbose > 3)
+			{
+				printf ( "difx_input(generateFreqSets):  frId= %4d  i= %4d  configId= %2d dfs->freqId2IF[fqId]= %4d  dfs->nIF= %4d\n", fqId, i, configId, dfs->freqId2IF[fqId], dfs->nIF );
 			}
 		}
 
@@ -682,7 +698,6 @@ static int generateFreqSets(DifxInput *D)
 
 	return 0;
 }
-
 /* This function checks whether a given file/directory is accessible directly,
  * or if not accessible, whether the given file might instead be found under
  * the directory that an .input file resides in.
@@ -3206,8 +3221,6 @@ static void setGlobalValues(DifxInput *D)
 	int hasL = 0;
 	int hasX = 0;
 	int hasY = 0;
-	int hasH = 0;
-	int hasV = 0;
 
 	if(!D)
 	{
@@ -3284,7 +3297,6 @@ static void setGlobalValues(DifxInput *D)
 			bw     = dfs->IF[i].bw;
 			pol[0] = dfs->IF[i].pol[0];
 			pol[1] = dfs->IF[i].pol[1];
-//  printf ( "difx_input-3140 i= %2d  pppp %d %f %c %c\n", i, nPol, bw, pol[0], pol[1] ); /* %%%%%%%%% */
 			if(D->doPolar)
 			{
 				nPol *= 2;
@@ -3293,7 +3305,6 @@ static void setGlobalValues(DifxInput *D)
 			{
 				D->nPolar = nPol;
 			}
-//  printf ( "difx_input-3148 ddd %d %d %d \n", dfs->IF[i].nPol, nPol, D->nPolar ); /* %%%%%%%%%%% */
 			if(D->chanBW < 0.0)
 			{
 				D->chanBW = bw;
@@ -3417,7 +3428,7 @@ static int mergeDifxInputFreqSetsStrict(DifxInput *D)
 		}
 	}
 
-	/* Remove exisitng frequency setups and put the new ones in place */
+	/* Remove existing frequency setups and put the new ones in place */
 	deleteDifxFreqSetArray(D->freqSet, D->nFreqSet);
 	D->freqSet = newdfs;
 	D->nFreqSet = n;
@@ -4343,29 +4354,46 @@ int DifxInputSimFXCORR(DifxInput *D)
 
 int DifxInputGetMaxTones(const DifxInput *D)
 {
-	int d;
+	int d, nTones;
 	int maxTones = 0;
+	double lowest, highest;
 
-	for(d = 0; d < D->nDatastream; ++d)
+	if(D->AllPcalTones == 0)
 	{
-		int f;
-
-		if(D->datastream[d].phaseCalIntervalMHz == 0)
+		/* A case when we use the tones defined in the difx input file */
+		for(d = 0; d < D->nDatastream; ++d)
 		{
-			continue;
-		}
-		for(f = 0; f < D->datastream[d].nRecFreq; ++f)
-		{
-			int fd;
+			int f;
 
-			fd = D->datastream[d].recFreqId[f];
-			if (fd < 0)
+			if(D->datastream[d].phaseCalIntervalMHz == 0)
 			{
-				break;
+				continue;
 			}
-			if(D->freq[fd].nTone > maxTones)
+			for(f = 0; f < D->datastream[d].nRecFreq; ++f)
 			{
-				maxTones = D->freq[fd].nTone;
+				int fd;
+
+				fd = D->datastream[d].recFreqId[f];
+				if(fd < 0)
+				{
+					break;
+				}
+				if(D->freq[fd].nTone > maxTones)
+				{
+					maxTones = D->freq[fd].nTone;
+				}
+			}
+		}
+        } 
+        else
+	{
+		/* A case when we use all the tones */
+		for(d = 0; d < D->nDatastream; ++d)
+		{
+			nTones = DifxDatastreamGetPhasecalRange(D->datastream + d, &(D->freq[D->datastream[d].recFreqId[0]]), &lowest, &highest);
+			if(nTones > maxTones)
+			{
+				maxTones = nTones;
 			}
 		}
 	}
@@ -4591,3 +4619,4 @@ void resetDifxMergeOptions(DifxMergeOptions *mergeOptions)
 {
 	memset(mergeOptions, 0, sizeof(DifxMergeOptions));
 }
+
