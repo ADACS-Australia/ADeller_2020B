@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsPH.c 9649 2020-08-05 13:04:32Z JanWagner $
+// $Id: fitsPH.c 9730 2020-09-19 18:42:14Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsPH.c $
-// $LastChangedRevision: 9649 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-08-05 23:04:32 +1000 (Wed, 05 Aug 2020) $
+// $LastChangedRevision: 9730 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-09-20 04:42:14 +1000 (Sun, 20 Sep 2020) $
 //
 //============================================================================
 
@@ -815,7 +815,7 @@ static int parseDifxPulseCal(const char *line,
 			/* set up pcal information for this recFreq (only up to nRecTones)*/
 			/* nRecTone is simply the number of tones that fall within the recorded band */
 			/* not all of them may be desired. */
-			nRecTone = DifxDatastreamGetPhasecalTones(toneFreq, dd, df, nt);
+			nRecTone = DifxDatastreamGetPhasecalTones(toneFreq, dd, df, nt, D->AllPcalTones);
 
 			nSkip = 0;				/* number of tones skipped because they weren't selected in the .input file */
 			if(nRecTone <= tone)
@@ -1294,7 +1294,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 			int nDifxAntennaTones;
 			int freqSetId;
 			int originalDsIds[maxDatastreams];
-			int originalDsId = -1, currentDsId = -1;
+			int originalDsId = -1;
 			int nds;	// number of datastreams for this antenna for this job
 			int d;
 
@@ -1481,15 +1481,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							if(originalDsId < 0)
 							{
 								continue;	/* to next line in file */
-							}
-
-							if(D->job[jobId].datastreamIdRemap)
-							{
-								currentDsId = D->job[jobId].datastreamIdRemap[originalDsId];
-							}
-							else
-							{
-								currentDsId = originalDsId;
 							}
 
 							mjdRecord = time - refDay + (int)(D->mjdStart);
