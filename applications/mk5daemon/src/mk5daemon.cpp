@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: mk5daemon.cpp 9732 2020-09-21 14:43:48Z GeoffreyCrew $
+ * $Id: mk5daemon.cpp 9735 2020-09-22 19:13:19Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/mk5daemon/trunk/src/mk5daemon.cpp $
- * $LastChangedRevision: 9732 $
- * $Author: GeoffreyCrew $
- * $LastChangedDate: 2020-09-22 00:43:48 +1000 (Tue, 22 Sep 2020) $
+ * $LastChangedRevision: 9735 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2020-09-23 05:13:19 +1000 (Wed, 23 Sep 2020) $
  *
  *==========================================================================*/
 
@@ -1111,11 +1111,11 @@ int main(int argc, char **argv)
     int highSock;
     int v;
     int halfSwapMonInterval;
+    int halfLoadMonInterval;
     int pid;
     int status;
 
 #ifdef HAVE_XLRAPI_H
-    int halfLoadMonInterval;
     time_t firstTime;
     int ok = 0;	/* FIXME: combine with D->ready? */
     int justStarted = 1;
@@ -1229,9 +1229,9 @@ int main(int argc, char **argv)
 	lastTime = time(0);
 
 	halfSwapMonInterval = D->swapMonInterval/2 + 3;
+	halfLoadMonInterval = D->loadMonInterval/2;
 
 #ifdef HAVE_XLRAPI_H
-	halfLoadMonInterval = D->loadMonInterval/2;
 	firstTime = lastTime;
 
 	v = initWatchdog();
