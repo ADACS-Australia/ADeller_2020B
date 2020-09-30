@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: expad.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: expad.py 9736 2020-09-23 12:55:41Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/expad/expad.py $
-# $LastChangedRevision: 9293 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedRevision: 9736 $
+# $Author: JanWagner $
+# $LastChangedDate: 2020-09-23 22:55:41 +1000 (Wed, 23 Sep 2020) $
 #
 #============================================================================
 
@@ -34,8 +34,8 @@ import datetime
 import ttk
 from optparse import OptionParser
 from Tkinter import *
-from tkinter.multilistbox import *
-from tkinter.DatePicker import DatePicker
+from tkinter_difx.multilistbox import *
+from tkinter_difx.DatePicker import DatePicker
 from string import  upper
 
 from difxdb.model import model
@@ -52,9 +52,9 @@ from difxutil.dbutil import *
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
-__lastAuthor__="$Author: HelgeRottmann $"
+__build__= "$Revision: 9736 $"
+__date__ ="$Date: 2020-09-23 22:55:41 +1000 (Wed, 23 Sep 2020) $"
+__lastAuthor__="$Author: JanWagner $"
 
 # minimum database schema version required by this program
 minSchemaMajor = 1

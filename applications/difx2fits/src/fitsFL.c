@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken                             *
+ *   Copyright (C) 2008-2020 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsFL.c 9518 2020-05-12 14:02:27Z JanWagner $
+// $Id: fitsFL.c 9734 2020-09-22 18:10:36Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsFL.c $
-// $LastChangedRevision: 9518 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-05-13 00:02:27 +1000 (Wed, 13 May 2020) $
+// $LastChangedRevision: 9734 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-09-23 04:10:36 +1000 (Wed, 23 Sep 2020) $
 //
 //============================================================================
 #include <stdlib.h>
@@ -61,10 +61,9 @@ enum
 
 static int parseFlag(char *line, char *antName, double timeRange[2], char *reason, int *recBand, int *chanRange)
 {
-	int l;
 	int n;
 
-	n = sscanf(line, "%s%lf%lf%d%d%d%n", antName, timeRange+0, timeRange+1, recBand, chanRange+0, chanRange+1, &l);
+	n = sscanf(line, "%s%lf%lf%d%d%d", antName, timeRange+0, timeRange+1, recBand, chanRange+0, chanRange+1);
 
 	if(n < 4)
 	{
@@ -77,8 +76,8 @@ static int parseFlag(char *line, char *antName, double timeRange[2], char *reaso
 		chanRange[1] = 0;
 	}
 
-	copyQuotedString(reason, line+l, 40);
-	
+	copyQuotedString(reason, line, 40);
+
 	return 1;
 }
 
@@ -165,7 +164,7 @@ static int processFlagFile(const DifxInput *D, struct fits_keywords *p_fits_keys
 		{
 			break;
 		}
-			
+
 		/* ignore possible comment lines */
 		if(line[0] == '#')
 		{

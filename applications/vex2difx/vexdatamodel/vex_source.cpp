@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_source.cpp 7208 2016-01-26 15:37:10Z WalterBrisken $
+ * $Id: vex_source.cpp 9741 2020-09-23 14:07:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 7208 $
+ * $LastChangedRevision: 9741 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2016-01-27 02:37:10 +1100 (Wed, 27 Jan 2016) $
+ * $LastChangedDate: 2020-09-24 00:07:56 +1000 (Thu, 24 Sep 2020) $
  *
  *==========================================================================*/
 
@@ -47,4 +47,10 @@ std::ostream& operator << (std::ostream &os, const VexSource &x)
 		"\n  dec=" << x.dec << std::endl;
 
 	return os;
+}
+
+void VexSource::setSourceType(const char *t1, const char *t2)
+{
+	sourceType1 = t1 ? t1 : "";
+	sourceType2 = t2 ? t2 : "";
 }

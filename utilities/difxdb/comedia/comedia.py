@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: comedia.py 9512 2020-05-08 09:45:51Z HelgeRottmann $
+# $Id: comedia.py 9736 2020-09-23 12:55:41Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/comedia/comedia.py $
-# $LastChangedRevision: 9512 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2020-05-08 19:45:51 +1000 (Fri, 08 May 2020) $
+# $LastChangedRevision: 9736 $
+# $Author: JanWagner $
+# $LastChangedDate: 2020-09-23 22:55:41 +1000 (Wed, 23 Sep 2020) $
 #
 #============================================================================
 __author__="Helge Rottmann"
@@ -53,7 +53,7 @@ from collections import deque
 from sqlalchemy import *
 #from Tkinter import *
 import Tkconstants, tkFileDialog
-from tkinter.multilistbox import *
+from tkinter_difx.multilistbox import *
 from functools import partial
 
 # minimum database schema version required by comedia

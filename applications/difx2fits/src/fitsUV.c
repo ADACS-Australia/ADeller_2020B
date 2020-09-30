@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsUV.c 9733 2020-09-21 20:48:05Z WalterBrisken $
+// $Id: fitsUV.c 9734 2020-09-22 18:10:36Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsUV.c $
-// $LastChangedRevision: 9733 $
+// $LastChangedRevision: 9734 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-09-22 06:48:05 +1000 (Tue, 22 Sep 2020) $
+// $LastChangedDate: 2020-09-23 04:10:36 +1000 (Wed, 23 Sep 2020) $
 //
 //============================================================================
 #include "fits.h"
@@ -568,7 +568,7 @@ static double evalPoly(const double *p, int n, double x)
 }
 	
 /* Auxilliary debugging routine for printing the contents of visilibity record */
-void UVfitsDump(const DifxVis *dv)
+static void UVfitsDump(const DifxVis *dv)
 {
 	int a1, a2, i,j,k,m;
 	int startChan;
