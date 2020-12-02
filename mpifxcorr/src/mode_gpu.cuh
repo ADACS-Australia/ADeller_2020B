@@ -5,6 +5,7 @@
 
 #define BLOCK_SIZE  512
 #define cf32        cufftComplex
+#define f64         double
 
 int create_cufftPlan(cufftHandle **plan, int length);
 int free_cufftPlan(cufftHandle *plan);

@@ -28,7 +28,7 @@ __global__ void cudaConj_cf32(cf32 *src, cf32 *dest, int length) {
     }
 }
 
-__global__ void cudaAddProduct_cf32(cf32 *src1, cf32 *src2, cf32 *accumulator, length) {
+__global__ void cudaAddProduct_cf32(cf32 *src1, cf32 *src2, cf32 *accumulator, int length) {
     int stride = blockDim.x * gridDim.x;
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += stride) {
         accumulator[i].x += src1[i].x * src2[i].x - src1[i].y * src2[i].y;
