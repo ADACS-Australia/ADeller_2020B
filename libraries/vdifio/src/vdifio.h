@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2018 by Adam Deller / Walter Brisken               *
+ *   Copyright (C) 2009-2020 by Adam Deller / Walter Brisken               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifio.h 8948 2019-05-21 12:23:32Z JanWagner $
+// $Id: vdifio.h 9868 2020-12-20 15:51:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.h $
-// $LastChangedRevision: 8948 $
-// $Author: JanWagner $
-// $LastChangedDate: 2019-05-21 22:23:32 +1000 (Tue, 21 May 2019) $
+// $LastChangedRevision: 9868 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
 //
 //============================================================================
 	
@@ -52,6 +52,26 @@ extern "C" {
 
 #define VDIF_EDV2_SUBVER_ALMA		0x0A5AE5
 #define VDIF_EDV2_SUBVER_R2DBE		0x000000
+
+
+/* Some of the error codes are defined below */
+
+#define EVDIFFAIL			-2000	/* generic "i failed" response */
+#define EVDIFCANTOPEN			-2001
+#define EVDIFCANTSEEK			-2002
+#define EVDIFCANTSTAT			-2003
+#define EVDIFCANTMALLOC			-2004
+#define EVDIFSHORTREAD			-2005
+#define EVDIFBUFFERSMALL		-2006
+#define EVDIFCANTGETFRAMESIZE		-2007
+#define EVDIFCANTGETFRAMEOFFSET		-2008
+#define EVDIFTOOMANYTHREADS		-2009
+#define EVDIFNOCORNERTURNER		-2010
+#define EVDIFTHREADOUTOFRANGE		-2011
+#define EVDIFNULLINPUT			-2012	/* generic "you gave me a null pointer" response */
+#define EVDIFBADINPUT			-2013	/* generic "input parameters don't make sense" response */
+#define EVDIFBADFRAMENUMBER		-2014
+
 
 /* *** implemented in vdifio.c *** */
 
@@ -293,6 +313,9 @@ enum VDIFHeaderPrintLevel	// for printVDIFHeader function
 	VDIFHeaderPrintLevelShort,	// Decode header and print one-liner
 	VDIFHeaderPrintLevelLong	// Print full header details
 };
+
+/* Get string corresponding to one of the VDIF error numbers. */
+const char *VDIFErrorMessage(int errorCode);
 
 /* Date manipulation functions */
 int ymd2doy(int yr, int mo, int day);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: applycorrparams.cpp 9382 2019-12-25 15:51:10Z WalterBrisken $
+ * $Id: applycorrparams.cpp 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9382 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-12-26 02:51:10 +1100 (Thu, 26 Dec 2019) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -215,17 +215,15 @@ int applyCorrParams(VexData *V, const CorrParams &params, unsigned int &nWarn, u
 
 					A = isVDIFFormat(V->getFormat(M->defName, it->first, ds));
 					B = isVDIFFormat(tmpVS.format);
-					if(A != B)
+					if(A && !B)
 					{
-						if(A)
-						{
-							std::cerr << "Error: cannot change format from VDIF to any other non-VDIF format (antenna " << as->vexName << ") with the .v2d file.  You need to change the .vex file." << std::endl;
-						}
-						else
-						{
-							std::cerr << "Error: cannot change format to VDIF from any other non-VDIF format (antenna " << as->vexName << ") with the .v2d file.  You need to change the .vex file." << std::endl;
-						}
+						std::cerr << "Error: cannot change format from VDIF to any other non-VDIF format (antenna " << as->vexName << ") with the .v2d file.  You need to change the .vex file." << std::endl;
 						++nError;
+					}
+
+					if(B && !A)
+					{
+						std::cerr << "Note: changing from non-VDIF to VDIF format for antenna " << as->vexName << ".  Check the results carefully." << std::endl;
 					}
 
 					v = V->setFormat(M->defName, it->first, ds, DS.format);
@@ -239,6 +237,15 @@ int applyCorrParams(VexData *V, const CorrParams &params, unsigned int &nWarn, u
 				if(DS.frameSize > 0)
 				{
 					V->setStreamFrameSize(M->defName, it->first, ds, DS.frameSize);
+				}
+
+				if(!DS.threadsAbsent.empty())
+				{
+					V->setStreamThreadsAbsent(M->defName, it->first, ds, DS.threadsAbsent);
+				}
+				if(!DS.threadsIgnore.empty())
+				{
+					V->setStreamThreadsIgnore(M->defName, it->first, ds, DS.threadsIgnore);
 				}
 			}
 

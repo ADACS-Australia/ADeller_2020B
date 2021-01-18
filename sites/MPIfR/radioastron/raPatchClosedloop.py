@@ -1,45 +1,59 @@
-#!/usr/bin/python
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
 """
 Patch DiFX/CALC .im file delay polynomials using RadioAstron closed-loop correction files.
 
-Usage: raPatchClosedloop.py [-r <add dly rate s/s>] [-P <PIMA fri file>]
-                            <dly_polys.txt> [<difxbasename1.im> <difxbasename2.im> ...]
-
-Iterative refinement if possible by correlating first with the ASC-provided initial delay
-polynomials, fringe fitting the data in PIMA, then patching the delay polynomial data with
-the residuals of the fringe fit, and correlating again.
-
-Input:
-    dly_polys.txt           text file with RadioAstron closed-loop delay polynomials
-    difxbasename1.im        original DiFX/CALC .im file to patch prior to DiFX correlation
-
-Output in -P <pimafile> mode:
-    dly_polys.txt.rev{n+1}       new closed-loop delay polys corrected by PIMA fringe fit
-
-Output:
-    difxbasename1.im.closedloop  new closed-loop DiFX/CALC .im to use in DiFX correlation
-
+Short usage: raPatchClosedloop.py [-h] [-a ANTENNA] [-P FRIFILE_PIMA]
+                            [-R REFANT_PIMA] [-r DDLYRATE] [-t DTSHIFT]
+                            [-N MAXORDER]
+                            dlypolyfile [imfiles [imfiles ...]]
 """
+
 from __future__ import print_function, division
 from datetime import datetime, timedelta
 from calendar import timegm
-import math, sys, time
-import argparse
-from datetime import datetime, timedelta
-import math
-import sys
+import argparse, math, sys, time
+
+__author__ = 'Jan Wagner (MPIfR)'
+__copyright__ = 'Copyright 2019, MPIfR'
+__license__ = 'GNU GPL 3'
+__version__ = '1.0.4'
+
 
 SCALE_DELAY = 1e6	# scaling to get from RA_C_COH.TXT units (secs) to .im units (usec)
 SCALE_UVW = 1		# scaling to get from RA_C_COH_uvw.txt units (m?) to .im units (m)
 
-parser = argparse.ArgumentParser(add_help=False, description='Patch a DiFX/CALC .im file delay and uvw polynomials with RadioAstron closed-loop correction files.')
-parser.add_argument('-h', '--help', help='Help', action='store_true')
-parser.add_argument('-P', '--pima', default=None, dest='frifile_pima', help='PIMA .fri file with residual rates and accelerations')
-parser.add_argument('-R', '--refant', default='GBT-VLBA', dest='refant_pima', help='Reference antenna of PIMA fringe fit')
-parser.add_argument('-r', '--drate', default=0.0, dest='ddlyrate', help='Residual delay rate in s/s to add to dly polynomial')
-parser.add_argument('-t', '--dt', default=0.0, dest='dtshift', help='Time shift polys p(t) to p(t+dt) by dt seconds via change of coefficients')
-parser.add_argument('-N', '--maxorder', default=12, dest='maxorder', help='Maximum poly order; set higher coeffs to zero if present')
-parser.add_argument('files', nargs='*')
+parser = argparse.ArgumentParser(add_help=True, formatter_class=argparse.RawDescriptionHelpFormatter, description=
+"""
+Patch DiFX/CALC .im file delay polynomials using RadioAstron closed-loop correction files.
+""", epilog=
+"""
+Iterative refinement is possible by correlating first with the ASC-provided initial delay
+polynomials, fringe fitting the data in PIMA, then patching the delay polynomial data with
+the residuals of the fringe fit, and correlating again.
+
+Input:
+    dly_polys.txt             text file with RadioAstron closed-loop delay polynomials
+    basename_1.im             original DiFX/CALC .im file to patch prior to DiFX correlation
+
+Output in -P <pimafile> mode:
+    dly_polys.txt.rev{n+1}    new closed-loop delay polys corrected by PIMA fringe fit
+
+Output:
+    basename_1.im.closedloop  new closed-loop DiFX/CALC .im to use in DiFX correlation
+"""
+)
+parser.add_argument('-a', '--antenna', default='GT', help='DiFX name of ground station; R1 or GT')
+parser.add_argument('-P', '--pima', default=None, dest='frifile_pima', help='PIMA fringe fit file with residual rates and accelerations; experiment.fri')
+parser.add_argument('-R', '--refant', default='GBT-VLBA', dest='refant_pima', help='Name of reference antenna in PIMA .fri fringe fit file')
+parser.add_argument('-r', '--drate', default=0.0, dest='ddlyrate', help='Residual delay rate [s/s] to add to dly polynomial')
+parser.add_argument('-t', '--dt', default=0.0, dest='dtshift', help='Time shift the polynomials p_i(t) to p_i(t+dt) by dt seconds via changing the polynomial coefficients')
+parser.add_argument('-T', '--disable-timeshift', action='store_false', dest="autoTimeShift", help='Do not permit shift of ASC polynomials in time when no exact match to a DiFX poly timerange found.') 
+parser.add_argument('-N', '--maxorder', default=12, dest='maxorder', help='Maximum polynomial order; higher coeffs if present are set to zero i.e. the polynomials are truncated')
+parser.add_argument('-V', '--version', action='version', version='%(prog)s {version}'.format(version=__version__))
+parser.add_argument('dlypolyfile', nargs='?', help='Input file with delay polynomials (dly_polys.txt)')
+parser.add_argument('imfiles', nargs='*', help='Input DiFX/CALC .im file(s) to patch; <basename_1.im> ...')
+
 
 class PolyCoeffs:
 	"""A single polynomial with coefficients"""
@@ -49,6 +63,7 @@ class PolyCoeffs:
 	dims = 0
 	coeffs = []
 	coeffscale = 1.0
+	shifted = False
 	tstart = datetime.utcnow() 
 	tstop = tstart
 	interval = 0
@@ -168,7 +183,7 @@ class PolyCoeffs:
 		#           f' = f
 		# --> diagonals of Pascal's triangle
 
-		if not dt:
+		if not dt or dt==0:
 			return
 
 		# Precompute Pascal's triangle
@@ -178,7 +193,6 @@ class PolyCoeffs:
 		# print (self.Ncoeffs, binom_nk)
 
 		# Precompute dt^n for n=0..Ncoeff
-		dt = dt * self.coeffscale
 		dtpow = [math.pow(dt,n) for n in range(self.Ncoeffs+1)]
 
 		# Shift the polynomial. Need to shift each poly/dimension (dly: 1D, uvw: 3D).
@@ -196,6 +210,7 @@ class PolyCoeffs:
 			# print ('')
 			for n in range(self.Ncoeffs):
 				self.coeffs[n][d] = newcoeffs[n]
+		self.shifted = True
 
 
 class PolySet:
@@ -239,19 +254,38 @@ class PolySet:
 		T = mjd_t0 + timedelta(days=MJD) + timedelta(seconds=sec)
 		return T
 
-	def lookupPolyFor(self,MJD,sec):
+	def lookupPolyFor(self,MJD,sec,interval_sec=0,allowShift=False):
 		"""
-		Lookup up poly that was start time identical to the given MJD and second-of-day
+		Lookup up poly that has start time identical to the given MJD and second-of-day
 		"""
 		tlookup = self.datetimeFromMJDSec(MJD,sec)
+		last = self.piecewisePolys[-1]
 		for poly in self.piecewisePolys:
 			if poly.tstart == tlookup:
 				return poly
-			if poly.tstart < tlookup and poly.tstop > tlookup:
-				dt = (tlookup - poly.tstart).total_seconds()
-				print ('Error: Time %d MJD %d sec (%s) not at start but rather %d seconds into RA poly.' % (MJD,sec,str(tlookup),dt))
-				print ('       Poly time-shift not supported yet!')
-				return None
+
+		toffsets = []
+		for poly in self.piecewisePolys:
+			dt_to_start = (tlookup - poly.tstart).total_seconds()
+			dt_to_stop = (tlookup - poly.tstop).total_seconds()
+			toffsets.append(dt_to_start)
+		absoffsets = [abs(dt) for dt in toffsets]
+
+		closest = absoffsets.index(min(absoffsets))
+		poly = self.piecewisePolys[closest]
+		dt = toffsets[closest]
+
+		if dt <= interval_sec:
+			if allowShift:
+				print('Info: Time shifting poly coeffs by %+d seconds to get DiFX %s covered by RA poly %s--%s.' % (dt,str(tlookup),str(poly.tstart),str(poly.tstop)))
+				# y0 = poly.eval(dt)
+				poly.timeshift(dt)
+				# y1 = poly.eval(0)
+				# print(y0,y1)
+				return poly
+			else:				
+				print ('Warning: Time %d MJD %d sec (%s) is %+d seconds from RA poly %s--%s.' % (MJD,sec,str(tlookup),dt,str(poly.tstart),str(poly.tstop)))
+
 		return None
 
 	def add(self, corrections):
@@ -266,6 +300,8 @@ class PolySet:
 
 	def timeshift(self, dt):
 		'''Time shift polynomials p(t) to p(t+dt) via change of coefficients'''
+		if not dt or dt==0:
+			return
 		for poly in self.piecewisePolys:
 			poly.timeshift(float(dt))
 
@@ -532,7 +568,7 @@ def imDetectNextScanpolyblock(lines,nstart,nstop):
 	return blk
 
 
-def imSumPolyCoeffs(telescope_id,lines,polystart,polystop,dpoly,uvwpoly,sign=-1,baseOffsets=None):
+def imApplyPolyCoeffs(telescope_id,lines,polystart,polystop,dpoly,uvwpoly,sign=-1,baseOffsets=None,polyEndDelays=None):
 	N_updated = 0
 	map_tag_to_poly = {
 		# line identifier                      storage   axis   type     linecount
@@ -580,24 +616,43 @@ def imSumPolyCoeffs(telescope_id,lines,polystart,polystop,dpoly,uvwpoly,sign=-1,
 				# Keep the CALC9 0th coeff but adjust for ASC poly drift and user delta-rate drift
 				if baseOffsets==None:
 					baseOffsets = {}
+				if polyEndDelays==None:
+					polyEndDelays = {}
+
+				#if sourcenr not in baseOffsets:
+				#	# Remember starting points of CALC9 and ASC dly offsets
+				#	polydlydelta = P.eval(float(P.interval))[0] - P.eval(0.0)[0]
+				#	baseOffsets[sourcenr] = [oldcoeffs[0], polydlydelta]
+				#	newcoeffs[0] = oldcoeffs[0]
+				#else:
+				#	# Adjust CALC9 dly offset to be contiguous across different polys
+				#	#newcoeffs[0] = oldcoeffs[0]  # old method, copy 1:1, will introduce clock jumps!
+				#	newcoeffs[0] = baseOffsets[sourcenr][0] + sign*baseOffsets[sourcenr][1]
+				#	polydlydelta = P.eval(float(P.interval))[0] - P.eval(0.0)[0]
+				#	baseOffsets[sourcenr] = [newcoeffs[0], polydlydelta]
+
 				if sourcenr not in baseOffsets:
 					# Remember starting points of CALC9 and ASC dly offsets
-					polydlydelta = P.eval(float(P.interval))[0] - P.eval(0.0)[0]
-					baseOffsets[sourcenr] = [oldcoeffs[0], polydlydelta]
+					baseOffsets[sourcenr] = sign*C[0] - oldcoeffs[0]
+					polyEndDelays[sourcenr] = oldcoeffs[0] + (P.eval(float(P.interval))[0] - P.eval(0.0)[0])
 					newcoeffs[0] = oldcoeffs[0]
 				else:
 					# Adjust CALC9 dly offset to be contiguous across different polys
-					#newcoeffs[0] = oldcoeffs[0]  # old method, copy 1:1, will introduce clock jumps!
-					newcoeffs[0] = baseOffsets[sourcenr][0] + sign*baseOffsets[sourcenr][1]
-					polydlydelta = P.eval(float(P.interval))[0] - P.eval(0.0)[0]
-					baseOffsets[sourcenr] = [newcoeffs[0], polydlydelta]
+					#newcoeffs[0] = oldcoeffs[0]  # old method, copy 1:1, will introduce clock jumps! CALC9 delays do not connect with ASC delays
+					if P.shifted:
+						# Time shifted poly that is 'extrapolated' to outside the original range is likely to
+						# have a starting delay that is not aligned with the end of the earlier poly.
+						# Especially if the shift was large, the delay model will be poor.
+						# Make matters better (or worse!) by forcing shifted poly to start from end of previous poly
+						newcoeffs[0] = sign*polyEndDelays[sourcenr]
+					else:
+						newcoeffs[0] = sign*C[0] - baseOffsets[sourcenr]  # use new coeff, but shifted to start from very first CALC9 delay
+
+				polyEndDelays[sourcenr] = sign*newcoeffs[0] + (P.eval(float(P.interval))[0] - P.eval(0.0)[0])
 
 				# Copy high-order ASC poly coeffs
 				for k in range(1,N):
 					newcoeffs[k] = sign*C[k]
-
-				# Debug printout for Matlab/octave
-				# print (sourcenr, newcoeffs, oldcoeffs[0], polydlydelta)
 
 			newcoeffs_str = ' '.join(['%.16e\t ' % v for v in newcoeffs])
 			newline = '%s:  %s' % (key.strip(),newcoeffs_str)
@@ -607,7 +662,7 @@ def imSumPolyCoeffs(telescope_id,lines,polystart,polystop,dpoly,uvwpoly,sign=-1,
 
 	# print (map_tag_to_poly)
 
-	return N_updated,baseOffsets
+	return N_updated,baseOffsets,polyEndDelays
 
 
 def areTimerangesMatched(startA, stopA, startB, stopB, granularity_secs=1.024):
@@ -619,11 +674,11 @@ def areTimerangesMatched(startA, stopA, startB, stopB, granularity_secs=1.024):
 	'''
 	t0 = startA - timedelta(microseconds=granularity_secs*1e6)
 	t1 = stopA + timedelta(microseconds=granularity_secs*1e6)
- 	if (startB >= t0 and stopB <= t1):
+	if (startB >= t0 and stopB <= t1):
 		return True
 	t0 = startB - timedelta(microseconds=granularity_secs*1e6)
 	t1 = stopB + timedelta(microseconds=granularity_secs*1e6)
- 	if (startA >= t0 and stopA <= t1):
+	if (startA >= t0 and stopA <= t1):
 		return True
 	return False
 
@@ -691,7 +746,7 @@ def patchPima2Dly(dlypolys, dlyfilename, frifilename, antname_pima='RADIO-AS', r
 	print ('Wrote %s' % (outfilename))
 
 
-def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
+def patchImFile(basename, dlypolys, uvwpolys, antname='GT', allowTimeShift=False):
 	if basename.endswith(('.difx','input','.calc','.im')):
 		basename = basename[:basename.rfind('.')]
 	imname = basename + '.im'
@@ -707,11 +762,25 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 
 	print ("\n%s\n" % (imname))
 
-	# Find start time, make sure no time-shift is necessary
+	# Find Model start time
+	# Note: difx mpifxcorr/trunk/src/model.cpp reads
+	#		'START SECOND'+'MINUTE'+... of .im and .calc into a fractional "modelmjd"
+	#       which apparently is the vlbi scan start time
+	#       and apparently calc polynomials can start offsetted from the model
 	im_start_sec = -1
 	for line in lines:
 		if 'START SECOND' in line:
 			im_start_sec = float(line.split(':')[-1])
+			break
+
+	# Find IM poly start time, make sure no time-shift is necessary
+	# Note: difx mpifxcorr/trunk/src/model.cpp
+	#     reads 'SCAN <n> POLY <m> MJD' into integer  polystartmjd
+	#     reads 'SCAN <n> POLY <m> SEC' into integer  polystartseconds
+	im_poly_start_sec = -1
+	for line in lines:
+		if 'SCAN 0 POLY 0 SEC' in line:
+			im_poly_start_sec = float(line.split(':')[-1]) # second of day
 			break
 
 	# Find telescope, poly order, poly interval
@@ -736,7 +805,7 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 	# Consistency check IM <-> RA coeffs
 	# is_polyorder_mismatched = [poly.Ncoeffs > (im_poly_order+1) for poly in dlypolys.piecewisePolys + uvwpolys.piecewisePolys]
 	is_polyorder_mismatched = [poly.Ncoeffs > (im_poly_order+1) for poly in dlypolys.piecewisePolys]
-	is_polystartsec_mismatched = (im_start_sec % im_poly_interval_s) != dlypolys.startSec
+	is_polystartsec_mismatched = (im_poly_start_sec % im_poly_interval_s) != dlypolys.startSec
 	# is_polyinterval_mismatched = [poly.interval < im_poly_interval_s for poly in dlypolys.piecewisePolys + uvwpolys.piecewisePolys]
 	is_polyinterval_mismatched = [poly.interval < im_poly_interval_s for poly in dlypolys.piecewisePolys]
 	if telescope_id == None:
@@ -748,19 +817,20 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 		print ('Error: too long polynomial validity interval in .im file (%d sec) for appyling closed-loop polys (%d sec).' % (im_poly_interval_s, poly.interval))
 		return False
 	if is_polystartsec_mismatched:
-		print ('Error: mismatch between .im base start time at second %d and poly start at second %d!' % (im_start_sec, dlypolys.startSec))
+		print ('Error: mismatch between .im base start time at second %d and poly start at second %d!' % (im_poly_start_sec, dlypolys.startSec))
 		print ('Currently no support for polynomial time-shifting. Please edit these files and re-run calcif3 and patching:')
 		print ('   .calc  file set START SECOND to 0 or %d sec multiple' % (im_poly_interval_s))
 		print ('   .input file adjust START SECONDS to fall on 0 sec or %d sec boundary' % (im_poly_interval_s))
 		print ('or alternatively edit')
 		print ('   .vex   file adjust scan start=<start> to fall on 0 sec or %d sec boundary' % (im_poly_interval_s))
-		print ('          and extend scan length by %d seconds' % (im_start_sec % im_poly_interval_s))
+		print ('          and extend scan length by %d seconds' % (im_poly_start_sec % im_poly_interval_s))
 		return False
 
 	# Patch all relevant IM file lines
 	nupdated_total = 0
 	n = 0
 	baseoffsets = None
+	polyenddelays = None
 	print ("Applying closed-loop coefficients to telescope %s with id %d" % (antname,telescope_id))
 	while n < len(lines):
 
@@ -781,11 +851,11 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 			(polystart,polystop,mjd,sec) = blkpoly
 
 			# Get the matching Closed Loop polynomial coeffs sets
-			dp = dlypolys.lookupPolyFor(mjd,sec)
+			dp = dlypolys.lookupPolyFor(mjd,sec,im_poly_interval_s,allowTimeShift)
 			# uvwp = uvwpolys.lookupPolyFor(mjd,sec)
 			if dp == None: # or uvwp == None:
 				T = dlypolys.datetimeFromMJDSec(mjd,sec)
-				print('Warning: no suitable poly found in coeffs file to match MJD %d sec %d (%s)!' % (mjd,sec,str(T)))
+				print('Warning: No ASC poly matches DiFX MJD %d sec %d (%s)!' % (mjd,sec,str(T)))
 				pstart = polystop
 				continue
 			# if dp.source != uvwp.source:
@@ -795,7 +865,7 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 				return False
 
 			# Apply the coeffs
-			nupdated,baseoffsets = imSumPolyCoeffs(telescope_id,lines,polystart,polystop,dp,None,baseOffsets=baseoffsets)
+			nupdated,baseoffsets,polyenddelays = imApplyPolyCoeffs(telescope_id,lines,polystart,polystop,dp,None,baseOffsets=baseoffsets,polyEndDelays=polyenddelays)
 			nupdated_total += nupdated
 
 			# Next poly segment
@@ -811,26 +881,27 @@ def patchImFile(basename, dlypolys, uvwpolys, antname='GT'):
 		f.write(line + '\n')
 
 	print ("Wrote new file '%s' with %d updated coefficient lines." % (imoutname,nupdated_total))
-	print ("Success: processed %s\n" % (imname))
 	return True
 
 
 if __name__ == "__main__":
 
 	for i, arg in enumerate(sys.argv):
-		# workaround from https://stackoverflow.com/questions/9025204/python-argparse-issue-with-optional-arguments-which-are-negative-numbers
-		if (arg[0] == '-') and arg[1].isdigit(): sys.argv[i] = ' ' + arg
+		# Workaround from https://stackoverflow.com/questions/9025204/python-argparse-issue-with-optional-arguments-which-are-negative-numbers
+		# required since --dt <time delta> argument can be negative
+		if (arg[0] == '-') and arg[1].isdigit():
+			sys.argv[i] = ' ' + arg
 
 	args = parser.parse_args(sys.argv[1:])
-	if args.help or len(args.files) < 1:
-		print(__doc__)
-		sys.exit(-1)
 
 	userresiduals = [0.0, float(args.ddlyrate)]
 
-	dly = PolySet(args.files[0], coeffscale=SCALE_DELAY)
+	if args.dlypolyfile == None:
+		sys.exit(0)
+
+	dly = PolySet(args.dlypolyfile, coeffscale=SCALE_DELAY)
 	if len(dly) < 1:
-		print ("Error: could not load delay polynomials from '%s'" % (args.files[0]))
+		print ("Error: could not load delay polynomials from '%s'" % (args.dlypolyfile))
 		sys.exit(-1)
 
 	dly.add(userresiduals)
@@ -840,12 +911,12 @@ if __name__ == "__main__":
 	if args.frifile_pima:
 
 		# Patch the poly .txt file and produce a new .txt.rev<N>
-		patchPima2Dly(dly, args.files[0], args.frifile_pima, refant_pima=args.refant_pima)
+		patchPima2Dly(dly, args.dlypolyfile, args.frifile_pima, refant_pima=args.refant_pima)
 
 	else:
 
 		# Patch the .im file using poly
-		for difxf in args.files[1:]:
-			ok = patchImFile(difxf, dly, None)
+		for difxf in args.imfiles:
+			ok = patchImFile(difxf, dly, None, args.antenna, args.autoTimeShift)
 			if not ok:
 				print ("Error: failed to patch %s" % (difxf))

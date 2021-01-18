@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013-2018 Walter Brisken                                *
+ *   Copyright (C) 2013-2020 Walter Brisken                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifmux.c 9341 2019-11-25 20:32:15Z WalterBrisken $
+// $Id: vdifmux.c 9868 2020-12-20 15:51:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.h $
-// $LastChangedRevision: 9341 $
+// $LastChangedRevision: 9868 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2019-11-26 07:32:15 +1100 (Tue, 26 Nov 2019) $
+// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
 //
 //============================================================================
 
@@ -124,7 +124,7 @@ int configurevdifmux(struct vdif_mux *vm, int inputFrameSize, int inputFramesPer
 	{
 		fprintf(stderr, "Error: configurevdifmux: cannot run vdifmux on more than %d threads; %d requested.\n", (int)sizeof(vm->goodMask)*8, nThread);
 
-		return -3;
+		return EVDIFTOOMANYTHREADS;
 	}
 
 	if(flags & VDIF_MUX_FLAG_COMPLEX)
@@ -142,7 +142,7 @@ int configurevdifmux(struct vdif_mux *vm, int inputFrameSize, int inputFramesPer
 	{
 		fprintf(stderr, "No corner turner implemented for %d threads and %d bits\n", nThread, nBit);
 		
-		return -1;
+		return EVDIFNOCORNERTURNER;
 	}
 
 	vm->inputFrameSize = inputFrameSize;
@@ -200,7 +200,7 @@ int configurevdifmux(struct vdif_mux *vm, int inputFrameSize, int inputFramesPer
 		{
 			fprintf(stderr, "Error: illegal thread Id: %d ; needs to be within 0..%d, inclusive.\n", threadIds[i], VDIF_MAX_THREAD_ID);
 			
-			return -2;
+			return EVDIFTHREADOUTOFRANGE;
 		}
 		vm->chanIndex[threadIds[i]] = i;
 	}
@@ -218,21 +218,21 @@ int setvdifmuxinputchannels(struct vdif_mux *vm, int inputChannelsPerThread)
 	{
 		fprintf(stderr, "Error: setvdifmuxinputchannels called with null vdif_mux structure\n");
 
-		return -1;
+		return EVDIFNULLINPUT;
 	}
 
 	if(inputChannelsPerThread <= 0)
 	{
 		fprintf(stderr, "Error: setvdifmuxinputchannels called with %d channels per thread\n", inputChannelsPerThread);
 
-		return -2;
+		return EVDIFTHREADOUTOFRANGE;
 	}
 
 	if(inputChannelsPerThread > 1 && vm->fanoutFactor > 1)
 	{
 		fprintf(stderr, "Error: setvdifmuxinputchannels: cannot have both inputChannelsPerThread and FanoutFactor > 1\n");
 		
-		return -3;
+		return EVDIFBADINPUT;
 	}
 
 	vm->inputChannelsPerThread = inputChannelsPerThread;
@@ -245,7 +245,7 @@ int setvdifmuxinputchannels(struct vdif_mux *vm, int inputChannelsPerThread)
 	{
 		fprintf(stderr, "No corner turner implemented for %d threads and %d bits\n", vm->nThread, nBit);
 		
-		return -1;
+		return EVDIFNOCORNERTURNER;
 	}
 
 	return 0;
@@ -258,28 +258,28 @@ int setvdifmuxfanoutfactor(struct vdif_mux *vm, int fanoutFactor)
 	{
 		fprintf(stderr, "Error: setvdifmuxfanoutfactor called with null vdif_mux structure\n");
 
-		return -1;
+		return EVDIFNULLINPUT;
 	}
 
 	if(fanoutFactor < 1)
 	{
 		fprintf(stderr, "Error: setvdifmuxfanoutfactor given out of range input value: %d.\n", fanoutFactor);
 
-		return -2;
+		return EVDIFBADINPUT;
 	}
 
 	if(vm->inputChannelsPerThread > 1 && fanoutFactor > 1)
 	{
 		fprintf(stderr, "Error: setvdifmuxfanoutfactor: cannot have both inputChannelsPerThread=%d and FanoutFactor=%d > 1\n", vm->inputChannelsPerThread, fanoutFactor);
 		
-		return -3;
+		return EVDIFBADINPUT;
 	}
 
 	if(vm->nThread % fanoutFactor != 0)
 	{
 		fprintf(stderr, "Error: setvidfmuxfanoutfactor: fanoutFactor=%d does not divide nThread=%d\n", fanoutFactor, vm->nThread);
 
-		return -4;
+		return EVDIFBADINPUT;
 	}
 
 	vm->fanoutFactor = fanoutFactor;
@@ -584,7 +584,7 @@ int vdifmux(unsigned char *dest, int destSize, const unsigned char *src, int src
 		startFrameNumber = getLowestFrameNumber(src, srcSize, vm);
 		if(startFrameNumber < 0)
 		{
-			return -3;
+			return EVDIFBADFRAMENUMBER;
 		}
 	}
 
@@ -641,7 +641,7 @@ int vdifmux(unsigned char *dest, int destSize, const unsigned char *src, int src
 			continue;
 		}
 
-		if (firstGoodByte < 0)
+		if(firstGoodByte < 0)
 		{
 			firstGoodByte = i;
 		}
@@ -1017,9 +1017,9 @@ int vdifmux(unsigned char *dest, int destSize, const unsigned char *src, int src
 		stats->startFrameNumber = startFrameNumber;
 
 		/* Catch cases where vmux got out of sync (e.g. too many fill-pattern frames or invalid frames in the input) */
-		if (stats->nOutputFrame == 0 || bytesProcessed == 0 || firstGoodByte < 0 || (nSequentialUnprocessable >= nSort))
+		if(stats->nOutputFrame == 0 || bytesProcessed == 0 || firstGoodByte < 0 || (nSequentialUnprocessable >= nSort))
 		{
-			if (getHighestFrameNumber(src, srcSize, vm) < 0)
+			if(getHighestFrameNumber(src, srcSize, vm) < 0)
 			{
 				stats->startFrameNumber += (srcSize / vm->inputFrameSize) / vm->nThread + 1;
 			}
@@ -1035,7 +1035,7 @@ int vdifmux(unsigned char *dest, int destSize, const unsigned char *src, int src
 		++stats->nCall;
 	}
 
-	if (bytesProcessed > firstGoodByte)
+	if(bytesProcessed > firstGoodByte)
 	{
 		return bytesProcessed;
 	}

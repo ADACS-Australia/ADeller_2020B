@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_setup.h 9673 2020-08-20 14:58:56Z WalterBrisken $
+ * $Id: vex_setup.h 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9673 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -56,7 +56,8 @@ public:
 	void selectTones(enum ToneSelection selection, double guardBandMHz);
 	bool usesFormat(enum VexStream::DataFormat format) const;
 	size_t nStream() const { return streams.size(); }
-	size_t nRecordChan() const;
+	size_t nRecordChan() const;		/* number of channels presumed to have been recorded, per vex file */
+	size_t nPresentChan() const;		/* number of channels thought to be present in the actual data (c.f. threadsAbsent) */
 	unsigned int getBits() const;
 	unsigned int getMinBits() const;
 	unsigned int getMaxBits() const;

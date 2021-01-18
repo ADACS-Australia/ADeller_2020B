@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013-2017 Walter Brisken                                *
+ *   Copyright (C) 2013-2020 Walter Brisken                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffile.c 8223 2018-03-28 13:00:49Z JanWagner $
+// $Id: vdiffile.c 9868 2020-12-20 15:51:00Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 8223 $
-// $Author: JanWagner $
-// $LastChangedDate: 2018-03-29 00:00:49 +1100 (Thu, 29 Mar 2018) $
+// $LastChangedRevision: 9868 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
 //
 //============================================================================
 
@@ -129,18 +129,23 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	strncpy(sum->fileName, fileName, VDIF_SUMMARY_FILE_LENGTH-1);
 	memset(hasThread, 0, sizeof(hasThread));
 	sum->startSecond = 1<<30;
-
+ 
 	in = fopen(fileName, "r");
 	if(!in)
 	{
-		return -2;
+		return EVDIFCANTOPEN;
+	}
+
+	if(fseeko(in, 0, SEEK_SET) < 0)	/* can't seek: can't summarize. */
+	{
+		return EVDIFCANTSEEK;
 	}
 
 	// note: do stat() after open() (not before) as filesize may be updated during open()
 	rv = stat(fileName, &st);
 	if(rv < 0)
 	{
-		return -1;
+		return EVDIFCANTSTAT;
 	}
 
 	sum->fileSize = st.st_size;
@@ -156,7 +161,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	{
 		fclose(in);
 
-		return -3;
+		return EVDIFCANTMALLOC;
 	}
 
 
@@ -168,7 +173,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 		fclose(in);
 		free(buffer);
 
-		return -4;
+		return EVDIFSHORTREAD;
 	}
 
 	if(frameSize == 0)
@@ -181,7 +186,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 			fclose(in);
 			free(buffer);
 
-			return -5;
+			return frameSize;
 		}
 	}
 
@@ -196,7 +201,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 		fclose(in);
 		free(buffer);
 
-		return -6;
+		return sum->firstFrameOffset;	/* pass error code on */
 	}
 	vh0 = (struct vdif_header *)(buffer + sum->firstFrameOffset);
 	sum->epoch = getVDIFEpoch(vh0);
@@ -269,14 +274,15 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	if(sum->fileSize > bufferSize)
 	{
 		int offset;
+		off_t seeked;
 
-		rv = fseeko(in, sum->fileSize - bufferSize, SEEK_SET);
-		if(rv != 0)
+		seeked = fseeko(in, sum->fileSize - bufferSize, SEEK_SET);
+		if(seeked != 0)
 		{
 			fclose(in);
 			free(buffer);
 
-			return -7;
+			return EVDIFCANTSEEK;
 		}
 
 		rv = fread(buffer, 1, bufferSize, in);
@@ -285,7 +291,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 			fclose(in);
 			free(buffer);
 
-			return -8;
+			return EVDIFSHORTREAD;
 		}
 
 		offset = determinevdifframeoffset(buffer, bufferSize, frameSize);
@@ -294,7 +300,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 			fclose(in);
 			free(buffer);
 
-			return -9;
+			return offset;	/* pass error code on */
 		}
 		vh0 = (struct vdif_header *)(buffer + offset);
 

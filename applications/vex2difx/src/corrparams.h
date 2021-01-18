@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2019 by Walter Brisken                             *
+ *   Copyright (C) 2009-2021 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: corrparams.h 9382 2019-12-25 15:51:10Z WalterBrisken $
+ * $Id: corrparams.h 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/corrparams.h $
- * $LastChangedRevision: 9382 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-12-26 02:51:10 +1100 (Thu, 26 Dec 2019) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -173,6 +173,8 @@ public:
 	std::set<int> recorderIds;	// List of recorder ids to associate with this datastream
 	enum DataSource dataSource;
 	enum SamplingType dataSampling;
+	std::set<int> threadsAbsent;	// Threads that are configured from vex file but expected not to be in the data stream itself
+	std::set<int> threadsIgnore;	// Threads that are expected to be present in the data stream but should not be correlated
 
 	int startBand;		// within the antenna's baseband channels (defined in vex order), where does this datastream start? [0-based]; -1 indicates not initialized
 	int nBand;		// number of baseband channels provided by this datastream

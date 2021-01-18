@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: Common.py 9400 2020-01-15 00:20:09Z AdamDeller $
+# $Id: Common.py 9861 2020-12-11 19:04:07Z JanWagner $
 # $HeadURL: $
-# $LastChangedRevision: 9400 $
-# $Author: AdamDeller $
-# $LastChangedDate: 2020-01-15 11:20:09 +1100 (Wed, 15 Jan 2020) $
+# $LastChangedRevision: 9861 $
+# $Author: JanWagner $
+# $LastChangedDate: 2020-12-12 06:04:07 +1100 (Sat, 12 Dec 2020) $
 #
 #============================================================================
 
@@ -327,7 +327,11 @@ def get_datastreamtable_info(inputfile):
             val, lines = nextinputline(lines[1:])
             datastreams[-1].recfreqindex.append(int(val))
             val, lines = nextinputline(lines[1:])
-            datastreams[-1].recclockoffset.append(float(val))
+            if ':' not in val:
+                datastreams[-1].recclockoffset.append(float(val))
+            else:
+                # extended 'f1p1:f1p2delta' syntax, ignore the delta -- TODO: store it somewhere?
+                datastreams[-1].recclockoffset.append(float(val.split(':')[0]))
             val, lines = nextinputline(lines[1:])
             datastreams[-1].recfreqoffset.append(float(val))
             val, lines = nextinputline(lines[1:])
