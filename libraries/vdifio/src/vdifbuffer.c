@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013 Walter Brisken                                     *
+ *   Copyright (C) 2013-2020 Walter Brisken                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifbuffer.c 8867 2019-04-26 13:26:28Z JanWagner $
+// $Id: vdifbuffer.c 9868 2020-12-20 15:51:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.h $
-// $LastChangedRevision: 8867 $
-// $Author: JanWagner $
-// $LastChangedDate: 2019-04-26 23:26:28 +1000 (Fri, 26 Apr 2019) $
+// $LastChangedRevision: 9868 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
 //
 //============================================================================
 
@@ -39,9 +39,9 @@ static int comparethreeframes(const unsigned char *buffer, int offset, int frame
 	vh1 = (struct vdif_header *)(buffer + offset);
 	vh2 = (struct vdif_header *)(buffer + offset + frameSize);
 	vh3 = (struct vdif_header *)(buffer + offset + 2*frameSize);
-	if (offset + 2*frameSize >= bufferSize)
+	if(offset + 2*frameSize >= bufferSize)
 	{
-		return -1;
+		return EVDIFBUFFERSMALL;
 	}
 
 	if(getVDIFFrameBytes(vh1) == frameSize &&
@@ -56,7 +56,8 @@ static int comparethreeframes(const unsigned char *buffer, int offset, int frame
 	{
 		return frameSize;
 	}
-	return -1;
+
+	return EVDIFFAIL;
 }
 
 /* look for at least 3 back-to-back frames with consistent structure */
@@ -71,12 +72,12 @@ int determinevdifframesize(const unsigned char *buffer, int bufferSize)
 	{
 		/* no way this can be useful */
 
-		return -1;
+		return EVDIFBUFFERSMALL;
 	}
 
 	/* First check the VDIF header -reported frame size */
 	frameSize = getVDIFFrameBytes((struct vdif_header *)buffer);
-	if (comparethreeframes(buffer, 0, frameSize, bufferSize) > 0)
+	if(comparethreeframes(buffer, 0, frameSize, bufferSize) > 0)
 	{
 		return frameSize;
 	}
@@ -113,7 +114,7 @@ int determinevdifframesize(const unsigned char *buffer, int bufferSize)
 		}
 	}
 
-	return -1;
+	return EVDIFCANTGETFRAMESIZE;
 }
 
 /* Look for first pair of consecutive valid frames and return offset to start of the first of these */
@@ -125,7 +126,7 @@ int determinevdifframeoffset(const unsigned char *buffer, int bufferSize, int fr
 	N = bufferSize - frameSize - VDIF_HEADER_BYTES;
 	if(N < frameSize || frameSize < VDIF_HEADER_BYTES + 8)
 	{
-		return -1;
+		return EVDIFBUFFERSMALL;
 	}
 
 	for(i = 0; i < N ; ++i)
@@ -145,5 +146,5 @@ int determinevdifframeoffset(const unsigned char *buffer, int bufferSize, int fr
 		}
 	}
 
-	return -1;
+	return EVDIFCANTGETFRAMEOFFSET;
 }

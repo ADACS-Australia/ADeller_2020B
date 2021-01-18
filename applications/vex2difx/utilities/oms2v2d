@@ -22,11 +22,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: oms2v2d 9745 2020-09-24 23:23:00Z WalterBrisken $
+# $Id: oms2v2d 9871 2021-01-04 14:33:45Z WalterBrisken $
 # $HeadURL: $
-# $LastChangedRevision: 9745 $
+# $LastChangedRevision: 9871 $
 # $Author: WalterBrisken $
-# $LastChangedDate: 2020-09-25 09:23:00 +1000 (Fri, 25 Sep 2020) $
+# $LastChangedDate: 2021-01-05 01:33:45 +1100 (Tue, 05 Jan 2021) $
 #
 #============================================================================
 
@@ -37,8 +37,8 @@ from os.path import isfile, isdir
 from os import umask, popen, system
 
 program = 'oms2v2d'
-version = '1.11'
-verdate = '20200331'
+version = '1.15'
+verdate = '20210104'
 author = 'Walter Brisken'
 
 def usage(pgm):
@@ -64,12 +64,14 @@ def usage(pgm):
 	print('  -e       make .v2d file for vlitebuf-based evlbi\n')
 	print('  --split')
 	print('  -s       make .v2d file for vlitebuf-based evlbi w/ 1032 byte frames\n')
+	print('  --profile')
+	print('  -p       generate .v2d for profile mode\n')
 	print('  --dual')
-	print('  -D       configure for two datastreams\n');
+	print('  -D       configure for two datastreams\n')
 	print('  --quad')
-	print('  -Q       configure for four datastreams\n');
+	print('  -Q       configure for four datastreams\n')
 	print('  --oct')
-	print('  -O       configure for eight datastreams\n');
+	print('  -O       configure for eight datastreams\n')
 	print('  --quiet')
 	print('  -q       be less verbose\n')
 	print('<oms file> is a .oms file produced by sched\n')
@@ -82,7 +84,7 @@ def readOMS(filename, verbose):
 	data = open(filename).readlines()
 	section = []
 	current = {}
-	n = 0;
+	n = 0
 	minbw = 1.0e9
 	maxbw = 0.0
 	spaces = ''
@@ -99,7 +101,7 @@ def readOMS(filename, verbose):
 			key = d[0:p].strip()
 			if len(key) < 1:
 				print('Illegal line [%d] : %s' % (n, d))
-				exit(0);
+				exit(0)
 			value = d[p+1:].strip()
 		if key == 'BEGIN':
 			section.append( (value, current) )
@@ -141,7 +143,7 @@ def readOMS(filename, verbose):
 
 	if len(section) > 0:
 		print('Error: unmatched BEGIN')
-		exit(0);
+		exit(0)
 	
 	current['MINBW'] = minbw
 	current['MAXBW'] = maxbw
@@ -215,9 +217,16 @@ def isNew(fn):
 				n += 1
 	return (n > 0)
 
-def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nStream, verbose):
+def dropzeros(s):
+	ss = s.strip('0')
+	if ss[-1] == '.':
+		ss += '0'
+	if ss[0] == '.':
+		ss = '0' + ss
+	return ss
+
+def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nStream, profile, verbose):
 	machineMap = {'BR':'swc001', 'FD':'swc002', 'HN':'swc003', 'KP':'swc004', 'LA':'swc005', 'MK':'swc006', 'NL':'swc007', 'OV':'swc008', 'PT':'swc009', 'SC':'swc010', 'Y':'swc011', 'GB':'swc012'}
-	machineMapEVLBI = {'BR':'swc011', 'FD':'swc012', 'HN':'swc013', 'KP':'swc014', 'LA':'swc015', 'MK':'swc016', 'NL':'swc017', 'OV':'swc018', 'PT':'swc019', 'SC':'swc020', 'Y':'swc009', 'GB':'swc008'}
 	corr = oms['CORRELATOR_PARAMETERS'][0]
 
 	if verbose > 0:
@@ -244,7 +253,9 @@ def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nS
 		if specAvg == 0:
 			specAvg = 1
 	
-	if 'POLARIZATION' in corr:
+	if profile:
+		doPolar = 'False'
+	elif 'POLARIZATION' in corr:
 		if corr['POLARIZATION'][0] == 'NO':
 			doPolar = 'False'
 		else:
@@ -262,17 +273,23 @@ def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nS
 	out.write('vex = %s\n\n' % vexFile)
 	out.write('antennas = %s\n\n' % stnString)
 
-	if nrt or (datacopyFormat != None) or (evlbiType != None):
+	if filebased:
 		out.write('delayModel = difxcalc+met\n\n')
 	elif isNew(vexFile):
 		out.write('delayModel = difxcalc\n\n')
 
 	if nrt or filebased or (datacopyFormat != None) or (evlbiType != None):
 		machineString = 'swc000, swc001, swc002, swc003, swc004, swc005, swc006, swc007, swc008, swc009, swc010'
-		out.write('machines = %s\n' % machineString);
+		out.write('machines = %s\n' % machineString)
 		out.write('nCore = 10\n')
 		out.write('nThread = 12\n\n')
 		out.write('singleScan = True\n\n')
+
+	if profile:
+		out.write('# profile mode selected:\n')
+		out.write('mode = profile\n')
+		out.write('startSeries = 100\n')
+		out.write('minSubarray = 1\n\n')
 
 	for s in oms['SOURCE_INFO']:
 		srcParams = ''
@@ -295,10 +312,16 @@ def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nS
 			machine = getMachineFromFilelist(filelistFile)
 			if machine == None:
 				machine = machineMap[s]
-			extra += 'filelist=%s machine=%s ' % (filelistFile, machine)
+			if evlbiType == 'split':
+				dsInfo = 'filelist=%s machine=%s ' % (filelistFile, machine)
+				if evlbiType == 'split':
+					dsInfo += 'frameSize=1032 '
+				dsData.append(dsInfo)
+			else:
+				extra += 'filelist=%s machine=%s ' % (filelistFile, machine)
 		elif evlbiType != None:
 			for d in range(nStream):
-				dsInfo = 'file=/tmp/vlitebuf%d/%%now.vdif%% machine=%s ' % (d, machineMapEVLBI[s])
+				dsInfo = 'file=/tmp/vlitebuf_%02d/%%now.vdif%% machine=%s ' % (d, machineMap[s])
 				if evlbiType == 'split':
 					dsInfo += 'frameSize=1032 '
 				dsData.append(dsInfo)
@@ -307,7 +330,7 @@ def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nS
 			if datacopyAntennaSetup == None:
 				print('Warning: data for antenna %s not found.  Skipping.  You will need to update the antenna list in the .v2d file.' % s)
 				out.write('# ANTENNA %s -- Data not found\n' % s)
-				continue;
+				continue
 			extra += datacopyAntennaSetup
 		for ds in dsData:
 			out.write('DATASTREAM %s%d { %s}\n' % (s, nds, ds))
@@ -328,11 +351,11 @@ def writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nS
 	out.write('{\n')
 
 	if 'TIME_AVERAGE' in corr:
-		out.write('  tInt = %s\n' % corr['TIME_AVERAGE'][0])
+		out.write('  tInt = %s\n' % dropzeros(corr['TIME_AVERAGE'][0]))
 
 	if specAvg != -1 and nFFT !=-1:
-		out.write('  fftSpecRes = %10.8f\n' % (bw/(nFFT//2)))
-		out.write('  specRes = %10.8f\n' % (bw/(nFFT//(2*specAvg))))
+		out.write('  fftSpecRes = %s\n' % dropzeros('%10.8f' % (bw/(nFFT//2))))
+		out.write('  specRes = %s\n' % dropzeros('%10.8f' % (bw/(nFFT//(2*specAvg)))))
 	if 'POLARIZATION' in corr:
 		out.write('  doPolar = %s\n' % doPolar)
 	if nFFT > 256:
@@ -352,6 +375,7 @@ print('')
 inFile = ''
 force = False
 stop = False
+profile = False
 nrt = False	# near real time mode
 filebased = False
 datacopyFormat = None
@@ -380,6 +404,8 @@ for a in argv[1:]:
 			evlbiType = 'vlite'
 		elif a in ['-s', '--split']:
 			evlbiType = 'split'
+		elif a in ['-p', '--profile']:
+			profile = True
 		elif a in ['-D', '--dual']:
 			nStream = 2
 		elif a in ['-Q', '--quad']:
@@ -425,6 +451,8 @@ elif isfile(prefix + '.vex'):
 		vexFile = prefix + '.vex.preobs'
 	else:
 		vexFile = prefix + '.vex.obs'
+elif isfile(prefix + '.vex.obs'):
+	vexFile = prefix + '.vex.obs'
 else:
 	print('No vex file found here.  It should be called %s.vex or %s.vex.preobs.' % (prefix, prefix))
 	if force:
@@ -447,4 +475,7 @@ if isfile(v2dFile):
 
 oms = readOMS(omsFile, verbose)
 
-writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nStream, verbose)
+writev2d(oms, v2dFile, prefix, nrt, filebased, datacopyFormat, evlbiType, nStream, profile, verbose)
+
+if evlbiType != None:
+	print('\nNOTE: if running in eVLBI mode for VLBA, consider using fiberLock.py to ensure routine network monitornig is turned off\n\n')

@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifio.c 8694 2019-02-13 10:17:29Z JanWagner $
+// $Id: vdifio.c 9868 2020-12-20 15:51:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.c $
-// $LastChangedRevision: 8694 $
-// $Author: JanWagner $
-// $LastChangedDate: 2019-02-13 21:17:29 +1100 (Wed, 13 Feb 2019) $
+// $LastChangedRevision: 9868 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
 //
 //============================================================================
 
@@ -39,6 +39,44 @@
 
 #define VDIF_VERSION 0
 
+const char *VDIFErrorMessage(int errorCode)
+{
+	switch(errorCode)
+	{
+	case EVDIFFAIL:
+		return "Operation failed.";
+	case EVDIFCANTOPEN:
+		return "File cannot be opened.";
+	case EVDIFCANTSEEK:
+		return "Cannot seek into file.";
+	case EVDIFCANTSTAT:
+		return "Cannot execute stat().";
+	case EVDIFCANTMALLOC:
+		return "Malloc failed.";
+	case EVDIFSHORTREAD:
+		return "Read was shorter than expected.";
+	case EVDIFBUFFERSMALL:
+		return "Too little data to examine.";
+	case EVDIFCANTGETFRAMESIZE:
+		return "Cannot determine frame size.";
+	case EVDIFCANTGETFRAMEOFFSET:
+		return "Cannot determine frame offset.";
+	case EVDIFTOOMANYTHREADS:
+		return "Too many threads.";
+	case EVDIFNOCORNERTURNER:
+		return "Required corner turner is not implemented.";
+	case EVDIFTHREADOUTOFRANGE:
+		return "Thread number is out of range.";
+	case EVDIFNULLINPUT:
+		return "A required function parameter is null.";
+	case EVDIFBADINPUT:
+		return "Illegal set of inputs provided.";
+	case EVDIFBADFRAMENUMBER:
+		return "Determined frame number is invalid.";
+	default:
+		return "<Unknown error code>";
+	}
+}
 
 int createVDIFHeader(vdif_header *header, int dataarraylength, int threadid, int bits, int nchan,
 		      int iscomplex, char stationid[3]) {

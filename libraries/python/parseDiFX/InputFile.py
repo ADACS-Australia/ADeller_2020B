@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: InputFile.py 9473 2020-04-06 09:26:22Z JanWagner $
+# $Id: InputFile.py 9760 2020-10-13 09:47:05Z JanWagner $
 # $HeadURL: $
-# $LastChangedRevision: 9473 $
+# $LastChangedRevision: 9760 $
 # $Author: JanWagner $
-# $LastChangedDate: 2020-04-06 19:26:22 +1000 (Mon, 06 Apr 2020) $
+# $LastChangedDate: 2020-10-13 20:47:05 +1100 (Tue, 13 Oct 2020) $
 #
 #============================================================================
 
@@ -47,7 +47,7 @@ class InputFile:
         self.numoutputfreqs, self.outputfreqs = self.determine_outputfreqs()
         self.version = self.determine_version() # TODO: currently relies on baseline table infos, make independent of that
         self.valid = self.numfreqs >= 1 and self.numtelescopes >= 1 and \
-            self.numdatastreams >= 1 and self.numbaselines >= 1
+            self.numdatastreams >= 1 and self.numbaselines >= 0
 
     def isvalid(self):
         return self.valid

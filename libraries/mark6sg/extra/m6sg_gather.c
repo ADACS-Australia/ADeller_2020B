@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m6sg_gather.c 9559 2020-06-18 12:50:12Z JanWagner $
+// $Id: m6sg_gather.c 9806 2020-11-07 11:38:52Z JanWagner $
 // $HeadURL$
-// $LastChangedRevision: 9559 $
+// $LastChangedRevision: 9806 $
 // $Author: JanWagner $
-// $LastChangedDate: 2020-06-18 22:50:12 +1000 (Thu, 18 Jun 2020) $
+// $LastChangedDate: 2020-11-07 22:38:52 +1100 (Sat, 07 Nov 2020) $
 //
 //============================================================================
 //
@@ -208,14 +208,15 @@ int main(int argc, char** argv)
             break;
         }
 
-        nwr = fwrite(buf, nrd, 1, fdout);
-	if (nwr != nrd)
-	{
+        nwr = fwrite(buf, 1, nrd, fdout);
+        if (nwr != nrd)
+        {
+fprintf(stderr, "nrd=%zd nwr=%zd\n", nrd, nwr);
             fprintf(stderr, "Write error (disk full?)\n");
             fprintf(stderr, "  %zd bytes written\n", ncopied + nwr);
             fprintf(stderr, "  %zd bytes remained to be written\n", nremain - nwr);
             break;
-	}
+        }
         nremain -= nrd;
         ncopied += nrd;
 

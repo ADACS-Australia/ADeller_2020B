@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2019 by Walter Brisken                             *
+ *   Copyright (C) 2009-2021 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: corrparams.cpp 9466 2020-04-02 12:39:53Z JanWagner $
+ * $Id: corrparams.cpp 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/corrparams.cpp $
- * $LastChangedRevision: 9466 $
- * $Author: JanWagner $
- * $LastChangedDate: 2020-04-02 23:39:53 +1100 (Thu, 02 Apr 2020) $
+ * $LastChangedRevision: 9873 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -965,6 +965,20 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 	{
 		ss >> tSys;
 	}
+	else if(key == "threadsAbsent" || key == "threadAbsent")
+	{
+		int t;
+
+		ss >> t;
+		threadsAbsent.insert(t);
+	}
+	else if(key == "threadsIgnore" || key == "threadIgnore")
+	{
+		int t;
+
+		ss >> t;
+		threadsIgnore.insert(t);
+	}
 	else
 	{
 		std::cerr << "Warning: ANTENNA: Unknown parameter '" << key << "'." << std::endl; 
@@ -1022,6 +1036,28 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 		std::cerr << "Error: conflicting formats: " << format << " != " << dss->format << std::endl;
 
 		return -2;
+	}
+
+	if(threadsAbsent.empty())
+	{
+		threadsAbsent = dss->threadsAbsent;
+	}
+	else if(!dss->threadsAbsent.empty())
+	{
+		std::cerr << "Error: conflicting threadsAbsent lists" << std::endl;
+
+		return -7;	
+	}
+
+	if(threadsIgnore.empty())
+	{
+		threadsIgnore = dss->threadsIgnore;
+	}
+	else if(!dss->threadsIgnore.empty())
+	{
+		std::cerr << "Error: conflicting threadsIgnore lists" << std::endl;
+
+		return -8;	
 	}
 
 	if(dataSampling != dss->dataSampling)
@@ -3202,6 +3238,24 @@ std::ostream& operator << (std::ostream &os, const DatastreamSetup &x)
 	{
 		os << "  machine=" << x.machine << std::endl;
 	}
+	if(!x.threadsAbsent.empty())
+	{
+		os << "  threadsAbsent =";
+		for(std::set<int>::const_iterator t = x.threadsAbsent.begin(); t != x.threadsAbsent.end(); ++t)
+		{
+			os << " " << *t;
+		}
+		os << std::endl;
+	}
+	if(!x.threadsIgnore.empty())
+	{
+		os << "  threadsIgnore =";
+		for(std::set<int>::const_iterator t = x.threadsIgnore.begin(); t != x.threadsIgnore.end(); ++t)
+		{
+			os << " " << *t;
+		}
+		os << std::endl;
+	}
 
 	os << "}" << std::endl;
 
@@ -3327,6 +3381,13 @@ std::ostream& operator << (std::ostream &os, const CorrParams &x)
 		for(std::vector<AntennaSetup>::const_iterator as = x.antennaSetups.begin(); as != x.antennaSetups.end(); ++as)
 		{
 			os << std::endl;
+			if(!as->datastreamSetups.empty())
+			{
+				for(std::vector<DatastreamSetup>::const_iterator ds =as->datastreamSetups.begin(); ds != as->datastreamSetups.end(); ++ds)
+				{
+					os << *ds;
+				}
+			}
 			os << *as;
 		}
 	}

@@ -33,6 +33,8 @@ const char author[]  = "Mark Wainright <mwainrig@nrao.edu>";
 const char version[] = "0.2";
 const char verdate[] = "20190604";
 
+// FIXME: module groups are not supported; use VSN of specified slot, but look up groups in '/mnt/disks/.meta/<slot>/*/group', pass those slots as integer 1/2/3/4/12/34/1234 to processMark6ScansSlot()
+
 static void usage(const char *pgm)
 {
 	printf("%s ver. %s  %s  %s\n\n", program, version, author, verdate);
@@ -60,7 +62,7 @@ static void usage(const char *pgm)
 	printf("                        and output mark6 activity difxmessage\n\n");
 }
 
-void summarizeFile(const char *fileName, char *vsn, char activityMsg, char verbose, int fileidx, int numfiles, FILE *summaryFile)
+void summarizeFile(const char *fileName, const char* filePattern, char *vsn, char activityMsg, char verbose, int fileidx, int numfiles, FILE *summaryFile)
 {
 	struct vdif_file_summary sum;
 	struct mark5b_file_summary sum5b;
@@ -69,7 +71,7 @@ void summarizeFile(const char *fileName, char *vsn, char activityMsg, char verbo
 	double mjd1, mjd2;
 	char fullFileName[MaxFilenameLength];
 
-	r = summarizemark5bmark6(&sum5b, fileName);
+	r = summarizemark5bmark6(&sum5b, filePattern);
 
 	if(r == 0)
 	{
@@ -84,7 +86,7 @@ void summarizeFile(const char *fileName, char *vsn, char activityMsg, char verbo
 		snprintf(fullFileName, MaxFilenameLength, "%s", fileName);
 		if(verbose)
 		{
-			printf("File %s is mark5b\n", fileName);
+			printf("File %s is mark5b\n", filePattern);
 			printf("%s %14.8f %14.8f - %4d of %d\n", fullFileName, mjd1, mjd2, fileidx + 1, numfiles);
 		}
 		if(activityMsg)
@@ -105,11 +107,11 @@ void summarizeFile(const char *fileName, char *vsn, char activityMsg, char verbo
 		return;
 	}
 
-	r = summarizevdifmark6(&sum, fileName, 0);
+	r = summarizevdifmark6(&sum, filePattern, 0);
 
 	if(r < 0)
 	{
-		fprintf(stderr, "File %s VDIF summary failed with return value %d\n\n", fileName, r);
+		fprintf(stderr, "File %s VDIF summary failed with return value %d\n\n", filePattern, r);
 	}
 	else
 	{
@@ -119,7 +121,7 @@ void summarizeFile(const char *fileName, char *vsn, char activityMsg, char verbo
 		snprintf(fullFileName, MaxFilenameLength, "%s", fileName);
 		if(verbose)
 		{
-			printf("File %s is vdif\n", fileName);
+			printf("File %s is vdif\n", filePattern);
 			printf("%s %14.8f %14.8f - %4d of %d\n", fullFileName, mjd1, mjd2, fileidx + 1, numfiles);
 		}
 		if(activityMsg)
@@ -145,6 +147,7 @@ void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, 
 	char **fileList;
 	int n;
 	char summaryFilePath[256];
+	char filePattern[256];
 	FILE *summaryFile;
 	
 	sprintf(summaryFilePath, "%s/%s.filelist", mk5dirpath, vsn);
@@ -173,7 +176,9 @@ void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, 
 
 		for(i = 0; i < n; ++i)
 		{
-			summarizeFile(fileList[i], vsn, activityMsg, verbose, i, n, summaryFile);
+			memset(filePattern, 0x00, sizeof(filePattern));
+			snprintf(filePattern, sizeof(filePattern)-1, "/mnt/disks/%d/*/data/%s", slot, fileList[i]);
+			summarizeFile(fileList[i], filePattern, vsn, activityMsg, verbose, i, n, summaryFile);
 		}
 	
 		for(i = 0; i < n; ++i)

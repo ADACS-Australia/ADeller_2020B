@@ -25,6 +25,13 @@ Version 2.7.0
     be listed after a colon on the source line.
   - RA and Dec listed in radians as second and third columns.
 * vexpeek: extend "doTime" option to apply to scan lists
+* oms2v2d: some improvements for special cases, don't print unneeded zeros
+* oms2v2d: add "profile" mode
+* oms2v2d: some improvements for real-time correlation
+* Restore capability to override a non-VDIF format with a VDIF format
+* Implement "threadsAbsent" DATASTREAM parameter to specify VDIF threads that were identified in the .vex file but not in the recorded data
+* Implement "threadsIgnore" DATASTREAM parameter to specify VDIF threads that are present but should not be correlated
+* Add vex2v2d -- a tool to create a skeleton (and possibly final) .v2d file based on the contents of a .vex file
 
 Version 2.6.0
 ~~~~~~~~~~~~~

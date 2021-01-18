@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2020 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_setup.cpp 9673 2020-08-20 14:58:56Z WalterBrisken $
+ * $Id: vex_setup.cpp 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9673 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -245,6 +245,18 @@ size_t VexSetup::nRecordChan() const
 	for(std::vector<VexStream>::const_iterator it = streams.begin(); it != streams.end(); ++it)
 	{
 		rc += it->nRecordChan;
+	}
+
+	return rc;
+}
+
+size_t VexSetup::nPresentChan() const
+{
+	size_t rc = 0;
+
+	for(std::vector<VexStream>::const_iterator it = streams.begin(); it != streams.end(); ++it)
+	{
+		rc += it->nPresentChan();
 	}
 
 	return rc;

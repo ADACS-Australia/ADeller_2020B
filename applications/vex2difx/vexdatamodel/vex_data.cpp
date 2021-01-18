@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_data.cpp 9673 2020-08-20 14:58:56Z WalterBrisken $
+ * $Id: vex_data.cpp 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vex_data.cpp $
- * $LastChangedRevision: 9673 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -1290,6 +1290,60 @@ void VexData::setStreamFrameSize(const std::string &modeName, const std::string 
 	else
 	{
 		std::cerr << "Developer error: setStreamFrameSize being called with modeName = " << modeName << " which returned modeId " << modeId << std::endl;
+
+		exit(EXIT_FAILURE);
+	}
+}
+
+void VexData::setStreamThreadsAbsent(const std::string &modeName, const std::string &antName, int dsId, const std::set<int> &threadsAbsent)
+{
+	int modeId = getModeIdByDefName(modeName);
+
+	if(modeId >= 0)
+	{
+		VexMode &M = modes[modeId];
+		std::map<std::string,VexSetup>::iterator it = M.setups.find(antName);
+		if(it != M.setups.end())
+		{
+			it->second.streams[dsId].threadsAbsent = threadsAbsent;
+		}
+		else
+		{
+			std::cerr << "Developer error: setStreamThreadsAbsent being called with antName = " << antName << " which is not found in mode " << modeName << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+	}
+	else
+	{
+		std::cerr << "Developer error: setStreamThreadsAbsent being called with modeName = " << modeName << " which returned modeId " << modeId << std::endl;
+
+		exit(EXIT_FAILURE);
+	}
+}
+
+void VexData::setStreamThreadsIgnore(const std::string &modeName, const std::string &antName, int dsId, const std::set<int> &threadsIgnore)
+{
+	int modeId = getModeIdByDefName(modeName);
+
+	if(modeId >= 0)
+	{
+		VexMode &M = modes[modeId];
+		std::map<std::string,VexSetup>::iterator it = M.setups.find(antName);
+		if(it != M.setups.end())
+		{
+			it->second.streams[dsId].threadsIgnore = threadsIgnore;
+		}
+		else
+		{
+			std::cerr << "Developer error: setStreamThreadsIgnore being called with antName = " << antName << " which is not found in mode " << modeName << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+	}
+	else
+	{
+		std::cerr << "Developer error: setStreamThreadsIgnore being called with modeName = " << modeName << " which returned modeId " << modeId << std::endl;
 
 		exit(EXIT_FAILURE);
 	}

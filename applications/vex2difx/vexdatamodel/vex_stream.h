@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_stream.h 9296 2019-11-14 05:01:58Z WalterBrisken $
+ * $Id: vex_stream.h 9874 2021-01-13 18:22:55Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9296 $
+ * $LastChangedRevision: 9874 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-11-14 16:01:58 +1100 (Thu, 14 Nov 2019) $
+ * $LastChangedDate: 2021-01-14 05:22:55 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -33,6 +33,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
 #include <difxio.h>
 #include <regex.h>
 
@@ -75,6 +76,9 @@ public:
 	void setFanout(int fan);
 	int snprintDifxFormatName(char *outString, int maxLength) const;
 	int dataFrameSize() const;
+	size_t nPresentChan() const;	// Looks through listed channels and excludes those that are in the threadsAbsent set
+	bool recordChanAbsent(int recChan) const;	// return true if this record channel is not in the data stream
+	bool recordChanIgnore(int recChan) const;	// return true if this record channel should not be correlated
 
 	double sampRate;		// [Hz]
 	unsigned int nBit;		// bits per sample
@@ -84,6 +88,8 @@ public:
 	unsigned int VDIFFrameSize;	// size of one logical block of data
 	bool singleThread;		// true for single thread VDIF
 	std::vector<int> threads;	// ordered list of threads for VDIF
+	std::set<int> threadsAbsent;	// threads that are expected to be absent in the data
+	std::set<int> threadsIgnore;	// threads that are expected to be present but should not be correlated
 	enum DataFormat format;
 	enum SamplingType dataSampling;	// Real or Complex
 	enum DataSource dataSource;

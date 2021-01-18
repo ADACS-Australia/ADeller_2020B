@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2009-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_data.h 9673 2020-08-20 14:58:56Z WalterBrisken $
+ * $Id: vex_data.h 9873 2021-01-13 17:23:01Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vex_data.h $
- * $LastChangedRevision: 9673 $
+ * $LastChangedRevision: 9873 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2020-08-21 00:58:56 +1000 (Fri, 21 Aug 2020) $
+ * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
  *
  *==========================================================================*/
 
@@ -104,6 +104,8 @@ public:
 	bool setFormat(const std::string &modeName, const std::string &antName, int dsId, const std::string &formatName);
 	void setStreamBands(const std::string &modeName, const std::string &antName, int dsId, int nBand, int startBand);
 	void setStreamFrameSize(const std::string &modeName, const std::string &antName, int dsId, int frameSize);
+	void setStreamThreadsAbsent(const std::string &modeName, const std::string &antName, int dsId, const std::set<int> &threadsAbsent);
+	void setStreamThreadsIgnore(const std::string &modeName, const std::string &antName, int dsId, const std::set<int> &threadsIgnore);
 	double getEarliestScanStart() const;
 	double getLatestScanStop() const;
 	void generateRecordChans();
