@@ -62,6 +62,10 @@
 #include "alert.h"
 #include <errno.h>
 
+#ifdef USE_CUDA
+#include "gpucore.h"
+#endif
+
 void usage(const char *const argv0);
 
 //act on an XML command message which was received
@@ -303,7 +307,12 @@ int main(int argc, char *argv[])
           nocommandthread = true;
           break; // --nocommandthread
         case 1:
+#ifdef USE_CUDA
           use_gpu = 1;
+#else
+          std::cerr << "GPU support not compiled with this version of mpifxcorr, sorry!" << std::endl;
+          return EXIT_FAILURE;
+#endif
           break; // --usegpu
         case 2:
           usage(argv[0]);
@@ -540,7 +549,15 @@ int main(int argc, char *argv[])
     }
     else //im a processing core
     {
+#ifdef USE_CUDA
+      if(use_gpu) {
+        core = new GPUCore(myID, config, datastreamids, return_comm);
+      } else {
+        core = new Core(myID, config, datastreamids, return_comm);
+      }
+#else
       core = new Core(myID, config, datastreamids, return_comm);
+#endif
       MPI_Barrier(world);
       cinfo << startl << "Estimated memory usage by Core: " << core->getEstimatedBytes()/1048576.0 << " MB" << endl;
       core->execute();
