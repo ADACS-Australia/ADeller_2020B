@@ -18,6 +18,12 @@ else
 mark6_files =
 endif
 
+if WITH_CUDA
+cuda_files = gpucore.cu
+else
+cuda_files =
+endif
+
 bin_PROGRAMS = mpifxcorr neuteredmpifxcorr
 
 mpifxcorr_SOURCES = \
@@ -42,6 +48,7 @@ mpifxcorr_SOURCES = \
 	alert.cpp \
 	pcal.cpp \
 	switchedpower.cpp \
+	$(cuda_files) \
 	$(mark5_files) \
 	$(mark6_files)
 
@@ -98,6 +105,7 @@ libmpifxcorr_a_SOURCES = \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
 	datamuxer.cpp \
+	$(cuda_files) \
 	$(mark5_files) \
 	$(mark6_files)
 
@@ -128,6 +136,7 @@ neuteredmpifxcorr_SOURCES = \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
 	datamuxer.cpp \
+	$(cuda_files) \
 	$(mark5_files) \
 	$(mark6_files)
 
@@ -148,3 +157,5 @@ sysutil_test_SOURCES = \
 
 sysutil_test_CXXFLAGS = -g -I$(top_srcdir)/src/ -I $(AM_CXXFLAGS)
 
+.cu.o:
+	nvcc -I.. $(CXXFLAGS) -c -o $@ $<

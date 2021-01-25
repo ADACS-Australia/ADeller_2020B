@@ -54,12 +54,12 @@ public:
   * @param rcomm An MPI_Comm object used for communicating to the FxManager only
   */
   Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm);
-  ~Core();
+  virtual ~Core();
 
  /**
   * Until told to terminate, sits in a loop receiving raw data from the Datastreams into the circular buffer and processing it
   */
-  void execute();
+  virtual void execute();
 
  /**
   * Returns the estimated number of bytes used by the Core
