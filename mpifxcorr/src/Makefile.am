@@ -19,7 +19,9 @@ mark6_files =
 endif
 
 if WITH_CUDA
-cuda_files = gpucore.cu
+cuda_files = \
+	gpucore.cu \
+	mode_process_gpu.cu
 else
 cuda_files =
 endif
