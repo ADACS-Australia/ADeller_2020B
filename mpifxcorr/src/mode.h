@@ -110,6 +110,22 @@ Mode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int
   void process(int index, int subloopindex);
 
  /**
+  * Does the same thing as ->process, but offloads the bulk of the processing
+  * to the GPU using CUDA.
+  * It is somewhat unfortunate to have two separate functions that do the same
+  * thing (process versus process_gpu) however there are not a lot of fantastic
+  * solutions given the existing inheritance structure of Mode (and that this
+  * function gets called in a hot loop, so we want to avoid making it
+  * 'virtual')
+  *
+  * @param index -- see process()
+  * @param subloopindex -- see process()
+  */
+
+  void process_gpu(int index, int subloopindex);
+
+
+ /**
   * Sets the autocorrelation arrays to contain 0's
   */
   void zeroAutocorrelations();

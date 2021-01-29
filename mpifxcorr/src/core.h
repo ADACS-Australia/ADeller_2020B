@@ -59,7 +59,7 @@ public:
  /**
   * Until told to terminate, sits in a loop receiving raw data from the Datastreams into the circular buffer and processing it
   */
-  virtual void execute();
+  void execute();
 
  /**
   * Returns the estimated number of bytes used by the Core
@@ -79,6 +79,37 @@ protected:
   * @param tdata Pointer to a processthreadinfo structure, describing which number thread this will be for this Core
   */
   static void * launchNewProcessThread(void * tdata);
+
+  ///Structure containing all of the pointers to scratch space for a single thread
+  typedef struct {
+    f32 **** baselineweight; //[freq][pulsarbin][baseline][pol]
+    f32 *** baselineshiftdecorr; //[freq][baseline][phasecentre]
+    cf32 * threadcrosscorrs;
+    s32 *** bins; //[fftsubloop][freq][channel]
+    cf32* pulsarscratchspace;
+    cf32******* pulsaraccumspace; //[freq][stride][baseline][source][polproduct][bin][channel]
+    f64 * chanfreqs;
+    cf32 * rotated;
+    cf32 * rotator;
+    cf32 * channelsums;
+    f32 * argument;
+    int shifterrorcount;
+    DifxMessageSTARecord * starecordbuffer;
+    bool dumpsta;
+    bool dumpkurtosis;
+  } threadscratchspace;
+
+ /**
+  * Processes a single thread's section of a single subintegration
+  * @param index The index in the circular send/receive buffer to be processed
+  * @param threadid The id of the thread which is doing the processing
+  * @param startblock The first FFT block which is this thread's responsibility
+  * @param numblocks The number of FFT blocks which this thread will take care of
+  * @param modes The Mode objects which handle the station-based processing
+  * @param currentpolyco The correct Polyco object for this time slice - null if not pulsar binning
+  * @param scratchspace Space for all of the intermediate results for this thread
+  */
+  virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
 private:
   /// Structure containing all the information necessary to describe one element in the circular send/receive buffer, and all the necessary space to
@@ -106,25 +137,6 @@ private:
     pthread_mutex_t acweightcopylock;
     pthread_mutex_t pcalcopylock;
   } processslot;
-
-  ///Structure containing all of the pointers to scratch space for a single thread
-  typedef struct {
-    f32 **** baselineweight; //[freq][pulsarbin][baseline][pol]
-    f32 *** baselineshiftdecorr; //[freq][baseline][phasecentre]
-    cf32 * threadcrosscorrs;
-    s32 *** bins; //[fftsubloop][freq][channel]
-    cf32* pulsarscratchspace;
-    cf32******* pulsaraccumspace; //[freq][stride][baseline][source][polproduct][bin][channel]
-    f64 * chanfreqs;
-    cf32 * rotated;
-    cf32 * rotator;
-    cf32 * channelsums;
-    f32 * argument;
-    int shifterrorcount;
-    DifxMessageSTARecord * starecordbuffer;
-    bool dumpsta;
-    bool dumpkurtosis;
-  } threadscratchspace;
 
   /// Structure containing a pointer to the current Core and the sequence id of the thread that will be launched, so it knows which part of the time slice to process
   typedef struct {
@@ -165,18 +177,6 @@ private:
   * @return The number of data messages received (0 or 1)
   */
   int receivedata(int index, bool * terminate);
-
- /**
-  * Processes a single thread's section of a single subintegration
-  * @param index The index in the circular send/receive buffer to be processed
-  * @param threadid The id of the thread which is doing the processing
-  * @param startblock The first FFT block which is this thread's responsibility
-  * @param numblocks The number of FFT blocks which this thread will take care of
-  * @param modes The Mode objects which handle the station-based processing
-  * @param currentpolyco The correct Polyco object for this time slice - null if not pulsar binning
-  * @param scratchspace Space for all of the intermediate results for this thread
-  */
-  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
  /**
   * Averages the autocorrelations down, sends off STA dumps down a socket if required and copies to coreresults
