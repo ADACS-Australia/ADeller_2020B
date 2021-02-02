@@ -416,17 +416,12 @@ int main(int argc, char *argv[])
   generateIdentifier(input_file, difxMessageID);
   difxMessageInit(myID, difxMessageID);
   difxMessageSetInputFilename(input_file);
-  if(myID == 0) {
-    // TODO PWC - this !false was once !nocommandthread, but appeared to be one
-    // that occurred before the options had be parsed (i.e., the
-    // nocommandthread variable was unconditionally false, from its
-    // initialisation). Check with science team to understand what' going on
-    // here.
-    if (isDifxMessageInUse() && !false) {
-      cout
-        << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!"
-        << endl;
-      }
+  if(myID == 0)
+  {
+    if(isDifxMessageInUse())
+    {
+      cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
+    }
   }
 
   cinfo << startl << "MPI Process " << myID << " is about to process input file" << endl;
