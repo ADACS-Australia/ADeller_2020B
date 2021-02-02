@@ -374,12 +374,7 @@ int main(int argc, char *argv[])
   difxMessageSetInputFilename(input_file);
   if(myID == 0)
   {
-    // TODO PWC - this !false was once !nocommandthread, but appeared to be one
-    // that occurred before the options had be parsed (i.e., the
-    // nocommandthread variable was unconditionally false, from its
-    // initialisation). Check with science team to understand what' going on
-    // here.
-    if(isDifxMessageInUse() && !false)
+    if(isDifxMessageInUse())
     {
       cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
     }
