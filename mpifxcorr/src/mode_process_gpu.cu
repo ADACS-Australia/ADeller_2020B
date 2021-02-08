@@ -7,6 +7,34 @@
 #include "mode.h"
 #include "alert.h"
 
+#define checkCuda(err) __checkCuda(err, (char *)__FILE__, __LINE__)
+inline cudaError_t __checkCuda(cudaError_t err, char *file, int line) {
+  if (err != cudaSuccess) {
+    std::cerr << "Error in calling CUDA operation in " << file << " at line " << line << std::endl;
+    std::cerr << "Error was " << cudaGetErrorString(err) << std::endl;
+    exit(1);
+  }
+  return err;
+}
+
+// CUDA kernels
+__global__ void cudaMul_f64(double *src, double by, double *dest) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if(idx > 16) return;
+  dest[idx] = src[idx] * by;
+}
+
+// Host calls
+
+void Mode::extra_gpu_init() {
+  checkCuda(cudaMalloc(&this->subxoff_gpu,
+        sizeof(double)*this->arraystridelength));
+  checkCuda(cudaMemcpy(this->subxoff_gpu, this->subxoff,
+        sizeof(double)*this->arraystridelength, cudaMemcpyHostToDevice));
+  checkCuda(cudaMalloc(&this->subxval_gpu,
+        sizeof(double)*this->arraystridelength));
+}
+
 // typical numrecordedbands = 2
 
 void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in microseconds 
@@ -32,8 +60,8 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   
   if((datalengthbytes <= 1) || (offsetseconds == INVALID_SUBINT) || (((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) == 0))
   {
-    std::cout << "call " << nth_call << "to M::p_g; we are in the weird place with the datalengthbytes" << std::endl;
-    std::cout << "call " << nth_call << "to M::p_g; numrecorededbands = " << numrecordedbands << std::endl;
+    //std::cout << "call " << nth_call << "to M::p_g; we are in the weird place with the datalengthbytes" << std::endl;
+    //std::cout << "call " << nth_call << "to M::p_g; numrecorededbands = " << numrecordedbands << std::endl;
     for(int i=0;i<numrecordedbands;i++)
     {
       status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
@@ -166,6 +194,45 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
       if(status != vecNoErr)
         csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
       break;
+      d0 = interpolator[0]*index*index + interpolator[1]*index + interpolator[2];
+      d1 = interpolator[0]*(index+0.5)*(index+0.5) + interpolator[1]*(index+0.5) + interpolator[2];
+      d2 = interpolator[0]*(index+1)*(index+1) + interpolator[1]*(index+1) + interpolator[2];
+      a = d2-d0;
+      b = d0 + (d1 - (a*0.5 + d0))/3.0;
+      integerdelay = static_cast<int>(b);
+      b -= integerdelay;
+
+      //std::cout << "early vecMul call, a = " << a << " ; arraystridelength = " << arraystridelength << std::endl;
+      //cudaDeviceSynchronize();
+      //std::cerr << "(b4)        cuda last error " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+      cudaMul_f64<<<1,arraystridelength>>>(subxoff_gpu, a, subxval_gpu);
+      {
+      cudaError_t lasterr = cudaGetLastError();
+      //std::cerr << "(aft)       cuda last error " << cudaGetErrorString(lasterr) << std::endl;
+      if(cudaSuccess != lasterr) {
+        cudaDeviceProp prop;
+        int device;
+        checkCuda(cudaGetDevice(&device));
+        checkCuda(cudaGetDeviceProperties(&prop, device));
+        std::cout << "Cuda info: name = " << prop.name << std::endl;
+      }
+      //cudaDeviceSynchronize();
+      lasterr = cudaGetLastError();
+      //std::cerr << "(aft synch) cuda last error " << cudaGetErrorString(lasterr) << std::endl;
+      checkCuda(cudaMemcpy(this->subxval, this->subxval_gpu,
+            sizeof(double)*this->arraystridelength, cudaMemcpyDeviceToHost));
+      //double test[16] = {42, 42, 42, 42, 42, 42, 42, 42};
+      //status = vectorMulC_f64(subxoff, a, test, arraystridelength);
+      //if(status != vecNoErr)
+      //  csevere << startl << "Error in linearinterpolate, subval multiplication" << endl;
+      }
+      status = vectorMulC_f64(stepxoff, a, stepxval, numfrstrides);
+      if(status != vecNoErr)
+        csevere << startl << "Error in linearinterpolate, stepval multiplication" << endl;
+      status = vectorAddC_f64_I(b, subxval, arraystridelength);
+      if(status != vecNoErr)
+        csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
+      break;
     case 2: //quadratic
       NOT_SUPPORTED("fringerotationorder = 2");
       break;
@@ -202,12 +269,7 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   looff = false;
   isfraclooffset = false;
   if(recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0) {
-    looff = true;
-    fraclooffset = fabs(recordedfreqlooffsets[i]) - int(fabs(recordedfreqlooffsets[i]));
-    if (fraclooffset > Mode::TINY)
-      isfraclooffset = true;
-    if (recordedfreqlooffsets[i] < 0)
-      fraclooffset = -fraclooffset;
+    NOT_SUPPORTED("lo offsets");
   }
 
   //get ready to apply fringe rotation, if it is pre-F.  
@@ -217,21 +279,13 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
   if (usecomplex && usedouble)
   {
-    if (config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-      lofreq -= config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
-    } else {
-      lofreq += config->getDRecordedBandwidth(configindex, datastreamindex, i)/2.0;
-    }
-    // For lower sideband complex data, the effective LO is at negative frequency, not positive
-    if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-      lofreq = -lofreq;
-    }
+    NOT_SUPPORTED("complex double-sideband data");
   } else if(usecomplex) {
-    if (usecomplex && config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-      lofreq = -lofreq;
-    }
+    NOT_SUPPORTED("complex data");
   }
+  //std::cout << "lo freq: " << lofreq << std::endl;
 
+  // OK, now let's put some actual GPU in here
   switch(fringerotationorder) {
     case 1: // linear
 
@@ -260,32 +314,11 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
         if(status != vecNoErr)
           csevere << startl << "Error in linearinterpolate lofreq non-integer freq addition!!!" << status << endl;
       }
-      if(looff) {
-        status = vectorMulC_f64(subtoff, -recordedfreqlooffsets[i], subtval, arraystridelength);
-        if(status != vecNoErr)
-          csevere << startl << "Error in LO offset calculation (time domain, sub vector)" << status << endl;
-        status = vectorMulC_f64(steptoff, -recordedfreqlooffsets[i], steptval, numfrstrides);
-        if(status != vecNoErr)
-          csevere << startl << "Error in LO offset calculation (time domain, step vector)" << status << endl;
-        status = vectorAdd_f64_I(subtval, subphase, arraystridelength);
-        if(status != vecNoErr)
-          csevere << startl << "Error in LO offset addition (time domain, sub vector)" << status << endl;
-        status = vectorAdd_f64_I(steptval, stepphase, numfrstrides);
-        if(status != vecNoErr)
-          csevere << startl << "Error in LO offset addition (time domain, step vector)" << status << endl;
-        status = vectorAddC_f64_I(-recordedfreqlooffsets[i]*fracwalltime, subphase, arraystridelength);
-        if(status != vecNoErr)
-          csevere << startl << "Error in LO offset addition (time domain, wallclock offset)" << status << endl;
-        if(isfraclooffset) {
-          status = vectorAddC_f64_I(-fraclooffset*intwalltime, subphase, arraystridelength);
-          if(status != vecNoErr)
-            csevere << startl << "Error in LO offset addition (time domain, frac LO offset wallclock offset)" << status << endl;
-        }
-      }
-      for(int j=0;j<arraystridelength;j++) {
+      // if(looff) { -- PWC removed this if() ... }
+      for(int j=0;j<arraystridelength;j++) { // PWCR - typ 16
         subarg[j] = -TWO_PI*(subphase[j] - int(subphase[j]));
       }
-      for(int j=0;j<numfrstrides;j++) {
+      for(int j=0;j<numfrstrides;j++) { // PWCR - typ 16
         steparg[j] = -TWO_PI*(stepphase[j] - int(stepphase[j]));
       }
       status = vectorSinCos_f32(subarg, subsin, subcos, arraystridelength);
@@ -327,14 +360,6 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   // For zero-th order (post-F) fringe rotation, calculate the fringe rotation (+ LO offset if necessary)
   if(fringerotationorder == 0) { // do both LO offset and fringe rotation  (post-F)
     NOT_SUPPORTED("fringerotationorder == 0");
-    phaserotation = (averagedelay-integerdelay)*lofreq;
-    if(fractionalLoFreq)
-      phaserotation += integerdelay*(lofreq-int(lofreq));
-    phaserotation -= walltimesecs*recordedfreqlooffsets[i];
-    phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
-    status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
-    if(status != vecNoErr)
-      csevere << startl << "Error in post-f phase rotation addition (+ maybe LO offset correction), sub!!!" << status << endl;
   }
 
   //create the fractional sample correction array
@@ -363,53 +388,11 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
 
   // Repeat the post F correction steps if each pol is different
   if (deltapoloffsets) {
-    status = vectorMulC_f32(currentsubchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, subfracsamparg, arraystridelength); 
-    if(status != vecNoErr) {
-  csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
-  exit(1);
-    }
-    status = vectorMulC_f32(currentstepchannelfreqs, fracsampleerror - recordedfreqclockoffsets[i] - recordedfreqclockoffsetsdelta[i]/2, stepfracsamparg, numfracstrides/2);  //L2C add delay
-    if(status != vecNoErr)
-  csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
-
-    // For zero-th order (post-F) fringe rotation, calculate the fringe rotation (+ LO offset if necessary)
-    if(fringerotationorder == 0) { // do both LO offset and fringe rotation  (post-F)
-  phaserotation = (averagedelay-integerdelay)*lofreq;
-  if(fractionalLoFreq)
-    phaserotation += integerdelay*(lofreq-int(lofreq));
-  phaserotation -= walltimesecs*recordedfreqlooffsets[i];
-  phaserotationfloat = (f32)(-TWO_PI*(phaserotation-int(phaserotation)));
-  status = vectorAddC_f32_I(phaserotationfloat, subfracsamparg, arraystridelength);
-  if(status != vecNoErr)
-    csevere << startl << "Error in post-f phase rotation addition (+ maybe LO offset correction), sub!!!" << status << endl;
-    }
-    
-    //create the fractional sample correction array
-    status = vectorSinCos_f32(subfracsamparg, subfracsampsin, subfracsampcos, arraystridelength);
-    if(status != vecNoErr)
-  csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-    status = vectorSinCos_f32(stepfracsamparg, stepfracsampsin, stepfracsampcos, numfracstrides/2);
-    if(status != vecNoErr)
-  csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-    status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsamprotatorB, arraystridelength); // L2C change pointers
-    if(status != vecNoErr)
-  csevere << startl << "Error in frac sample correction, real to complex (sub)!!!" << status << endl;
-    status = vectorRealToComplex_f32(stepfracsampcos, stepfracsampsin, stepfracsampcplx, numfracstrides/2);
-    if(status != vecNoErr)
-  csevere << startl << "Error in frac sample correction, real to complex (step)!!!" << status << endl;
-    for(int j=1;j<numfracstrides/2;j++) {
-  status = vectorMulC_cf32(fracsamprotatorB, stepfracsampcplx[j], &(fracsamprotatorB[j*arraystridelength]), arraystridelength); // L2C change pointers
-  if(status != vecNoErr)
-    csevere << startl << "Error doing the time-saving complex multiplication in frac sample correction!!!" << endl;
-    }
-
-    // now do the first arraystridelength elements (which are different from fracsampptr1 for LSB case)
-    status = vectorMulC_cf32_I(stepfracsampcplx[0], fracsamprotatorB, arraystridelength); // L2C change pointers
-    if(status != vecNoErr)
-  csevere << startl << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!" << endl;
-
+    NOT_SUPPORTED("deltapoloffsets");
   }
 
+  // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
+  // PWCR This is the big and nasty loop that does all the work
   for(int j=0;j<numrecordedbands;j++)  // Loop over all recorded bands looking for the matching frequency we should be dealing with
   {
     if(config->matchingRecordedBand(configindex, datastreamindex, i, j))
@@ -417,42 +400,14 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
       indices[count++] = j;
       switch(fringerotationorder) {
         case 0: //post-F
-          if (usecomplex) {
-            cfatal << startl << "Post-F (0th order) fringe rotation not currently supported for complex sampled data!" << endl;
-            exit(1);
-          }
-            
-          fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
-
-          //do the fft
-          // Chris add C2C fft for complex data
-          if(isfft) {
-            status = vectorFFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*) fftptr, pFFTSpecR, fftbuffer);
-            if (status != vecNoErr)
-              csevere << startl << "Error in FFT!!!" << status << endl;
-          //fix the lower sideband if required
-          }
-          else{
-            status = vectorDFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*) fftptr, pDFTSpecR, fftbuffer);
-            if (status != vecNoErr)
-              csevere << startl << "Error in DFT!!!" << status << endl;  
-          }
-          if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
-          {
-            status = vectorConjFlip_cf32(&(fftptr[1]), fftoutputs[j][subloopindex], recordedbandchannels);
-            if(status != vecNoErr)
-              csevere << startl << "Error in conjugate!!!" << status << endl;
-          }
+          NOT_SUPPORTED("fringe rotation order == 0");
           break;
         case 1: // Linear
         case 2: // Quadratic
           if (usecomplex) {
-            status = vectorMul_cf32(complexrotator, &unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
-            // The following can be uncommented (and the above commented) if wanting to 'turn off' fringe rotation for testing in the complex case
-            //status = vectorCopy_cf32(&unpackedcomplexarrays[j][nearestsample - unpackstartsamples], complexunpacked, fftchannels);
-            if (status != vecNoErr)
-              csevere << startl << "Error in complex fringe rotation" << endl;
+            NOT_SUPPORTED("complex");
           } else {
+            // PWCR DO THIS
             status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
             if (status != vecNoErr)
               csevere << startl << "Error in real->complex conversion" << endl;
@@ -464,41 +419,17 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
             status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
             if(status != vecNoErr)
               csevere << startl << "Error doing the FFT!!!" << endl;
-          }
-          else {
-            status = vectorDFT_CtoC_cf32(complexunpacked, fftd, pDFTSpecC, fftbuffer);
-            if(status != vecNoErr)
-              csevere << startl << "Error doing the DFT!!!" << endl;
+          } else {
+            NOT_SUPPORTED("!isfft");
           }
 
           if(config->getDRecordedLowerSideband(configindex, datastreamindex, i)) {
-            // All lower sideband bands need to be conjugated (achieved by taking the second half of the band for real-valued inputs)
-            // Additionally for the complex-valued inputs, the order of the frequency channels is reversed so they need to be flipped
-            // (for the double sideband case, in two halves, for the regular case, the whole thing)
-            if (usecomplex) {
-              if (usedouble) {
-                status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels/2+1);
-                status = vectorConjFlip_cf32(&fftd[recordedbandchannels/2]+1, &fftoutputs[j][subloopindex][recordedbandchannels/2]+1, recordedbandchannels/2-1);
-              } else {
-                //status = vectorConjFlip_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
-                // note: using vectorConjFlip_cf32() -lofreq breaks Complex LSB (non-DSB!) fringes for VGOS *assuming* VGOS RDBE-G indeed LSB like memos claim
-                // fix?: LSB fringes are restored at least for a synthetic fully correlated data set of Complex USB and Complex LSB data.
-                //       The reversal has to be changed as below to retain DC in bin 0, producing not [ch1 ch2 ch3 ... DC] but instead [DC ch1 ch2 ch3 ...]
-                // todo: validate fix on real world definitely-known-LSB data (evidenced by pcal tone positions etc), then uncomment the next lines:
-                status = vectorConjFlip_cf32(fftd+1, fftoutputs[j][subloopindex]+1, recordedbandchannels-1);
-                fftoutputs[j][subloopindex][0] = fftd[0];
-              }
-            }
-            else {
-              status = vectorCopy_cf32(&(fftd[recordedbandchannels]), fftoutputs[j][subloopindex], recordedbandchannels);
-            }
-          }
-          else {
+            NOT_SUPPORTED("lower sideband");
+          } else {
             // For upper sideband bands, normally just need to copy the fftd channels.
             // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
             if (usecomplex && usedouble) {
-              status = vectorCopy_cf32(fftd, &fftoutputs[j][subloopindex][recordedbandchannels/2], recordedbandchannels/2);
-              status = vectorCopy_cf32(&fftd[recordedbandchannels/2], fftoutputs[j][subloopindex], recordedbandchannels/2);
+              NOT_SUPPORTED("use complex && usedouble");
             } else {
               status = vectorCopy_cf32(fftd, fftoutputs[j][subloopindex], recordedbandchannels);
             }
@@ -578,45 +509,9 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   if (count>1) {
     // Do linear to circular conversion if required
     if (linear2circular) {
-
-  // FIXME: Apply gain correction
-
-  if (config->getDRecordedBandPol(configindex, datastreamindex, indices[0])=='R') {
-      RcpIndex = indices[0];
-      LcpIndex = indices[1];
-    } else {
-      RcpIndex = indices[1];
-      LcpIndex = indices[0];
-    }
-    
-    // Rotate Lcp by 90deg
-    vectorMulC_cf32_I(phasecorrA[i], fftoutputs[LcpIndex][subloopindex], recordedbandchannels);
-    vectorMulC_cf32_I(phasecorrconjA[i], conjfftoutputs[LcpIndex][subloopindex], recordedbandchannels);
-
-    // Add and subtract
-    vectorSub_cf32(fftoutputs[LcpIndex][subloopindex], fftoutputs[RcpIndex][subloopindex], tmpvec, recordedbandchannels);
-    vectorAdd_cf32_I(fftoutputs[LcpIndex][subloopindex], fftoutputs[RcpIndex][subloopindex], recordedbandchannels);
-    vectorCopy_cf32(tmpvec, fftoutputs[LcpIndex][subloopindex], recordedbandchannels);
-
-    vectorSub_cf32(conjfftoutputs[LcpIndex][subloopindex], conjfftoutputs[RcpIndex][subloopindex], tmpvec, recordedbandchannels);
-    vectorAdd_cf32_I(conjfftoutputs[LcpIndex][subloopindex], conjfftoutputs[RcpIndex][subloopindex], recordedbandchannels);
-    vectorCopy_cf32(tmpvec, conjfftoutputs[LcpIndex][subloopindex], recordedbandchannels);
-
-    // TODO PWC - this return was once a break (out of the 'numrecordedfreqs'
-    // loop); see if we need to handle it any more carefully
-    return;
+      NOT_SUPPORTED("linear to circular polarisation conversion");
     } else if (phasepoloffset) {
-  // Add phase offset to Lcp
-
-  if (config->getDRecordedBandPol(configindex, datastreamindex, indices[0])=='R') {
-      LcpIndex = indices[1];
-    } else {
-      LcpIndex = indices[0];
-    }
-    
-    // Rotate Lcp by phase offset deg
-    vectorMulC_cf32_I(phasecorrA[i], fftoutputs[LcpIndex][subloopindex], recordedbandchannels);
-    vectorMulC_cf32_I(phasecorrconjA[i], conjfftoutputs[LcpIndex][subloopindex], recordedbandchannels);
+      NOT_SUPPORTED("phase polarisation offset");
     }
 
     //if we need to, do the cross-polar autocorrelations
@@ -643,22 +538,7 @@ void Mode::process_gpu(int index, int subloopindex)  //frac sample error is in m
   }
   
   if (linear2circular) {// Delay this as it is possible for linear2circular to be active, but just one pol present
-    for (int k=0; k<count; k++) {
-  //do the autocorrelation (skipping Nyquist channel)
-  status = vectorAddProduct_cf32(fftoutputs[indices[k]][subloopindex], conjfftoutputs[indices[k]][subloopindex], autocorrelations[0][indices[k]], recordedbandchannels);
-  if(status != vecNoErr)
-    csevere << startl << "Error in autocorrelation!!!" << status << endl;
-
-  //store the weight
-      if(perbandweights)
-      {
-    weights[0][indices[k]] += perbandweights[subloopindex][indices[k]];
-      }
-      else
-      {
-    weights[0][indices[k]] += dataweight[subloopindex];
-      }
-    }
+    NOT_SUPPORTED("linear to circular polarisation conversion");
   }
 }
 
