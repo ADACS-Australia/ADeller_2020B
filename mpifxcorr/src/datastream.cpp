@@ -39,6 +39,7 @@
 #include <sys/time.h>
 #include "config.h"
 #include "alert.h"
+#include "mode.h"
 
 // Raw socket support is OS dependent.  For now only Linux is supported
 #ifdef __linux__

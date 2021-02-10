@@ -29,6 +29,7 @@
 #include "fxmanager.h"
 #include "alert.h"
 #include "config.h"
+#include "cpumode.h"
 
 Core::Core(int id, Configuration * conf, int * dids, MPI_Comm rcomm)
   : mpiid(id), config(conf), return_comm(rcomm)
@@ -805,7 +806,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
         i = fftloop*numBufferedFFTs + fftsubloop + startblock;
 	if(i >= startblock+numblocks)
 	  break; //may not have to fully complete last fftloop
-        modes[j]->process(i, fftsubloop);
+        ((CPUMode*)modes[j])->process(i, fftsubloop);
         numfftsprocessed++;
       }
     }

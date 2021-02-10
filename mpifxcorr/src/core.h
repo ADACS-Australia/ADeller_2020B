@@ -28,11 +28,11 @@
 #define CORE_H
 
 #include "architecture.h"
-#include "datastream.h"
 #include "configuration.h"
-#include "mode.h"
 #include "difxmessage.h"
-#include <pthread.h>
+
+class Configuration;
+class Mode;
 
 /**
 @class Core
@@ -111,7 +111,10 @@ protected:
   */
   virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
-private:
+// TODO PWC: This used to be 'private' but I changed it to 'protected' when we
+// introduced GPUCore. Work out what should actually be protected and what
+// should be private
+protected:
   /// Structure containing all the information necessary to describe one element in the circular send/receive buffer, and all the necessary space to
   /// store data and results
   typedef struct {

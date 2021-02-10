@@ -20,8 +20,7 @@ endif
 
 if WITH_CUDA
 cuda_files = \
-	gpucore.cu \
-	mode_process_gpu.cu
+	gpumode_kernels.cu
 else
 cuda_files =
 endif
@@ -32,12 +31,15 @@ mpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
 	core.cpp \
+	gpucore.cpp \
 	datastream.cpp \
 	visibility.cpp \
 	configuration.cpp \
 	mathutil.cpp \
 	sysutil.cpp \
 	mode.cpp \
+	cpumode.cpp \
+	gpumode.cpp \
 	model.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
@@ -69,6 +71,8 @@ library_include_HEADERS = \
 	mk5mode.h \
 	model.h \
 	mode.h \
+	cpumode.h \
+	gpumode.cpp \
 	polyco.h \
 	nativemk5.h \
 	watchdog.h \
@@ -90,7 +94,10 @@ libmpifxcorr_a_SOURCES = \
 	pcal.cpp \
 	configuration.cpp \
 	mode.cpp \
+	cpumode.cpp \
+	gpumode.cpp \
 	core.cpp \
+	gpucore.cpp \
 	datastream.cpp \
 	polyco.cpp \
 	mk5.cpp \
@@ -117,6 +124,7 @@ libfxcorr_a_SOURCES = \
 	mathutil.cpp \
 	sysutil.cpp \
 	mode.cpp \
+	cpumode.cpp \
 	mk5mode.cpp \
 	polyco.cpp \
 	visibility.cpp \
@@ -128,6 +136,7 @@ neuteredmpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
 	core.cpp \
+	gpucore.cpp \
 	datastream.cpp \
 	mathutil.cpp \
 	sysutil.cpp \
