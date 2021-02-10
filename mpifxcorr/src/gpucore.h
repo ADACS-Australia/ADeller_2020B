@@ -11,11 +11,9 @@ class GPUCore: public Core {
     virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
   protected:
-    /*
     virtual Mode *getMode(const int configindex, const int datastreamindex) {
       return config->getMode(configindex, datastreamindex, true);
     }
-    */
 };
 
 #endif
