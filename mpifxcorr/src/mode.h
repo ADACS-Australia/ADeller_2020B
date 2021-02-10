@@ -49,7 +49,6 @@ the provided data and control (delay) arrays
 */
 class Mode{
 public:
-  void extra_gpu_init();
  /**
   * Stores the FFT valid flags for this block of data
   * @param v The array of valid flags for each FFT
