@@ -43,6 +43,7 @@ mpifxcorr_SOURCES = \
 	model.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	mk5mode_gpu.cpp \
 	datamuxer.cpp \
 	mark5bfile.cpp \
 	vdiffile.cpp \
@@ -61,6 +62,7 @@ library_include_HEADERS = \
 	fxmanager.h \
 	pcal.h \
 	core.h \
+	gpucore.h \
 	datastream.h \
 	architecture.h \
 	visibility.h \
@@ -72,7 +74,7 @@ library_include_HEADERS = \
 	model.h \
 	mode.h \
 	cpumode.h \
-	gpumode.cpp \
+	gpumode.h \
 	polyco.h \
 	nativemk5.h \
 	watchdog.h \
@@ -102,6 +104,7 @@ libmpifxcorr_a_SOURCES = \
 	polyco.cpp \
 	mk5.cpp \
 	mk5mode.cpp \
+	mk5mode_gpu.cpp \
 	fxmanager.cpp \
 	mathutil.cpp \
 	sysutil.cpp \
@@ -125,7 +128,9 @@ libfxcorr_a_SOURCES = \
 	sysutil.cpp \
 	mode.cpp \
 	cpumode.cpp \
+	gpumode.cpp \
 	mk5mode.cpp \
+	mk5mode_gpu.cpp \
 	polyco.cpp \
 	visibility.cpp \
 	model.cpp \
@@ -147,7 +152,6 @@ neuteredmpifxcorr_SOURCES = \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
 	datamuxer.cpp \
-	$(cuda_files) \
 	$(mark5_files) \
 	$(mark6_files)
 

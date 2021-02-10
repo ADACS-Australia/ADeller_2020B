@@ -2186,7 +2186,7 @@ void Core::updateconfig(int oldconfigindex, int configindex, int threadid, int &
   //cdebug << startl << "About to create some new modes..." << endl;
   //get the config to create the appropriate Modes for us
   for(int i=0;i<numdatastreams;i++) {
-    modes[i] = config->getMode(configindex, i);
+    modes[i] = this->getMode(configindex, i);
     if(modes[i] == NULL || !modes[i]->initialisedOK()) {
       cfatal << startl << "Problem initialising a mode during a config change - aborting!" << endl;
       MPI_Abort(MPI_COMM_WORLD, 1);

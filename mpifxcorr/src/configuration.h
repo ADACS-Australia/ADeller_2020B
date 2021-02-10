@@ -570,9 +570,10 @@ public:
   * Creates and returns the appropriate mode object
   * @param configindex The index of the configuration being used (from the table in the input file)
   * @param datastreamindex The index of the datastream (from the table in the input file)
+  * @param usegpu      If true, return GPUMode children (otherwise return CPUMode children)
   * @return A new Mode object for that datastream, in that configuration
   */
-  Mode * getMode(int configindex, int datastreamindex);
+  Mode * getMode(int configindex, int datastreamindex, const bool usegpu);
 
  /**
   * @param scan The scan index

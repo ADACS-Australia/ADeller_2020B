@@ -111,6 +111,18 @@ protected:
   */
   virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
+  /**
+   * Forward a call onwards to config->getMode. This is virtual to allow
+   * GPUMode to override it (and pass 'true' for usegpu); in the future it
+   * could maybe use a more sophisticated factory/constructor for Modes.
+   * @param configindex Passed on to config->getMode
+   * @param datastreamindex Passed on to config->getMode
+   * @return Whatever config->getMode returns
+   */
+  virtual Mode *getMode(const int configindex, const int datastreamindex) {
+    return config->getMode(configindex, datastreamindex, false);
+  }
+
 // TODO PWC: This used to be 'private' but I changed it to 'protected' when we
 // introduced GPUCore. Work out what should actually be protected and what
 // should be private
