@@ -1,12 +1,13 @@
 #include "gpucore.h"
+#include "gpumode.h"
 #include "alert.h"
-#include <iostream>
+//#include <iostream>
 
 void GPUCore::processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace)
 {
-  static int nth_call = 0;
-  ++nth_call;
-  std::cout << "called GPUCore::processdata for the " << nth_call << time << std::endl;
+  //static int nth_call = 0;
+  //++nth_call;
+  //std::cout << "called GPUCore::processdata for the " << nth_call << time << std::endl;
 #ifndef NEUTERED_DIFX
   int status, i, numfftloops, numfftsprocessed;
   int resultindex, cindex, ds1index, ds2index, binloop;
@@ -146,7 +147,7 @@ void GPUCore::processdata(int index, int threadid, int startblock, int numblocks
         i = fftloop*numBufferedFFTs + fftsubloop + startblock;
 	if(i >= startblock+numblocks)
 	  break; //may not have to fully complete last fftloop
-        modes[j]->process_gpu(i, fftsubloop);
+        ((GPUMode*)modes[j])->process(i, fftsubloop);
         numfftsprocessed++;
       }
     }
