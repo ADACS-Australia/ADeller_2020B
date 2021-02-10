@@ -654,25 +654,6 @@ void Mode::process(const int index, const int subloopindex) {
   abort();
 }
 
-// Below is a stub 'process_gpu' that is used when we have *not* compiled with
-// CUDA. It indicates a fatal error and quits (although the code itself should
-// never be called because -- normally -- we would have bailed out already).
-//
-// The defintion of Mode::process_gpu when USE_CUDA *is* defined is not
-// containe here (because it needs to be compiled with nvcc) - it is stored in
-// a separate mode_process_gpu.cu file
-#ifndef USE_CUDA
-void Mode::process_gpu(const int index, const int subloopindex) {
-  // avoid compiler warnings
-  (void)index;
-  (void)subloopindex;
-
-  cfatal << "not compiled with GPU support" << endl;
-  exit(1);
-}
-
-#endif
-
 void Mode::averageFrequency()
 {
   cf32 tempsum;
