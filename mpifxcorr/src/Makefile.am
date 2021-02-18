@@ -152,6 +152,7 @@ neuteredmpifxcorr_SOURCES = \
 	vdiffake.cpp \
 	vdifnetwork.cpp \
 	datamuxer.cpp \
+	$(cuda_files) \
 	$(mark5_files) \
 	$(mark6_files)
 
