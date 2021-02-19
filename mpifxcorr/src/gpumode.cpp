@@ -3,13 +3,15 @@
 #include "gpumode.h"
 #include "alert.h"
 #include <cuda_runtime.h>
+#include <string>
 
 #include "gpumode_kernels.cuh"
 
 // Host calls
 
 GPUMode::GPUMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, int unpacksamp, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, double bclock):
-    Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, tcomplex, unpacksamp, fbank, linear2circular, fringerotorder, arraystridelen, cacorrs, bclock)
+    Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, tcomplex, unpacksamp, fbank, linear2circular, fringerotorder, arraystridelen, cacorrs, bclock),
+    estimatedbytes_gpu(0)
   {
   checkCuda(cudaMalloc(&this->subxoff_gpu,
         sizeof(double)*this->arraystridelength));
@@ -17,12 +19,44 @@ GPUMode::GPUMode(Configuration * conf, int confindex, int dsindex, int recordedb
         sizeof(double)*this->arraystridelength, cudaMemcpyHostToDevice));
   checkCuda(cudaMalloc(&this->subxval_gpu,
         sizeof(double)*this->arraystridelength));
+
+  this->complexunpacked_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels);
+  this->estimatedbytes_gpu += sizeof(cuFloatComplex)*this->fftchannels;
+
+  this->fftd_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels);
+  this->estimatedbytes_gpu += sizeof(cuFloatComplex)*this->fftchannels;
+
+  this->complexrotator_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels);
+
+  this->unpackedarrays_gpu = new float*[numrecordedbands];
+  this->estimatedbytes += sizeof(float*)*numrecordedbands;
+  for(size_t i = 0; i < numrecordedbands; ++i) {
+    checkCuda(cudaMalloc(&this->unpackedarrays_gpu[i], sizeof(float)*unpacksamples));
+    this->estimatedbytes_gpu += sizeof(float)*this->unpacksamples;
+  }
+  // TODO: PWC: allocations for complex
+
+  checkCufft(cufftPlan1d(&this->fft_plan, this->fftchannels, CUFFT_C2C, 1));
+}
+
+GPUMode::~GPUMode() {
+  checkCuda(cudaFree(this->complexunpacked_gpu));
+  checkCuda(cudaFree(this->fftd_gpu));
+
+  for(size_t i = 0; i < numrecordedbands; ++i) {
+    checkCuda(cudaFree(this->unpackedarrays_gpu[i]));
+  }
+  delete [] this->unpackedarrays_gpu;
+  // TODO: PWC: dealloctions for complex
+
+  cufftDestroy(this->fft_plan);
 }
 
 // typical numrecordedbands = 2
 
 void GPUMode::process(int index, int subloopindex)  //frac sample error is in microseconds 
 {
+#ifndef NEUTERED_DIFX
   static int nth_call = 0;
   ++nth_call;
   double phaserotation, averagedelay, nearestsampletime, starttime, lofreq, walltimesecs, fracwalltime, fftcentre, d0, d1, d2, fraclooffset;
@@ -392,17 +426,23 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
             NOT_SUPPORTED("complex");
           } else {
             // PWCR DO THIS
-            status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
-            if (status != vecNoErr)
-              csevere << startl << "Error in real->complex conversion" << endl;
-            status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
-            if(status != vecNoErr)
-              csevere << startl << "Error in fringe rotation!!!" << status << endl;
+            //status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
+            // TODO: none of this complexrotator faff, just calculate e^...
+            // directly in the kernel
+            checkCuda(cudaMemcpy(this->complexrotator_gpu, this->complexrotator, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
+            gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
+            gpu_inPlaceMultiply_cf(complexrotator_gpu, complexunpacked_gpu, fftchannels);
+            //status = vectorRealToComplex_f32(NULL, NULL, complexunpacked, fftchannels);
+            //if (status != vecNoErr)
+            //  csevere << startl << "Error in real->complex conversion" << endl;
+            //status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
+            //if(status != vecNoErr)
+            //  csevere << startl << "Error in fringe rotation!!!" << status << endl;
           }
           if(isfft) {
-            status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
-            if(status != vecNoErr)
-              csevere << startl << "Error doing the FFT!!!" << endl;
+            checkCufft(cufftExecC2C(this->fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
+            //status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
+            checkCuda(cudaMemcpy(this->fftd, this->fftd_gpu, sizeof(cuFloatComplex)*this->fftchannels, cudaMemcpyDeviceToHost));
           } else {
             NOT_SUPPORTED("!isfft");
           }
@@ -439,21 +479,7 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
 
       if(dumpkurtosis) //do the necessary accumulation
       {
-        status = vectorMagnitude_cf32(fftoutputs[j][subloopindex], kscratch, recordedbandchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error taking kurtosis magnitude!" << endl;
-        status = vectorSquare_f32_I(kscratch, recordedbandchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error in first kurtosis square!" << endl;
-        status = vectorAdd_f32_I(kscratch, s1[j], recordedbandchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error in kurtosis s1 accumulation!" << endl;
-        status = vectorSquare_f32_I(kscratch, recordedbandchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error in second kurtosis square!" << endl;
-        status = vectorAdd_f32_I(kscratch, s2[j], recordedbandchannels);
-        if(status != vecNoErr)
-          csevere << startl << "Error in kurtosis s2 accumulation!" << endl;
+        NOT_SUPPORTED("dump_kurtosis branch");
       }
 
       //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
@@ -462,6 +488,8 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
   } else {
     status = vectorMul_cf32_I(fracsamprotatorB, fftoutputs[j][subloopindex], recordedbandchannels);
   }
+
+
   if(status != vecNoErr)
     csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
 
@@ -524,6 +552,7 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
   if (linear2circular) {// Delay this as it is possible for linear2circular to be active, but just one pol present
     NOT_SUPPORTED("linear to circular polarisation conversion");
   }
+#endif
 }
 
 // vim: shiftwidth=2:softtabstop=2:expandtab

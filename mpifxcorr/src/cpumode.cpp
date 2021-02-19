@@ -1,6 +1,55 @@
 #include "cpumode.h"
 #include "alert.h"
 
+CPUMode::CPUMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, int unpacksamp, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, double bclock):
+    Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, tcomplex, unpacksamp, fbank, linear2circular, fringerotorder, arraystridelen, cacorrs, bclock)
+{
+	/*
+    unpackedarrays = new f32*[numrecordedbands];
+    if (usecomplex) unpackedcomplexarrays = new cf32*[numrecordedbands];
+    for(int i=0;i<numrecordedbands;i++) {
+      unpackedarrays[i] = vectorAlloc_f32(unpacksamples);
+      estimatedbytes += sizeof(f32)*unpacksamples;
+      if (usecomplex) unpackedcomplexarrays[i] = (cf32*) unpackedarrays[i];
+    }
+	*/
+  int status;
+  switch(fringerotationorder) {
+    case 2:
+      /* fall through */
+    case 1:
+
+      if (isfft) {
+        status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint, &fftbuffersize, &fftbuffer);
+        if (status != vecNoErr)
+          csevere << startl << "Error in FFT initialisation!!!" << status << endl;
+      } else {
+        status = vectorInitDFTC_cf32(&pDFTSpecC, fftchannels, flag, hint, &fftbuffersize, &fftbuffer);
+        if(status != vecNoErr)
+          csevere << startl << "Error in DFT initialisation!!!" << status << endl;
+      }
+      break;
+  }
+}
+
+CPUMode::~CPUMode() {
+  for(int i=0;i<numrecordedbands;i++)
+    vectorFree(unpackedarrays[i]);
+  delete [] unpackedarrays;
+
+  switch(fringerotationorder) {
+    case 2:
+      /* fall through */
+    case 1:
+      if(isfft) {
+        vectorFreeFFTC_cf32(pFFTSpecC);
+      } else {
+        vectorFreeDFTC_cf32(pDFTSpecC);
+      }
+      break;
+  }
+}
+
 void CPUMode::process(int index, int subloopindex)  //frac sample error is in microseconds 
 {
   //static int nth_call = 0;
