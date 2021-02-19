@@ -162,7 +162,7 @@ AS_IF([test "x$with_cuda" == "xyes"],[
 	AC_SUBST(NVCCFLAGS)
 	dnl This needs to go into the linker command, because in the end mpicc
 	dnl (rather than nvcc) will be called to link everything together
-	CUDA_LIBS=-lcudart
+	CUDA_LIBS="-lcudart -lcufft"
 	AC_DEFINE([USE_CUDA], [1], [Compile CUDA-based GPU acceleration.])
 	AC_MSG_NOTICE([GPU support through CUDA will be **enabled** on this build])
 ],[

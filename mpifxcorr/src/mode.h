@@ -49,6 +49,8 @@ the provided data and control (delay) arrays
 */
 class Mode{
 public:
+  f32 **  unpackedarrays;
+  cf32 **  unpackedcomplexarrays;
  /**
   * Stores the FFT valid flags for this block of data
   * @param v The array of valid flags for each FFT
@@ -265,17 +267,13 @@ protected:
   u8  *   data;
   s16 *   lookup;
   s16 *   linearunpacked;
-  f32 **  unpackedarrays;
-  cf32 **  unpackedcomplexarrays;
   cf32*** fftoutputs;
   cf32*** conjfftoutputs;
   f32 **  weights;
   s32 *   validflags;
   cf32*** autocorrelations;
   vecFFTSpecR_f32 * pFFTSpecR;
-  vecFFTSpecC_cf32 * pFFTSpecC;
   vecDFTSpecR_f32 * pDFTSpecR;
-  vecDFTSpecC_cf32 * pDFTSpecC;
   u8 * fftbuffer;
   vecHintAlg hint;
   Model * model;

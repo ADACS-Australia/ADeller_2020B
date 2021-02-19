@@ -157,14 +157,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
     if(samplesperblock > 1)
       numlookups++;
 
-    unpackedarrays = new f32*[numrecordedbands];
-    if (usecomplex) unpackedcomplexarrays = new cf32*[numrecordedbands];
-    for(int i=0;i<numrecordedbands;i++) {
-      unpackedarrays[i] = vectorAlloc_f32(unpacksamples);
-      estimatedbytes += sizeof(f32)*unpacksamples;
-      if (usecomplex) unpackedcomplexarrays[i] = (cf32*) unpackedarrays[i];
-    }
-
     interpolator = new f64[3];
 
     fftoutputs = new cf32**[numrecordedbands + numzoombands];
@@ -275,16 +267,6 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
             stepxoffsquared[i] = stepxoff[i]*stepxoff[i];
         }
 
-        if (isfft) {
-          status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint, &fftbuffersize, &fftbuffer);
-          if (status != vecNoErr)
-            csevere << startl << "Error in FFT initialisation!!!" << status << endl;
-        }
-        else {
-          status = vectorInitDFTC_cf32(&pDFTSpecC, fftchannels, flag, hint, &fftbuffersize, &fftbuffer);
-          if(status != vecNoErr)
-            csevere << startl << "Error in DFT initialisation!!!" << status << endl;
-        }
         break;
       case 0: //zeroth order interpolation, can do "post-F"
         if (isfft) {
@@ -300,6 +282,14 @@ Mode::Mode(Configuration * conf, int confindex, int dsindex, int recordedbandcha
         break;
     }
     estimatedbytes += fftbuffersize;
+
+    unpackedarrays = new f32*[numrecordedbands];
+    if (usecomplex) unpackedcomplexarrays = new cf32*[numrecordedbands];
+    for(int i=0;i<numrecordedbands;i++) {
+      unpackedarrays[i] = vectorAlloc_f32(unpacksamples);
+      estimatedbytes += sizeof(f32)*unpacksamples;
+      if (usecomplex) unpackedcomplexarrays[i] = (cf32*) unpackedarrays[i];
+    }
 
     subfracsamparg = vectorAlloc_f32(arraystridelength);
     subfracsampsin = vectorAlloc_f32(arraystridelength);
@@ -490,10 +480,6 @@ Mode::~Mode()
   delete [] conjfftoutputs;
   delete [] interpolator;
 
-  for(int i=0;i<numrecordedbands;i++)
-    vectorFree(unpackedarrays[i]);
-  delete [] unpackedarrays;
-
   switch(fringerotationorder) {
     case 2: // Quadratic
       vectorFree(piecewiserotator);
@@ -530,12 +516,6 @@ Mode::~Mode()
       vectorFree(complexunpacked);
       vectorFree(complexrotator);
       vectorFree(fftd);
-      if(isfft) {
-	vectorFreeFFTC_cf32(pFFTSpecC);
-      }
-      else{
-	vectorFreeDFTC_cf32(pDFTSpecC);
-      }
       break;
     case 0: //zeroth order interpolation, "post-F"
       if(isfft) {
@@ -549,7 +529,7 @@ Mode::~Mode()
 
   vectorFree(lookup);
   vectorFree(linearunpacked);
-  vectorFree(fftbuffer);
+  //vectorFree(fftbuffer);
 
   vectorFree(subfracsamparg);
   vectorFree(subfracsampsin);
@@ -616,6 +596,7 @@ Mode::~Mode()
 
 float Mode::unpack(int sampleoffset, int subloopindex)
 {
+	/*
   int status, leftoversamples, stepin = 0;
 
   if(bytesperblockdenominator/bytesperblocknumerator == 0)
@@ -645,6 +626,7 @@ float Mode::unpack(int sampleoffset, int subloopindex)
   }
 
   return 1.0;
+  */
 }
 
 void Mode::process(const int index, const int subloopindex) {
