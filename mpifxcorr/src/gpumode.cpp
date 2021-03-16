@@ -212,45 +212,6 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
       if(status != vecNoErr)
         csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
       break;
-      d0 = interpolator[0]*index*index + interpolator[1]*index + interpolator[2];
-      d1 = interpolator[0]*(index+0.5)*(index+0.5) + interpolator[1]*(index+0.5) + interpolator[2];
-      d2 = interpolator[0]*(index+1)*(index+1) + interpolator[1]*(index+1) + interpolator[2];
-      a = d2-d0;
-      b = d0 + (d1 - (a*0.5 + d0))/3.0;
-      integerdelay = static_cast<int>(b);
-      b -= integerdelay;
-
-      //std::cout << "early vecMul call, a = " << a << " ; arraystridelength = " << arraystridelength << std::endl;
-      //cudaDeviceSynchronize();
-      //std::cerr << "(b4)        cuda last error " << cudaGetErrorString(cudaGetLastError()) << std::endl;
-      cudaMul_f64(arraystridelength, subxoff_gpu, a, subxval_gpu);
-      {
-      cudaError_t lasterr = cudaGetLastError();
-      //std::cerr << "(aft)       cuda last error " << cudaGetErrorString(lasterr) << std::endl;
-      if(cudaSuccess != lasterr) {
-        cudaDeviceProp prop;
-        int device;
-        checkCuda(cudaGetDevice(&device));
-        checkCuda(cudaGetDeviceProperties(&prop, device));
-        std::cout << "Cuda info: name = " << prop.name << std::endl;
-      }
-      //cudaDeviceSynchronize();
-      lasterr = cudaGetLastError();
-      //std::cerr << "(aft synch) cuda last error " << cudaGetErrorString(lasterr) << std::endl;
-      checkCuda(cudaMemcpy(this->subxval, this->subxval_gpu,
-            sizeof(double)*this->arraystridelength, cudaMemcpyDeviceToHost));
-      //double test[16] = {42, 42, 42, 42, 42, 42, 42, 42};
-      //status = vectorMulC_f64(subxoff, a, test, arraystridelength);
-      //if(status != vecNoErr)
-      //  csevere << startl << "Error in linearinterpolate, subval multiplication" << endl;
-      }
-      status = vectorMulC_f64(stepxoff, a, stepxval, numfrstrides);
-      if(status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate, stepval multiplication" << endl;
-      status = vectorAddC_f64_I(b, subxval, arraystridelength);
-      if(status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
-      break;
     case 2: //quadratic
       NOT_SUPPORTED("fringerotationorder = 2");
       break;
@@ -333,6 +294,9 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
           csevere << startl << "Error in linearinterpolate lofreq non-integer freq addition!!!" << status << endl;
       }
       // if(looff) { -- PWC removed this if() ... }
+      if(looff) {
+        NOT_SUPPORTED("looff");
+      }
       for(int j=0;j<arraystridelength;j++) { // PWCR - typ 16
         subarg[j] = -TWO_PI*(subphase[j] - int(subphase[j]));
       }
@@ -426,22 +390,43 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
             NOT_SUPPORTED("complex");
           } else {
             // PWCR DO THIS
-            //status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
+            status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
             // TODO: none of this complexrotator faff, just calculate e^...
             // directly in the kernel
+            const double bigA_d = a * lofreq/fftchannels - sampletime*1.e-6*recordedfreqlooffsets[i];
+            const double bigB_d = b*lofreq   // NOTE - no division by /fftchannels here
+                                 + (lofreq-int(lofreq))*integerdelay
+                                 - recordedfreqlooffsets[i]*fracwalltime
+                                 - fraclooffset*intwalltime;
+            for(size_t k = 0; k < fftchannels; ++k) {
+              const double exponent_d = (bigA_d * k + bigB_d);
+              const std::complex<double> cr_d = exp( std::complex<double>(0, -TWO_PI) * ( exponent_d - int(exponent_d) ) );
+              const std::complex<double> cr_orig(this->complexrotator[k].re, this->complexrotator[k].im);
+              if(std::abs(cr_d - cr_orig) > 1e-2) {
+                std::cerr << " UH OK k = " << k << " and we don't have a match (" << std::abs(cr_d - cr_orig) << ")" << std::endl;
+                std::cerr << "       --- (" << cr_d.real() << ", " << cr_d.imag() << ") vs (" << cr_orig.real() << ", " << cr_orig.imag() << ")" << std::endl;
+              }
+            }
             checkCuda(cudaMemcpy(this->complexrotator_gpu, this->complexrotator, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
             gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
-            gpu_inPlaceMultiply_cf(complexrotator_gpu, complexunpacked_gpu, fftchannels);
+            //checkCuda(cudaMemcpy(this->complexunpacked_gpu, this->complexunpacked, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
+            //gpu_inPlaceMultiply_cf(complexrotator_gpu, complexunpacked_gpu, fftchannels);
+            gpu_complexrotatorMultiply(this->fftchannels, this->complexunpacked_gpu, bigA_d, bigB_d, this->complexrotator_gpu);
+            //sleep(5);
+            //exit(42);
             //status = vectorRealToComplex_f32(NULL, NULL, complexunpacked, fftchannels);
             //if (status != vecNoErr)
             //  csevere << startl << "Error in real->complex conversion" << endl;
-            //status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
+            status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
             //if(status != vecNoErr)
             //  csevere << startl << "Error in fringe rotation!!!" << status << endl;
           }
           if(isfft) {
             checkCufft(cufftExecC2C(this->fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
+              vecFFTSpecC_cf32 * pFFTSpecC;
+              status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint, &fftbuffersize, &fftbuffer);
             //status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
+              vectorFreeFFTC_cf32(pFFTSpecC);
             checkCuda(cudaMemcpy(this->fftd, this->fftd_gpu, sizeof(cuFloatComplex)*this->fftchannels, cudaMemcpyDeviceToHost));
           } else {
             NOT_SUPPORTED("!isfft");
