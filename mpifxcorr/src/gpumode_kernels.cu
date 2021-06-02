@@ -33,7 +33,8 @@ void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const s
 __global__ void _gpu_complexrotatorMultiply(cuFloatComplex *const a, const
     double bigA, const double bigB, cuFloatComplex *comparison) {
   const size_t j = blockIdx.x * blockDim.x + threadIdx.x;
-  double exponent = ( bigA*j + bigB );
+  double bigB_reduced = bigB - int(bigB);
+  double exponent = ( bigA*j + bigB_reduced );
   exponent -= int(exponent);
   cuFloatComplex cr;
   sincosf(-TWO_PI * exponent, &cr.y, &cr.x);

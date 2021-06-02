@@ -4,6 +4,7 @@
 #include "alert.h"
 #include <cuda_runtime.h>
 #include <string>
+#include <unistd.h>
 
 #include "gpumode_kernels.cuh"
 
@@ -399,13 +400,16 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
                                  - recordedfreqlooffsets[i]*fracwalltime
                                  - fraclooffset*intwalltime;
             for(size_t k = 0; k < fftchannels; ++k) {
-              const double exponent_d = (bigA_d * k + bigB_d);
+              const double reduced_bigB = bigB_d - int(bigB_d);
+              const double exponent_d = (bigA_d * k + reduced_bigB);
               const std::complex<double> cr_d = exp( std::complex<double>(0, -TWO_PI) * ( exponent_d - int(exponent_d) ) );
               const std::complex<double> cr_orig(this->complexrotator[k].re, this->complexrotator[k].im);
-              if(std::abs(cr_d - cr_orig) > 1e-2) {
+              /*
+              if(std::abs(cr_d - cr_orig) > 1e-4) {
                 std::cerr << " UH OK k = " << k << " and we don't have a match (" << std::abs(cr_d - cr_orig) << ")" << std::endl;
                 std::cerr << "       --- (" << cr_d.real() << ", " << cr_d.imag() << ") vs (" << cr_orig.real() << ", " << cr_orig.imag() << ")" << std::endl;
               }
+              */
             }
             checkCuda(cudaMemcpy(this->complexrotator_gpu, this->complexrotator, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
             gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
