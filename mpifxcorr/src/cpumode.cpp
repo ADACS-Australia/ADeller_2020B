@@ -1,6 +1,9 @@
 #include "cpumode.h"
 #include "alert.h"
 
+#include <complex.h>
+#include <fftw3.h>
+
 CPUMode::CPUMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, int unpacksamp, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, double bclock):
     Mode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, tcomplex, unpacksamp, fbank, linear2circular, fringerotorder, arraystridelen, cacorrs, bclock)
 {
@@ -603,9 +606,39 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
               	csevere << startl << "Error in fringe rotation!!!" << status << endl;
             }
             if(isfft) {
+              // ORIGINAL VERSION
+              /*
               status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
               if(status != vecNoErr)
                 csevere << startl << "Error doing the FFT!!!" << endl;
+              */
+              // FFTW version
+              fftw_make_planner_thread_safe();
+              fftw_plan p;
+              const int N = (int)pow(2, order);
+              //p = fftw_plan_dft_1d((int)pow(2, order), (double (*)[2])complexunpacked, (double (*)[2])fftd, FFTW_FORWARD, FFTW_ESTIMATE);
+              fftw_complex *inZ = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N);
+              fftw_complex *outZ = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N);
+              if(!inZ) {
+                fprintf(stderr, "BAD IN\n");
+              }
+              if(!outZ) {
+                fprintf(stderr, "BAD OUT\n");
+              }
+              p = fftw_plan_dft_1d(N, inZ, outZ, FFTW_FORWARD, FFTW_ESTIMATE);
+              if(!p) {
+                fprintf(stderr, "BAD PLAN\n");
+              }
+              for(size_t i = 0; i < N; ++i) {
+                inZ[i][0] = complexunpacked[i].re;
+                inZ[i][1] = complexunpacked[i].im;
+              }
+              fftw_execute(p);
+              for(size_t i = 0; i < N; ++i) {
+                fftd[i].re = outZ[i][0];
+                fftd[i].im = outZ[i][1];
+              }
+              fftw_destroy_plan(p);
             }
             else {
               status = vectorDFT_CtoC_cf32(complexunpacked, fftd, pDFTSpecC, fftbuffer);
