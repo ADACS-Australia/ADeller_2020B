@@ -390,47 +390,18 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
           if (usecomplex) {
             NOT_SUPPORTED("complex");
           } else {
-            // PWCR DO THIS
-            status = vectorRealToComplex_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), NULL, complexunpacked, fftchannels);
-            // TODO: none of this complexrotator faff, just calculate e^...
-            // directly in the kernel
             const double bigA_d = a * lofreq/fftchannels - sampletime*1.e-6*recordedfreqlooffsets[i];
             const double bigB_d = b*lofreq   // NOTE - no division by /fftchannels here
                                  + (lofreq-int(lofreq))*integerdelay
                                  - recordedfreqlooffsets[i]*fracwalltime
                                  - fraclooffset*intwalltime;
-            for(size_t k = 0; k < fftchannels; ++k) {
-              const double reduced_bigB = bigB_d - int(bigB_d);
-              const double exponent_d = (bigA_d * k + reduced_bigB);
-              const std::complex<double> cr_d = exp( std::complex<double>(0, -TWO_PI) * ( exponent_d - int(exponent_d) ) );
-              const std::complex<double> cr_orig(this->complexrotator[k].re, this->complexrotator[k].im);
-              /*
-              if(std::abs(cr_d - cr_orig) > 1e-4) {
-                std::cerr << " UH OK k = " << k << " and we don't have a match (" << std::abs(cr_d - cr_orig) << ")" << std::endl;
-                std::cerr << "       --- (" << cr_d.real() << ", " << cr_d.imag() << ") vs (" << cr_orig.real() << ", " << cr_orig.imag() << ")" << std::endl;
-              }
-              */
-            }
             checkCuda(cudaMemcpy(this->complexrotator_gpu, this->complexrotator, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
             gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
-            //checkCuda(cudaMemcpy(this->complexunpacked_gpu, this->complexunpacked, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
-            //gpu_inPlaceMultiply_cf(complexrotator_gpu, complexunpacked_gpu, fftchannels);
             gpu_complexrotatorMultiply(this->fftchannels, this->complexunpacked_gpu, bigA_d, bigB_d, this->complexrotator_gpu);
-            //sleep(5);
-            //exit(42);
-            //status = vectorRealToComplex_f32(NULL, NULL, complexunpacked, fftchannels);
-            //if (status != vecNoErr)
-            //  csevere << startl << "Error in real->complex conversion" << endl;
-            status = vectorMul_cf32_I(complexrotator, complexunpacked, fftchannels);
-            //if(status != vecNoErr)
-            //  csevere << startl << "Error in fringe rotation!!!" << status << endl;
           }
           if(isfft) {
             checkCufft(cufftExecC2C(this->fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
               vecFFTSpecC_cf32 * pFFTSpecC;
-              status = vectorInitFFTC_cf32(&pFFTSpecC, order, flag, hint, &fftbuffersize, &fftbuffer);
-            //status = vectorFFT_CtoC_cf32(complexunpacked, fftd, pFFTSpecC, fftbuffer);
-              vectorFreeFFTC_cf32(pFFTSpecC);
             checkCuda(cudaMemcpy(this->fftd, this->fftd_gpu, sizeof(cuFloatComplex)*this->fftchannels, cudaMemcpyDeviceToHost));
           } else {
             NOT_SUPPORTED("!isfft");
