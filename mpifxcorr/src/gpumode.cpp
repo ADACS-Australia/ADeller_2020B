@@ -395,9 +395,8 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
                                  + (lofreq-int(lofreq))*integerdelay
                                  - recordedfreqlooffsets[i]*fracwalltime
                                  - fraclooffset*intwalltime;
-            checkCuda(cudaMemcpy(this->complexrotator_gpu, this->complexrotator, sizeof(cuFloatComplex)*fftchannels, cudaMemcpyHostToDevice));
             gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
-            gpu_complexrotatorMultiply(this->fftchannels, this->complexunpacked_gpu, bigA_d, bigB_d, this->complexrotator_gpu);
+            gpu_complexrotatorMultiply(this->fftchannels, this->complexunpacked_gpu, bigA_d, bigB_d);
           }
           if(isfft) {
             checkCufft(cufftExecC2C(this->fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
