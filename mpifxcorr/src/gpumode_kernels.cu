@@ -31,36 +31,19 @@ void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const s
 }
 
 __global__ void _gpu_complexrotatorMultiply(cuFloatComplex *const a, const
-    double bigA, const double bigB, cuFloatComplex *comparison) {
+    double bigA, const double bigB) {
   const size_t j = blockIdx.x * blockDim.x + threadIdx.x;
   double bigB_reduced = bigB - int(bigB);
   double exponent = ( bigA*j + bigB_reduced );
   exponent -= int(exponent);
   cuFloatComplex cr;
   sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
-  const double max_re = (fabs(cr.x) > fabs(comparison[j].x) ? cr.x : comparison[j].x);
-  const double max_im = (fabs(cr.y) > fabs(comparison[j].y) ? cr.y : comparison[j].y);
-  const double diff_re = (cr.x - comparison[j].x)/max_re;
-  const double diff_im = (cr.y - comparison[j].y)/max_im;
-  /*
-  if(fabs(diff_re) > 1e-2 || fabs(diff_im) > 1e-2) {
-    printf("j = % 4d; cr = %0.17f + %0.17f ; c.f. orig = %0.17f + %0.17f\n"
-           "   diff: %0.17e + %0.17e\n", j, cr.x, cr.y, comparison[j].x,
-           comparison[j].y, diff_re, diff_im);
-  }
-  */
-  //if(1 || diff_re > 0.0 || diff_im > 0.0) {
-  //if(fabs(diff_re) > 1e-4 || fabs(diff_im) > 1e-4) {
-  //if(cr.x != comparison[j].x || cr.y != comparison[j].y) {
-    //a[j] = cuCmulf(a[j], comparison[j]);
-  //} else {
-    a[j] = cuCmulf(a[j], cr);
-  //}
+  a[j] = cuCmulf(a[j], cr);
 }
 
 void gpu_complexrotatorMultiply(const size_t len, cuFloatComplex *const a,
-    const double bigA, const double bigB, cuFloatComplex *comparison) {
-  _gpu_complexrotatorMultiply<<<1,len>>>(a, bigA, bigB, comparison);
+    const double bigA, const double bigB) {
+  _gpu_complexrotatorMultiply<<<1,len>>>(a, bigA, bigB);
 }
 
 void *gpu_malloc(const size_t amt) {
