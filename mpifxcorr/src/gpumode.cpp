@@ -31,6 +31,7 @@ GPUMode::GPUMode(Configuration * conf, int confindex, int dsindex, int recordedb
 
   this->unpackedarrays_gpu = new float*[numrecordedbands];
   this->estimatedbytes += sizeof(float*)*numrecordedbands;
+  this->unpackedarrays_elem_count = unpacksamples;
   for(size_t i = 0; i < numrecordedbands; ++i) {
     checkCuda(cudaMalloc(&this->unpackedarrays_gpu[i], sizeof(float)*unpacksamples));
     this->estimatedbytes_gpu += sizeof(float)*this->unpacksamples;
@@ -395,7 +396,7 @@ void GPUMode::process(int index, int subloopindex)  //frac sample error is in mi
                                  + (lofreq-int(lofreq))*integerdelay
                                  - recordedfreqlooffsets[i]*fracwalltime
                                  - fraclooffset*intwalltime;
-            gpu_host2DevRtoC(complexunpacked_gpu, &(unpackedarrays[j][nearestsample - unpackstartsamples]), fftchannels);
+            gpu_RtoC(complexunpacked_gpu, &(unpackedarrays_gpu[j][nearestsample - unpackstartsamples]), fftchannels);
             gpu_complexrotatorMultiply(this->fftchannels, this->complexunpacked_gpu, bigA_d, bigB_d);
           }
           if(isfft) {

@@ -29,6 +29,10 @@ protected:
   size_t estimatedbytes_gpu;
 
   cuFloatComplex *complexrotator_gpu;
+
+  // Remember how long the 'unpackedarrays' are -- norally this would be
+  // 'unpacksamples' but e.g. the Mk5Mode implementation overwrites that
+  size_t unpackedarrays_elem_count;
 private:
 
   cufftHandle fft_plan;

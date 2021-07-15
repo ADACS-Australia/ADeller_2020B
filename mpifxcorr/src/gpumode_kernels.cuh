@@ -49,6 +49,9 @@ void gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *con
  */
 void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
 
+/** TODO documnt */
+void gpu_RtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
+
 void gpu_complexrotatorMultiply(const size_t fftchannels, cuFloatComplex *const
     a, const double bigA, const double bigB);
 
