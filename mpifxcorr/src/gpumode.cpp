@@ -1,4 +1,4 @@
-#define NOT_SUPPORTED(x) std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1)
+#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
 
 #include "gpumode.h"
 #include "alert.h"
