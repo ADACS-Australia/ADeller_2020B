@@ -1,7 +1,10 @@
 #include <mpi.h>
 #include "mk5mode_gpu.h"
+#include "gpumode_kernels.cuh"
 //#include "mk5.h"
 #include "alert.h"
+
+#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
 
 Mk5_GPUMode::Mk5_GPUMode(Configuration * conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend, int gsamples, int nrecordedfreqs, double recordedbw, double * recordedfreqclkoffs, double * recordedfreqclkoffsdelta, double * recordedfreqphaseoffs, double * recordedfreqlooffs, int nrecordedbands, int nzoombands, int nbits, Configuration::datasampling sampling, Configuration::complextype tcomplex, bool fbank, bool linear2circular, int fringerotorder, int arraystridelen, bool cacorrs, int framebytes, int framesamples, Configuration::dataformat format)
   : GPUMode(conf, confindex, dsindex, recordedbandchan, chanstoavg, bpersend, gsamples, nrecordedfreqs, recordedbw, recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands, nzoombands, nbits, sampling, tcomplex, recordedbandchan*2+4, fbank, linear2circular, fringerotorder, arraystridelen, cacorrs, recordedbw*2)
@@ -86,7 +89,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   //unpack one frame plus one FFT size worth of samples
   if(usecomplex) 
   {
-    goodsamples = mark5_unpack_complex_with_offset(mark5stream, data, unpackstartsamples, (mark5_float_complex**)unpackedcomplexarrays, samplestounpack);
+    NOT_SUPPORTED("unpack - usecomplex");
   }
   else
   {
@@ -118,25 +121,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   }
   if(perbandweights)
   {
-    int totalinvalid;
-
-    if(usecomplex)
-    {
-      blank_vdif_EDV4_complex(data, unpackstartsamples, (mark5_float_complex**)unpackedcomplexarrays, samplestounpack, invalid);
-    }
-    else
-    {
-      blank_vdif_EDV4(data, unpackstartsamples, unpackedarrays, samplestounpack, invalid);
-    }
-
-    totalinvalid = 0;
-    for(int b = 0; b < mark5stream->nchan; ++b)
-    {
-      perbandweights[subloopindex][b] = (goodsamples - invalid[b])/(float)unpacksamples;
-      totalinvalid += invalid[b];
-    }
-
-    goodsamples -= (float)totalinvalid/(float)(mark5stream->nchan);
+      NOT_SUPPORTED("per band weights");
   }
 
   if(goodsamples < 0)
@@ -145,6 +130,13 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
     goodsamples = 0;
     for(int b = 0; b < mark5stream->nchan; ++b)
       invalid[b] = 0;
+  }
+
+  // PWC - bulk copy into GPU - but we'll have to do something smarter in the
+  // future
+  for(size_t i = 0; i < numrecordedbands; ++i) {
+    //printf("copy total elems = unpacksamples + 2 = %d + 2 = %d\n", unpacksamples, unpacksamples + 2);
+    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[i], this->unpackedarrays[i], sizeof(float)*(this->unpackedarrays_elem_count), cudaMemcpyHostToDevice));
   }
 
   return goodsamples/(float)unpacksamples;

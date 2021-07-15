@@ -25,9 +25,21 @@ void gpu_inPlaceMultiply_cf(const cuFloatComplex *const dst, cuFloatComplex *con
   _gpu_inPlaceMultiply_cf<<<1,len>>>(dst, bydst);
 }
 
+// Copy from host to device, converting from float to cuFloatComplex
+// (initialising all imaginary parts as zero) as you go
 void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len) {
   checkCuda(cudaMemset(dst, 0x0, len*sizeof(cuFloatComplex)));
   checkCuda(cudaMemcpy2D(dst, sizeof(cuFloatComplex), src, sizeof(float), sizeof(float), len, cudaMemcpyHostToDevice));
+}
+
+__global__ void _gpu_RtoC(cuFloatComplex *const dst, const float *const src) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  dst[idx] = make_cuFloatComplex(src[idx], 0.f);
+}
+
+void gpu_RtoC(cuFloatComplex *const dst, const float *const src, const size_t len) {
+  _gpu_RtoC<<<len,1>>>(dst, src);
+  //checkCuda(cudaDeviceSynchronize());
 }
 
 __global__ void _gpu_complexrotatorMultiply(cuFloatComplex *const a, const
