@@ -32,9 +32,11 @@ GPUMode::GPUMode(Configuration * conf, int confindex, int dsindex, int recordedb
   this->unpackedarrays_gpu = new float*[numrecordedbands];
   this->estimatedbytes += sizeof(float*)*numrecordedbands;
   this->unpackedarrays_elem_count = unpacksamples;
+  float *big_array;
+  checkCuda(cudaMalloc(&big_array, sizeof(float)*unpacksamples*numrecordedbands));
+  this->estimatedbytes_gpu += sizeof(float)*this->unpacksamples*numrecordedbands;
   for(size_t i = 0; i < numrecordedbands; ++i) {
-    checkCuda(cudaMalloc(&this->unpackedarrays_gpu[i], sizeof(float)*unpacksamples));
-    this->estimatedbytes_gpu += sizeof(float)*this->unpacksamples;
+    this->unpackedarrays_gpu[i] = big_array + (i*unpacksamples);
   }
   // TODO: PWC: allocations for complex
 
@@ -45,9 +47,8 @@ GPUMode::~GPUMode() {
   checkCuda(cudaFree(this->complexunpacked_gpu));
   checkCuda(cudaFree(this->fftd_gpu));
 
-  for(size_t i = 0; i < numrecordedbands; ++i) {
-    checkCuda(cudaFree(this->unpackedarrays_gpu[i]));
-  }
+  // Allocated on the GPU as one big array so we don't need to free them all
+  checkCuda(cudaFree(this->unpackedarrays_gpu[0]));
   delete [] this->unpackedarrays_gpu;
   // TODO: PWC: dealloctions for complex
 
