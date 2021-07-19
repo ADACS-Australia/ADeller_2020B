@@ -132,12 +132,15 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
       invalid[b] = 0;
   }
 
+  checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays[0], sizeof(float)*this->unpackedarrays_elem_count*numrecordedbands, cudaMemcpyHostToDevice));
   // PWC - bulk copy into GPU - but we'll have to do something smarter in the
   // future
+  /*
   for(size_t i = 0; i < numrecordedbands; ++i) {
     //printf("copy total elems = unpacksamples + 2 = %d + 2 = %d\n", unpacksamples, unpacksamples + 2);
     checkCuda(cudaMemcpy(this->unpackedarrays_gpu[i], this->unpackedarrays[i], sizeof(float)*(this->unpackedarrays_elem_count), cudaMemcpyHostToDevice));
   }
+  */
 
   return goodsamples/(float)unpacksamples;
 }
