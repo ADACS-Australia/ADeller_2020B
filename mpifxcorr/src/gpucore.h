@@ -8,7 +8,8 @@ class GPUCore: public Core {
     GPUCore(const int id, Configuration *const conf, int *const dids, MPI_Comm rcomm)
       : Core(id, conf, dids, rcomm) {};
 
-    virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
+    virtual void loopprocess(int threadid);
+    void processgpudata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
   protected:
     virtual Mode *getMode(const int configindex, const int datastreamindex) {

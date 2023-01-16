@@ -489,7 +489,7 @@ void Core::loopprocess(int threadid)
   //grab the lock we really want, unlock the end section and signal the main thread we're ready to go
   perr = pthread_mutex_lock(&(procslots[0].slotlocks[threadid]));
   if(perr != 0)
-    csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying lock mutex 0" << endl; 
+    csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying lock mutex 0" << endl;
   perr = pthread_mutex_unlock(&(procslots[RECEIVE_RING_LENGTH-1].slotlocks[threadid]));
   if(perr != 0)
     csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock mutex " << RECEIVE_RING_LENGTH-1 << endl;
@@ -713,19 +713,19 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     modes[j]->setDumpKurtosis(scratchspace->dumpkurtosis);
     if(scratchspace->dumpkurtosis)
       modes[j]->zeroKurtosis();
-    
+
     //reset pcal
     if(config->getDPhaseCalIntervalMHz(procslots[index].configindex, j) > 0)
     {
       // Calculate the sample time. Every band has the same bandwidth.
       sampletimens = 1.0/(2.0*config->getDRecordedBandwidth(procslots[index].configindex, j, 0))*1e+3;
-      
+
       // Get the ns start time of the whole block.
       starttimens = procslots[index].offsets[2];
-      
+
       // Calculate the FFT size in number of samples.
       fftsize = 2*config->getFNumChannels(config->getDRecordedFreqIndex(procslots[index].configindex, j, 0));
-      
+
       modes[j]->resetpcal();
     }
   }
@@ -1229,7 +1229,7 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
         // the number of channels (since we use an un-normalised FFT) and the number of integrations (i.e. time)
         // which is the weight
         renormvalue = 1.0/(2*freqchannels*modes[i]->getWeight(false, j));
-        
+
         if(datastreamsaveraged) {
           // if the data has been averaged above, then we need to adjust normalisation factor
           // because channels are summed below, not averaged

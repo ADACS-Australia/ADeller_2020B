@@ -109,7 +109,7 @@ protected:
   * @param currentpolyco The correct Polyco object for this time slice - null if not pulsar binning
   * @param scratchspace Space for all of the intermediate results for this thread
   */
-  virtual void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
+  void processdata(int index, int threadid, int startblock, int numblocks, Mode ** modes, Polyco * currentpolyco, threadscratchspace * scratchspace);
 
   /**
    * Forward a call onwards to config->getMode. This is virtual to allow
@@ -183,7 +183,7 @@ protected:
   * While the correlation is continuing, processes the given thread's share of the next element in the send/receive circular buffer
   * @param threadid The id of the thread which is doing the processing, which tells us which section of the time slice this call will process
   */
-  void loopprocess(int threadid);
+  virtual void loopprocess(int threadid);
 
  /**
   * Receives data from all telescopes into the given index of the circular send/receive buffer, as well as control info from the FxManager
