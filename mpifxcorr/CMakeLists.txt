@@ -43,9 +43,8 @@ set(
         src/fxmanager.h
         src/gpucore.cpp
         src/gpucore.h
-        src/gpumode.cpp
-        src/gpumode.h
-        src/gpumode_kernels.cu
+        src/gpumode.cu
+        src/gpumode.cuh
         src/gpumode_kernels.cuh
         src/mpifxcorr.cpp
         src/mpifxcorr.h
@@ -110,8 +109,8 @@ set(
         cudart
         cufft
 
-        ipps
-        ippvm
+        ippse9
+        ippvme9
         ippcore
 
         mpi

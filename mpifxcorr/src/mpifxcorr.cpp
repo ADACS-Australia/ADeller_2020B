@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 
   cverbose << startl << "About to process the input file..." << endl;
   //process the input file to get all the info we need
-  config = new Configuration(input_file, myID, world, restartseconds);
+  config = new Configuration(input_file, myID, world, restartseconds, use_gpu);
   if(!config->consistencyOK())
   {
     //There was a problem with the input file, so shut down gracefully

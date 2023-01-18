@@ -61,8 +61,8 @@ static unsigned int calcstridelength(unsigned int arraylength)
   }
 }
 
-Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, double restartsec)
-  : mpiid(id), enableMpi(true), consistencyok(true), restartseconds(restartsec), jobname("na")
+Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, double restartsec, bool use_gpu)
+  : mpiid(id), enableMpi(true), consistencyok(true), restartseconds(restartsec), jobname("na"), use_gpu(use_gpu)
 {
   commonread = false;
   datastreamread = false;
@@ -105,8 +105,8 @@ Configuration::Configuration(const char * configfile, int id, MPI_Comm& comm, do
 }
 
 
-Configuration::Configuration(const char * configfile, int id, double restartsec)
-  : mpiid(id), enableMpi(false), consistencyok(true), restartseconds(restartsec), jobname("na")
+Configuration::Configuration(const char * configfile, int id, double restartsec, bool use_gpu)
+  : mpiid(id), enableMpi(false), consistencyok(true), restartseconds(restartsec), jobname("na"), use_gpu(use_gpu)
 {
   commonread = false;
   datastreamread = false;
@@ -887,6 +887,10 @@ int Configuration::getDMatchingBand(int configindex, int datastreamindex, int ba
 
 int Configuration::getCNumProcessThreads(int corenum) const
 {
+    if (use_gpu) {
+        return 1;
+    }
+
   if(numcoreconfs == 0)
     return 1;
   if(corenum < numcoreconfs)

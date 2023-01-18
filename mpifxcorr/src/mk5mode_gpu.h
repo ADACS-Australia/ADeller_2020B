@@ -2,7 +2,7 @@
 #define MK5MODE_GPU_H
 
 #include <mark5access.h>
-#include "gpumode.h"
+#include "gpumode.cuh"
 
 /** 
  @class Mk5_GPUMode

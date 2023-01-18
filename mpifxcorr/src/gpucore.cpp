@@ -1,5 +1,5 @@
 #include "gpucore.h"
-#include "gpumode.h"
+#include "gpumode.cuh"
 #include "alert.h"
 //#include <iostream>
 
@@ -208,14 +208,18 @@ void GPUCore::loopprocess(int threadid) {
     delete scratchspace;
 
     cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process thread exiting!!!" << endl;
+
+    extern int calls;
+    cout << "process calls: " << calls << endl;
 }
 
 void
 GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, Mode **modes, Polyco *currentpolyco,
                         threadscratchspace *scratchspace) {
-    //static int nth_call = 0;
-    //++nth_call;
-    //std::cout << "called GPUCore::processdata for the " << nth_call << time << std::endl;
+    static int nth_call = 0;
+    ++nth_call;
+    std::cout << "called GPUCore::processdata for the " << nth_call << time << ", index: " << index << ", startblock: " << startblock << ", numblocks: " << numblocks<< std::endl;
+
 #ifndef NEUTERED_DIFX
     int status, i, numfftloops, numfftsprocessed;
     int resultindex, cindex, ds1index, ds2index, binloop;
@@ -346,19 +350,12 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                  << maxacblocks * blockns << " ns" << endl;
     }
 
-    //process each chunk of FFTs in turn
+    // process each chunk of FFTs in turn
     for (int fftloop = 0; fftloop < numfftloops; fftloop++) {
         numfftsprocessed = 0;   // not strictly needed, but to prevent compiler warning
         //do the station-based processing for this batch of FFT chunks
         for (int j = 0; j < numdatastreams; j++) {
-            numfftsprocessed = 0;
-            for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
-                i = fftloop * numBufferedFFTs + subloopindex + startblock;
-                if (i >= startblock + numblocks)
-                    break; //may not have to fully complete last fftloop
-                ((GPUMode *) modes[j])->process(i, subloopindex);
-                numfftsprocessed++;
-            }
+            numfftsprocessed = ((GPUMode *) modes[j])->process_gpu(fftloop, numBufferedFFTs, startblock, numblocks);
         }
 
         //if necessary, work out the pulsar bins

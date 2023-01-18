@@ -73,12 +73,14 @@ public:
   void resetpcal();
   void finalisepcal();
 
- /**
+  /**
   * Calculates fringe rotation and fractional sample correction arrays and FFTs, and autocorrelates
   * @param index The index of the FFT chunk to process
   * @param subloopindex The "subloop" index to put the output in
   */
-  void process(int index, int subloopindex);
+  virtual void process(int index, int subloopindex);
+
+  virtual int process_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) { return 0; };
 
  /**
   * Sets the autocorrelation arrays to contain 0's
