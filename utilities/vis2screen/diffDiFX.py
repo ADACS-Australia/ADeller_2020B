@@ -148,6 +148,8 @@ while not len(nextheader[0]) == 0 and not len(nextheader[1]) == 0:
                 refavg = refavg + abs(vis[0][j])/nchan[0]
             longtermabsdiff += absdiffavg/refavg
             longtermmeandiff += meandiffavg/refavg
+            # if absdiffavg == math.nan or refavg == math.nan:
+            print ("GOT NAN! The percentage absolute difference on baseline %d, freq %d at MJD/sec %d/%7.2f is %10.8f, and the percentage mean difference is %10.8f + %10.8f i" % (baseline[0], freqindex[0], mjd[0], seconds[0], 100.0*absdiffavg/refavg, 100.0*meandiffavg.real/refavg, 100.0*meandiffavg.imag/refavg))
             if 100.0*absdiffavg/refavg > threshold:
                 print ("THRESHOLD EXCEEDED! The percentage absolute difference on baseline %d, freq %d at MJD/sec %d/%7.2f is %10.8f, and the percentage mean difference is %10.8f + %10.8f i" % (baseline[0], freqindex[0], mjd[0], seconds[0], 100.0*absdiffavg/refavg, 100.0*meandiffavg.real/refavg, 100.0*meandiffavg.imag/refavg))
             if nonequalchanslist:

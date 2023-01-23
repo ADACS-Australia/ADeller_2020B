@@ -36,33 +36,34 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     this->fftd_gpu_out = new cf32[this->fftchannels * cfg_numBufferedFFTs * numrecordedbands];
     this->estimatedbytes_gpu += sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands;
 
-    this->complexrotator_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels);
-
-    this->unpackedarrays_gpu = new float *[numrecordedbands];
+    this->unpackedarrays_gpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
     this->estimatedbytes += sizeof(float *) * numrecordedbands;
     this->unpackedarrays_elem_count = unpacksamples;
     float *big_array;
-    checkCuda(cudaMalloc(&big_array, sizeof(float) * unpacksamples * numrecordedbands));
-    this->estimatedbytes_gpu += sizeof(float) * this->unpacksamples * numrecordedbands;
-    for (size_t i = 0; i < numrecordedbands; ++i) {
-        this->unpackedarrays_gpu[i] = big_array + (i * unpacksamples);
+    checkCuda(cudaMalloc(&big_array, sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs));
+    this->estimatedbytes_gpu += sizeof(float) * this->unpacksamples * numrecordedbands * cfg_numBufferedFFTs;
+    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
+        for (size_t i = 0; i < numrecordedbands; ++i) {
+            this->unpackedarrays_gpu[j * numrecordedbands + i] = big_array + ((j * numrecordedbands + i) * unpacksamples);
+        }
     }
     // TODO: PWC: allocations for complex
 
-    int n[1] = {cfg_numBufferedFFTs};
-    int idist = cfg_numBufferedFFTs;
+    int n[1] = {this->fftchannels};
+    int idist = this->fftchannels;
     int odist = this->fftchannels;
 
-    int inembed[] = {cfg_numBufferedFFTs};
+    int inembed[] = {this->fftchannels};
     int onembed[] = {this->fftchannels};
 
     int istride = 1;
     int ostride = 1;
 
-    checkCufft(
-            cufftPlanMany(&this->fft_plan, 1, (int *) &n, (int *) &inembed, istride, idist, (int *) &onembed, ostride,
-                          odist, CUFFT_C2C, 1));
-
+    checkCufft(cufftPlan1d(&this->fft_plan, this->fftchannels, CUFFT_C2C,cfg_numBufferedFFTs));
+//    checkCufft(
+//            cufftPlanMany(&this->fft_plan, 1, (int *) &n, (int *) &inembed, istride, idist, (int *) &onembed, ostride,
+//                          odist, CUFFT_C2C, cfg_numBufferedFFTs));
+//
 //    cufftCallbackLoadC hostCopyOfCallbackPtr;
 //
 //    cudaMemcpyFromSymbol(&hostCopyOfCallbackPtr,
@@ -168,14 +169,12 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     int numfftsprocessed = 0;
     // Do stuff with the FFT results
-    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
-        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+    for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
+        int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
         if (i >= startblock + numblocks)
             break; // may not have to fully complete last fftloop
 
-        postprocess(i, subloopindex);
-
-        numfftsprocessed++;
+        postprocess(i, numfftsprocessed);
     }
 
     return numfftsprocessed;
@@ -447,11 +446,11 @@ void GPUMode::preprocess(int index, int subloopindex) {
                                   - recordedfreqlooffsets[0] * fracwalltime
                                   - fraclooffset * intwalltime;
 
-            gpu_RtoC(&complexunpacked_gpu[subloopindex * fftchannels * numrecordedbands + j],
-                     &(unpackedarrays_gpu[j][nearestsample - unpackstartsamples]),
+            gpu_RtoC(&complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
+                     &(unpackedarrays_gpu[subloopindex * numrecordedbands + j][nearestsample - unpackstartsamples]),
                      fftchannels);
-            // In place
-            gpu_complexrotatorMultiply(this->fftchannels, &this->complexunpacked_gpu[subloopindex * fftchannels * numrecordedbands + j],
+//             In place
+            gpu_complexrotatorMultiply(this->fftchannels, &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
                                        bigA_d, bigB_d);
         }
     }
@@ -468,8 +467,11 @@ void GPUMode::postprocess(int index, int subloopindex) {
 
             // For upper sideband bands, normally just need to copy the fftd channels.
             // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-            status = vectorCopy_cf32(&fftd_gpu_out[subloopindex * fftchannels * numrecordedbands + j], fftoutputs[j][subloopindex],
+            status = vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + j], fftoutputs[j][subloopindex],
                                      recordedbandchannels);
+
+            for (int i = 0; i < numrecordedbands; i++)
+            cout << i << ": " << fftoutputs[j][subloopindex][i].re << " " << fftoutputs[j][subloopindex][i].im << endl;
 
             if (status != vecNoErr)
                 csevere << startl << "Error copying FFT results!!!" << endl;
