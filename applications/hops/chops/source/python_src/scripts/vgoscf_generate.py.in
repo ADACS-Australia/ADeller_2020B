@@ -31,7 +31,7 @@ def main():
     parser.add_argument('control_file', help='the control file to be applied to all scans')
     parser.add_argument('network_reference_station', help='single character code of station used as network reference')
     parser.add_argument('stations', help='concatenated string of single codes of non-network-reference stations of interest')
-    parser.add_argument('data_directory', help='relative path to directory containing experiment or scan data')
+    parser.add_argument('data_directory', help='relative path to directory containing experiment or scan data, cannot contain "prepass" or "scratch" and must point to a folder with a 4-digit name')
 
     parser.add_argument('-v', '--verbosity', type=int, dest='verbosity', help='verbosity level: 0 (least verbose) to 3 (most verbose), default=2.', default=2)
     parser.add_argument('-n', '--num-proc', type=int, dest='num_proc', help='number of concurrent fourfit jobs to run, default=1', default=1)
@@ -46,6 +46,8 @@ def main():
     parser.add_argument('-o', '--output-filename', dest='output_filename', help='specify the name of the generated control file', default='')
     parser.add_argument('-a', '--averaging-scan-limit', type=int, dest='averaging_scan_limit', help='limit the number of scans used in averaging, use 0 to disable, default=10', default=10)
     parser.add_argument('-t', '--toggle-run-info', action='store_false', dest='toggle_dump_info', help='do not append control file with information about how this program was called', default=True)
+    parser.add_argument('-y', '--nchannel-discard-threshold', type=int, dest='nchannel_discard_threshold', help='specify number of channels allowed to be flagged before discarding this entire scan', default=5)
+    parser.add_argument('-z', '--channel-discard-tolerance', type=float, dest='channel_discard_tolerance', help='allowable channel phase error (deg) before it is flagged', default=15.0)
 
 
     args = parser.parse_args()
@@ -86,6 +88,15 @@ def main():
     work_dir = exp_dir
 
     if args.use_scratch is True:
+
+        exp_name = os.path.split( os.path.abspath(exp_dir) )[1]
+        
+        # check that experiment directory is constructed properly
+        if any([xx in os.path.abspath(exp_dir) for xx in ['prepass', 'scratch']]) or len(exp_name)!=4 or not(exp_name.isdigit()):
+            print("path to experiment directory is: " + os.path.abspath(exp_dir))
+            print( "error: path to experiment directory cannot contain 'prepass' or 'scratch' and must point to a folder with a 4-digit name")
+            sys.exit(1)
+
         #we need to mirror the experiment directory into some scratch space
         #so that we don't pollute it with extraneous fringe files
         scratch_topdir = os.path.join(exp_dir, 'scratch')
@@ -98,8 +109,8 @@ def main():
             os.makedirs(scratch_dir)
 
         #mirror the experiment directory to the scratch space directory
-        exp_name = os.path.split( os.path.abspath(exp_dir) )[1]
         work_dir = os.path.join(scratch_dir, exp_name)
+
         ht.mirror_directory_with_symlinks(exp_dir, work_dir, exclude_list=['prepass', 'scratch'])
 
     #check the format of the scan limit formats:
@@ -144,6 +155,8 @@ def main():
     ffres2pcp_conf.start_scan_limit = start_scan_limit
     ffres2pcp_conf.stop_scan_limit = stop_scan_limit
     ffres2pcp_conf.use_progress_ticker = args.use_progress_ticker
+    ffres2pcp_conf.nchannel_discard_threshold = args.nchannel_discard_threshold
+    ffres2pcp_conf.channel_discard_tolerance = args.channel_discard_tolerance
     ffres2pcp_output_control_filename = os.path.join( os.path.abspath(work_dir), "cf_" + exp_name + "_" + ref_station + rem_stations + "_pcphases" )
     vpal.ffres2pcp_lib.generate_ffres2pcp_control_file(ffres2pcp_conf, ffres2pcp_output_control_filename)
 

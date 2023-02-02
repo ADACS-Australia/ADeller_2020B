@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5test.c 9289 2019-11-14 00:56:26Z WalterBrisken $
+// $Id: m5test.c 10490 2022-06-03 14:18:03Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_stream.c $
-// $LastChangedRevision: 9289 $
+// $LastChangedRevision: 10490 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2019-11-14 11:56:26 +1100 (Thu, 14 Nov 2019) $
+// $LastChangedDate: 2022-06-04 00:18:03 +1000 (Sat, 04 Jun 2022) $
 //
 //============================================================================
 
@@ -60,18 +60,17 @@ int usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("A Mark5 tester.  Can verify VLBA, Mark3/4, and Mark5B "
-		"formats using the\nmark5access library.\n\n");
+	printf("A Mark5 tester.  Can verify VLBA, Mark3/4, Mark5B, and single-thread\n");
+	printf("VDIF formats using the\nmark5access library.\n\n");
 	printf("Usage : %s <file> <dataformat> [<offset>] [<report>]\n\n", pgm);
 	printf("  <file> is the name of the input file\n\n");
-	printf("  <dataformat> should be of the form: "
-		"<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
+	printf("  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
 	printf("    VLBA1_2-256-8-2\n");
 	printf("    MKIV1_4-128-2-1\n");
 	printf("    Mark5B-512-16-2\n");
 	printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n");
 	printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
 	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <offset> is number of bytes into file to start decoding\n\n");
@@ -229,10 +228,14 @@ int main(int argc, char **argv)
 
 			exit(EXIT_FAILURE);
 		}
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
 			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
+			fclose(in);
+			free(buffer);
+			return -1;
 		}
 		else
 		{

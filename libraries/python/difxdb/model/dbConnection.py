@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: dbConnection.py 8343 2018-06-15 09:09:42Z HelgeRottmann $
+# $Id: dbConnection.py 10112 2021-08-26 12:31:31Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/model/dbConnection.py $
-# $LastChangedRevision: 8343 $
+# $LastChangedRevision: 10112 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2018-06-15 19:09:42 +1000 (Fri, 15 Jun 2018) $
+# $LastChangedDate: 2021-08-26 22:31:31 +1000 (Thu, 26 Aug 2021) $
 #
 #============================================================================
 __author__="Helge Rottmann"
@@ -99,13 +99,13 @@ class Schema(object):
             'releasedByUser':relation(User, primaryjoin=self.experimentTable.c.releasedByUserID==self.userTable.c.id, uselist = False, lazy="subquery"), \
             'types':relation(ExperimentType, secondary=self.experimentAndTypeTable, primaryjoin=self.experimentAndTypeTable.c.experimentID==self.experimentTable.c.id, secondaryjoin=self.experimentAndTypeTable.c.experimentTypeID==self.experimentTypeTable.c.id, foreign_keys = [self.experimentAndTypeTable.c.experimentID, self.experimentAndTypeTable.c.experimentTypeID], lazy="subquery")}) 
 
-	mapper(Module, self.moduleTable, properties={'experiments': relation(Experiment, secondary=self.experimentModuleTable, primaryjoin=self.experimentModuleTable.c.moduleID==self.moduleTable.c.id, secondaryjoin=self.experimentModuleTable.c.experimentID==self.experimentTable.c.id, foreign_keys = [self.experimentModuleTable.c.experimentID, self.experimentModuleTable.c.moduleID], backref=backref('modules'))}) 
-	mapper(Slot, self.slotTable,properties={'module': relation(Module, uselist = False, backref=backref('slot', uselist=False))})
+        mapper(Module, self.moduleTable, properties={'experiments': relation(Experiment, secondary=self.experimentModuleTable, primaryjoin=self.experimentModuleTable.c.moduleID==self.moduleTable.c.id, secondaryjoin=self.experimentModuleTable.c.experimentID==self.experimentTable.c.id, foreign_keys = [self.experimentModuleTable.c.experimentID, self.experimentModuleTable.c.moduleID], backref=backref('modules'))}) 
+        mapper(Slot, self.slotTable,properties={'module': relation(Module, uselist = False, backref=backref('slot', uselist=False))})
         mapper(VersionHistory, self.versionHistoryTable)
         mapper(User, self.userTable)
         mapper(ExperimentType, self.experimentTypeTable)
         mapper(ExperimentStatusHistory, self.experimentStatusHistoryTable)
-	mapper(FileData, self.fileDataTable, properties={'experiment': relation(Experiment, backref=backref('fileData'))})
+        mapper(FileData, self.fileDataTable, properties={'experiment': relation(Experiment, backref=backref('fileData'))})
         #mapper(ExportFile, self.exportFileTable, properties={'experiment': relation(Experiment, uselist = False, backref=backref('exportFiles', uselist=False))})
         mapper(ExportFile, self.exportFileTable, properties={'experiment': relation(Experiment, backref=backref('exportFiles'))})
 

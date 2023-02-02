@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: difxvmf.c 9128 2019-09-03 18:49:27Z WalterBrisken $
+ * $Id: difxvmf.c 10847 2022-12-04 22:42:48Z WalterBrisken $
  * $HeadURL: $
- * $LastChangedRevision: 9128 $
+ * $LastChangedRevision: 10847 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-09-04 04:49:27 +1000 (Wed, 04 Sep 2019) $
+ * $LastChangedDate: 2022-12-05 09:42:48 +1100 (Mon, 05 Dec 2022) $
  *
  *==========================================================================*/
 
@@ -53,7 +53,7 @@ void usage()
 	printf("Environment variables used:\n");
 	printf("  DIFX_VERSION : to enforce DiFX version compatibility\n");
 	printf("  DIFX_VMF_DATA : writable directory for caching downloaded VMF coefficients\n\n");
-	printf("This program takes a DiFX fileset (including the .imfile) and modifies the wet\n");
+	printf("This program takes a DiFX fileset (including the .im file) and modifies the wet\n");
 	printf("and dry troposphere values based on the Vienna Mapping Functions.  This program\n");
 	printf("retrieves the needed external data from http://vmf.geo.tuwien.ac.at .  The .im\n");
 	printf("file will be replaced with an updated version.\n\n");
@@ -84,14 +84,12 @@ int processFile(const char *inputFile, const DifxMergeOptions *mergeOptions, con
 	}
 
 	vmfRows = loadVMFData(vmfData, MaxVMFData, (int)(D->job->mjdStart), 2, verbose);
-
 	if(vmfRows <= 0)
 	{
 		fprintf(stderr, "Error: %s: no VMF data loaded\n", program);
 
 		return -1;
 	}
-
 	
 	if(difxVersion && D->job->difxVersion[0])
 	{

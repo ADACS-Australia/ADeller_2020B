@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark6_sg_vfs_impl.h 8491 2018-09-20 07:45:41Z JanWagner $
+// $Id: mark6_sg_vfs_impl.h 10550 2022-07-26 12:33:43Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark6sg/trunk/mark6sg/mark6_sg_vfs_impl.h $
-// $LastChangedRevision: 8491 $
+// $LastChangedRevision: 10550 $
 // $Author: JanWagner $
-// $LastChangedDate: 2018-09-20 17:45:41 +1000 (Thu, 20 Sep 2018) $
+// $LastChangedDate: 2022-07-26 22:33:43 +1000 (Tue, 26 Jul 2022) $
 //
 //============================================================================
 #ifndef MARK6_SG_VFS_IMPL__H
@@ -68,6 +68,7 @@ typedef struct m6sg_virt_filedescr {
     char      scanname[1024];
     char**    filepathlist;
     char**    filenamelist; // (unused, although populated)
+    char      activeMSN[9]; // informative/optional, for difxmessage multicast; DIFX_MESSAGE_MARK6_MSN_LENGTH 8 plus 1 Null
     int       fds[MARK6_SG_MAXFILES];
     void*     fmmap[MARK6_SG_MAXFILES];
     off_t     fsize[MARK6_SG_MAXFILES];

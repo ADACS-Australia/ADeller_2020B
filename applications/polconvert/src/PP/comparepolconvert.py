@@ -1,5 +1,8 @@
 #!/usr/bin/python
 #
+# Copyright (c) Ivan Marti-Vidal 2015-2022, University of Valencia (Spain)
+#       and Geoffrey Crew 2015-2022, Massachusetts Institute of Technology
+#
 # Script to compare PolConvert text products with a previous execution
 #
 # Py2/3 compatible as written we expect...
@@ -29,7 +32,7 @@ def parseOptions():
     For example:
       comparepolconvert.py -t testname -- *ANTAB FRINGE.PEAKS/*
     '''
-    use = '$Id'
+    use = ''
     parser = argparse.ArgumentParser(epilog=epi, description=des, usage=use)
     parser.add_argument('-v', '--verbose', dest='verb',
         default=False, action='store_true',
@@ -155,7 +158,11 @@ def deviant(verb, what, tval, rval, atol, rtol):
     if math.fabs(tval - rval) > atol:
         judgement,how = (True,'abs')
     elif tval + rval == 0.0:
-        judgement,how = (True,'inf')
+        # prevent div by zero in next elif clause
+        if tval == 0.0 or rval == 0.0:
+            judgement,how = (False,'zer')
+        else:
+            judgement,how = (True,'inf')
     elif math.fabs(2 * (tval - rval) / (tval + rval)) > rtol:
         judgement,how = (True,'rel')
     else:

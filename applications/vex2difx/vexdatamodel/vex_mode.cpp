@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_mode.cpp 9637 2020-07-31 02:14:27Z LeonidPetrov $
+ * $Id: vex_mode.cpp 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9637 $
- * $Author: LeonidPetrov $
- * $LastChangedDate: 2020-07-31 12:14:27 +1000 (Fri, 31 Jul 2020) $
+ * $LastChangedRevision: 10363 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -146,7 +146,7 @@ int VexMode::getBits() const
 		{
 			if(nBit != 0 && nb != 0 && firstTime)
 			{
-				std::cerr << "Warning: getBits: differing number of bits: " << nBit << "," << nb << std::endl;
+				std::cerr << "Note: getBits: Mode=" << defName << " differing number of bits: " << nBit << "," << nb << std::endl;
 				std::cerr << "  Will proceed, but note that some metadata may be incorrect." << std::endl;
 
 				firstTime = 0;
@@ -200,6 +200,90 @@ int VexMode::getMaxBits() const
 
 	return maxBit;
 }
+
+// returns zero if number of bits differs across channels or antennas
+int VexMode::zBits() const
+{
+	unsigned int maxBit = 0;
+	unsigned int minBit = 0;
+	std::map<std::string,VexSetup>::const_iterator it;
+
+	for(it = setups.begin(); it != setups.end(); ++it)
+	{
+		unsigned int mb;
+		
+		mb = it->second.getMaxBits();
+		if(mb > 0 && (mb > maxBit || maxBit == 0))
+		{
+			maxBit = mb;
+		}
+
+		mb = it->second.getMinBits();
+		if(mb > 0 && (mb < minBit || minBit == 0))
+		{
+			minBit = mb;
+		}
+	}
+
+	if(maxBit == minBit)
+	{
+		return maxBit;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+// returns zero if not consistent
+int VexMode::zRecordChan() const
+{
+	unsigned int nRecChan = 0;
+
+	for(std::map<std::string,VexSetup>::const_iterator it = setups.begin(); it != setups.end(); ++ it)
+	{
+		if(nRecChan == 0)
+		{
+			nRecChan = it->second.nRecordChan();
+		}
+		else if(nRecChan != it->second.nRecordChan())
+		{
+			return 0;
+		}
+	}
+
+	return nRecChan;
+}
+
+// [Hz] channel bandwidth, or zero if not consistent
+double VexMode::zBandwidth() const
+{
+	double sampleRate = 0.0;
+
+	for(std::map<std::string,VexSetup>::const_iterator it = setups.begin(); it != setups.end(); ++ it)
+	{
+		double s1, s2;
+
+		s1 = it->second.getLowestSampleRate();
+		s2 = it->second.getHighestSampleRate();
+
+		if(s1 != s2)
+		{
+			return 0.0;
+		}
+		if(sampleRate == 0.0)
+		{
+			sampleRate = s1;
+		}
+		else if(sampleRate != s1)
+		{
+			return 0.0;
+		}
+	}
+
+	return sampleRate/2.0;	
+}
+
 
 int VexMode::getMinSubbands() const
 {

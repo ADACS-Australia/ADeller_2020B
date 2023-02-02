@@ -16,6 +16,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "msg.h"
+#include "hops_complex.h"
 #define PLOT_DATA_DIR_IMPLEMENTATION 1
 #include "plot_data_dir.h"
 
@@ -65,7 +67,6 @@
 
 
 #define R2D(RAD) ((RAD) * (M_1_PI * 180.0))
-extern void msg (char *, int, ...);
 extern char control_filename[];
 
 /*
@@ -173,8 +174,8 @@ static void dump_plot_info(FILE *fp, struct type_dump *dp)
             /* line one */
             dp->pass->pass_data[ii].freq_code,
             dp->pass->pass_data[ii].frequency,
-            carg (dp->status->fringe[ii]) * 180.0 / M_PI,
-            cabs (dp->status->fringe[ii]),
+            arg_complex (dp->status->fringe[ii]) * 180.0 / M_PI,
+            abs_complex (dp->status->fringe[ii]),
             dp->status->sbdbox[ii],
             dp->status->ap_num[0][ii], dp->status->ap_num[1][ii],
             /* line two */
@@ -324,7 +325,18 @@ static void dump_fineprint(FILE *fp, struct type_dump *dp)
                 "undefined");
 
     fprintf(fp, "# ControlFile             '%s'\n", control_filename);
-    //FIXME -- yet morethings
+    if (dp->param->passband[0] != 0.0 || dp->param->passband[1] != 1.0E6)
+        fprintf(fp, "# PassbandInAvXPSpectrum  '%lf %lf'\n",
+            dp->status->xpnotchpband[0], dp->status->xpnotchpband[1]);
+    if (dp->param->nnotches > 0) {
+        fprintf(fp, "# NumberOfNotches         '%d'\n", dp->param->nnotches);
+        fprintf(fp, "# NotchesInAvXPSpectrum   '");
+        for (ii = 0; ii < dp->param->nnotches; ii++)
+            fprintf(fp, " %lf", dp->status->xpnotchpband[ii]);
+        fprintf(fp, "'\n");
+    }
+
+    //FIXME -- yet morethings that should be output
 }
 
 /*
@@ -346,16 +358,16 @@ static void dump_onedim(FILE *fp, char *lb, int pr, int npts, double *data)
 /*
  * Calls dump_onedim twice for magnitude and phase
  */
-static void dump_xpspec(FILE *fp, char *lb, int pr, int npts, complex *data)
+static void dump_xpspec(FILE *fp, char *lb, int pr, int npts, hops_complex *data)
 {
     static char lab[20];
     static double vec[2*MAXLAG];
     int ii;
     snprintf(lab, sizeof(lab), "%s-ABS", lb);
-    for (ii = 0; ii < npts; ii++) vec[ii] = cabs(data[ii]);
+    for (ii = 0; ii < npts; ii++) vec[ii] = abs_complex(data[ii]);
     dump_onedim(fp, lab, pr, npts, vec);
     snprintf(lab, sizeof(lab), "%s-ARG", lb);
-    for (ii = 0; ii < npts; ii++) vec[ii] = R2D(carg(data[ii]));
+    for (ii = 0; ii < npts; ii++) vec[ii] = R2D(arg_complex(data[ii]));
     dump_onedim(fp, lab, pr, npts, vec);
 }
 
@@ -396,7 +408,7 @@ static void dump_twodim(FILE *fp, char *lb, int pr, int npts, int apo, int nap,
  * Cf fill_212.c for use of status->amp_corr_fact
  */
 static void dump_phasor(FILE *fp, char *lb, int pr, int npts, int apo, int nap,
-    double period, double start, complex w[][MAXAP], double acf)
+    double period, double start, hops_complex w[][MAXAP], double acf)
 {
     static char lab[20];
     static double vec[MAXFREQ+1][MAXAP];
@@ -404,12 +416,12 @@ static void dump_phasor(FILE *fp, char *lb, int pr, int npts, int apo, int nap,
     snprintf(lab, sizeof(lab), "%s-ABS", lb);
     for (ap = apo; ap < nap; ap++)
         for (ii = 0; ii < npts; ii++)
-            vec[ii][ap] = cabs(w[ii][ap]) * acf;
+            vec[ii][ap] = abs_complex(w[ii][ap]) * acf;
     dump_twodim(fp, lab, pr, npts, apo, nap, period, start, vec);
     snprintf(lab, sizeof(lab), "%s-ARG", lb);
     for (ap = apo; ap < nap; ap++)
         for (ii = 0; ii < npts; ii++)
-            vec[ii][ap] = R2D(carg(w[ii][ap]));
+            vec[ii][ap] = R2D(arg_complex(w[ii][ap]));
     dump_twodim(fp, lab, pr, npts, apo, nap, period, start, vec);
 }
 
@@ -720,6 +732,7 @@ void dump_plot_data2dir(struct type_dump *dump)
     if (rv < 0 && errno == ENOENT) {
         rv = mkdir(outdir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         if (rv < 0) perror("dump_plot_data2dir:mkdir");
+        errno = 0;
     } else if (rv < 0) {
         perror("dump_plot_data2dir:stat");
     }

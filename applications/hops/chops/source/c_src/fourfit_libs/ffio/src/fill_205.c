@@ -2,7 +2,7 @@
 /*                                                                      */
 /*  Fills in a type_205 record                                          */
 /*                                                                      */
-/*      Inputs:         
+/*      Inputs:                                                         */
 /*                                                                      */
 /*      Output:         t205        Filled in type_205 record           */
 /*                                                                      */
@@ -11,7 +11,9 @@
 /************************************************************************/
 #include <stdio.h>
 #include <math.h>
+#include "msg.h"
 #include "mk4_data.h"
+#include "mk4_dfio.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 #include "vex.h"
@@ -27,7 +29,7 @@ struct type_205 *t205)
     int i, j, ch, nch, int_time, sb, ind,
         nchan, nfreqs;
     struct freq_corel *fc;
-    nchan = (strncmp (t203->version_no, "00", 2) == 0) ? 32 : 8*MAXFREQ;
+    nchan = (strncmp (t203->version_no, "00", (size_t)2) == 0) ? 32 : 8*MAXFREQ;
 
     clear_205 (t205);
                                         /* For now, UCT central is same as FRT */

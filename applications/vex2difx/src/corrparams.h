@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: corrparams.h 9873 2021-01-13 17:23:01Z WalterBrisken $
+ * $Id: corrparams.h 10674 2022-10-10 11:44:49Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/corrparams.h $
- * $LastChangedRevision: 9873 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
+ * $LastChangedRevision: 10674 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2022-10-10 22:44:49 +1100 (Mon, 10 Oct 2022) $
  *
  *==========================================================================*/
 
@@ -38,8 +38,13 @@
 #include <iostream>
 #include <difxio.h>
 
+class AutoBands;
+
+#include "autobands.h"
 #include "interval.h"
+#include "job.h"
 #include "freq.h"
+#include "zoomfreq.h"
 #include "vex_data.h"
 
 extern const double MJD_UNIX0;	// MJD at beginning of unix time
@@ -82,11 +87,12 @@ public:
 	std::string difxName;
 	char calCode;
 	int qualifier;
-	// ephemeris
+
+	// for non-star source type:
 	std::string ephemObject;	// name of the object in the ephemeris
-	std::string ephemFile;	// file containing a JPL ephemeris
-	std::string naifFile;	// file containing naif time data
-	double ephemDeltaT;	// tabulated ephem. nterval (seconds, default 60)
+	std::string ephemFile;		// file containing a JPL ephemeris
+	std::string naifFile;		// file containing naif time data
+	double ephemDeltaT;		// tabulated ephem. interval (seconds, default 24)
 	double ephemStellarAber;	// 0 = don't apply (default), 1 = apply, other: scale correction accordingly
 	double ephemClockError;		// (sec) 0.0 is no error
 	double X, Y, Z;			// For geosync satellite [0, 0, 0 means not a geosync]
@@ -99,36 +105,34 @@ public:
 	int setkv(const std::string &key, const std::string &value);
 	int setkv(const std::string &key, const std::string &value, PhaseCentre * pc);
 
-	bool doPointingCentre;		// Whether or not to correlate the pointing centre
-	std::string vexName;		// Source name as appears in vex file
-	PhaseCentre pointingCentre;	// The source which is at the pointing centre
-	std::vector<PhaseCentre> phaseCentres; // Additional phase centres to be correlated
-};
-
-class ZoomFreq
-{
-public:
-	//constructor
-	ZoomFreq();
-
-	//method
-	void initialise(double freq, double bw, bool corrparent, int specavg);
-
-	//variables
-	double frequency, bandwidth;
-	int spectralaverage;
-	bool correlateparent;
+	bool doPointingCentre;			// Whether or not to correlate the pointing centre
+	std::string vexName;			// Source name as appears in vex file
+	PhaseCentre pointingCentre;		// The source which is at the pointing centre
+	std::vector<PhaseCentre> phaseCentres;	// Additional phase centres to be correlated
 };
 
 class GlobalZoom
 {
 public:
-	GlobalZoom(const std::string &name) : difxName(name) {};
+	GlobalZoom(const std::string &name) : difxName(name) { zoomFreqs.clear(); }
 	int setkv(const std::string &key, const std::string &value, ZoomFreq * zoomFreq);
 	int setkv(const std::string &key, const std::string &value);
 
 	std::string difxName;	// Name in .v2d file of this global zoom band set
 	std::vector<ZoomFreq> zoomFreqs;
+};
+
+class GlobalOutputband
+{
+public:
+	GlobalOutputband(const std::string &name);
+	int setkv(const std::string &key, const std::string &value, ZoomFreq * zoomFreq);
+	int setkv(const std::string &key, const std::string &value);
+
+	std::string difxName;	// Name in .v2d file of this global outputband definitions set
+	double outputBandwidth; // Hz; target bw for assembly of output bands from slices depending on OutputBandwidthMod
+	enum OutputBandwidthMode outputBandwidthMode;   // mode in which to choose/generate output bands
+	AutoBands autobands;
 };
 
 /* Datastreams...
@@ -200,7 +204,6 @@ public:
 	double X, Y, Z;		// [m] Station coordinates to override vex
 	double axisOffset;	// [m]
 	int clockorder;		// Order of clock poly (if overriding)
-	double clock2, clock3, clock4, clock5;	// Clock coefficients (if overriding)
 	std::vector<double> freqClockOffs;	// Clock offsets for the individual frequencies
 	std::vector<double> freqClockOffsDelta; // Clock offsets between pols for the individual frequencies
 	std::vector<double> freqPhaseDelta;	// Phase difference between pols for each frequency
@@ -228,6 +231,8 @@ public:
 	std::list<std::string> datastreamList;	// list of datastreams provided in v2d file
 	std::vector<DatastreamSetup> datastreamSetups;
 
+	std::vector<ZoomFreq> v2dZoomFreqs;//List of zoom freqs for this antenna; minus any Outputbands-introduced zooms
+
 	std::string filelistFile;
 	bool filelistReadFail;
 
@@ -239,6 +244,7 @@ class CorrSetup
 public:
 	CorrSetup(const std::string &name = "setup_default");
 	int setkv(const std::string &key, const std::string &value);
+	int setkv(const std::string &key, const std::string &value, ZoomFreq *outputbandFreq);
 	bool correlateFreqId(int freqId) const;
 	double bytesPerSecPerBLPerBand() const;
 	int checkValidity() const;
@@ -404,12 +410,18 @@ public:
 	/* rules to determine which setups to apply */
 	std::vector<CorrRule> rules;
 
-	/* global zoom bands (referenced from a setup; applies to all antennas) */
+	/* global named zoom band sets (available to all antennas; each AntennaSetup can refer to any one of these by name) */
 	std::vector<GlobalZoom> globalZooms;
+
+	/* global named outputband set(s); for now only one makes sense, but keep the possibility for several */
+	std::vector<GlobalOutputband> globalOutputbands;
 
 	enum V2D_Mode v2dMode;
 
 	std::list<std::string> machines;	// List of computers for generation of .machines file
+
+	/* Introduce auto-determined zoom bands if necessary to support user-requested output bands */
+	void updateZoomBandsForOutputBands(const std::vector<Job>& alljobs, const VexData *V, int verbose = 0);
 
 private:
 	void addAntenna(const std::string &antName);

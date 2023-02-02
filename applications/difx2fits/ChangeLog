@@ -1,3 +1,60 @@
+Version 3.8.0
+* Post DiFX-2.8
+* Remove restrictions on max number of datastreams
+* Fix some possible memory leaks in cases where there are sometimes no pulse call tones.
+* Streamline some logic in ML and MC tables (and fix incorrect use of ant2dsId[] in both cases)
+
+Version 3.7.0
+* Post DiFX-2.6
+* python3 conversion: showcal, plotpcal, plotpcal2, gentcal, makefits
+* add --relabelCircular option that will simply change the labeled  polarizations to R/L without any change to the processing.
+* pass CommandLineOptions to more of the major subroutines to improve the code
+* (along with corresponding difxio commit) remove polxy2hv from DifxInput
+* various pulse cal and polarizations additions as described below:
+* option to perform van Vleck corections within difx2fits.
+  - Activated by one or more of the following conditions:
+    - command line argument --vanVleck
+    - different sampling on different antennas
+    - any antenna sampling with more than 2 bits per sample
+  - Currently coded for any combination of 1, 2, 4, and 8 bits per sample
+  - When in use, set the new VANVLECK keyword to "1"
+    - AIPS FITLD (and later CASA importfitsidi) will not attempt double correction
+      - AIPS from Aug 2022 or later is required.
+  - When not activated, behavior is unchanged from past versions
+* Increase observation code length to 24
+* makefits: a few minor changes requested by VLBA analysts
+* Version for DiFX-2.8, Nov 4, 2022
+
+Commit 10003 2021.04.30
+
+* Fixed a bug: presence of bad values in pcal file forced difx2calc to
+  bypass affected pcal record entirely. As a results difx2fits did not
+  dump pcal, and lost pcal at the affected station of a given job.
+
+* Added extra check to ensure difx2fits does not skip dumping accumulated
+  pcal phases and amplitudes.
+
+* Added a new feature in difx2fits: if --difx-pcal-interval 0, then
+  phase calibration phase and amplitude is averaged over an entire scan.
+
+
+Commit 9???  2021.02.28
+
+* Forced sorting job files chronologically in fitsPH for processing
+  phase calibration. Out of order jobs may result in loosing phase 
+  calibration file.
+
+* Changed the logic of handling pcal and cablecal files. The original
+  logic stopped processing loop for a given antenna given job at 
+  earliest the either pcal file or the cable cal file (if exists)
+  reached the end. If cable calibration file was truncated, phase 
+  calibration was lost beyond that epoch. The new logic continues 
+  the loop for phase calibration processing after the end of cable 
+  calibration file.
+
+* Added support of environment variable DIFX_USE_CABLE_CAL. If set 
+  to zero, cable calibration files are ignored.
+
 Commit 9???  2020.09.18
 
 * Support of a new options is added:
@@ -60,10 +117,6 @@ Commit 9637  2020.07.30
 
   Option --polxy2hv re-labels polarization XY to HV. This option works
   only if --antpol is applied.
-
-Version 3.7.0
-* Post DiFX-2.6
-* python3 conversion: showcal, plotpcal, plotpcal2, gentcal, makefits
 
 Version 3.6.0
 * SU table: make more IDI-FITS compliant

@@ -17,16 +17,16 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: experimentaction.py 9270 2019-11-13 01:35:11Z JanWagner $
+# $Id: experimentaction.py 10110 2021-08-26 12:29:48Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/business/experimentaction.py $
-# $LastChangedRevision: 9270 $
-# $Author: JanWagner $
-# $LastChangedDate: 2019-11-13 12:35:11 +1100 (Wed, 13 Nov 2019) $
+# $LastChangedRevision: 10110 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2021-08-26 22:29:48 +1000 (Thu, 26 Aug 2021) $
 #
 #============================================================================
 from difxdb.model import model
 from sqlalchemy import desc
-from string import upper
+#from string import upper
 
 
 def experimentExists(session, code):
@@ -58,9 +58,9 @@ def getExperimentById(session, id):
     Returns the Experiment object referenced by the given experimentID 
     '''
     try:
-    	ret = session.query(model.Experiment).filter_by(id=id).one()
+        ret = session.query(model.Experiment).filter_by(id=id).one()
     except:
-	ret = None
+        ret = None
     return(ret)
 
 
@@ -70,9 +70,9 @@ def getExperimentByCode(session, code):
     '''
     
     try:
-    	ret = session.query(model.Experiment).filter_by(code=code).one()
+        ret = session.query(model.Experiment).filter_by(code=code).one()
     except:
-	ret = None
+        ret = None
     return(ret)
 
 def getExperimentStatusCode(session, code):
@@ -106,23 +106,23 @@ def addExperiment(session, code, types=[], analyst=None, obsDate=None, statuscod
     '''
     
     if (experimentExists(session, code)):
-	raise Exception("Experiment with code %s already exists" % (code))
+        raise Exception("Experiment with code %s already exists" % (code))
         return
 
     expTypes = []
     experiment = model.Experiment()
-    experiment.code = upper(code)
+    experiment.code = code.upper()
     experiment.number = int(getLastExperimentNumber(session)) + 1
     experiment.user = analyst
     experiment.dateObserved = obsDate
 
     try:
-	for type in types:
-		expType= session.query(model.ExperimentType).filter_by(type=type).one()
+        for type in types:
+                expType= session.query(model.ExperimentType).filter_by(type=type).one()
                 if expType is not None:
                     expTypes.append(expType)
     except:
-	raise Exception("Trying to set an unknown epxeriment type (%s)" (type))
+        raise Exception("Trying to set an unknown epxeriment type (%s)" (type))
 
     experiment.types = expTypes
     
@@ -136,8 +136,9 @@ def addExperiment(session, code, types=[], analyst=None, obsDate=None, statuscod
     try:
         session.add(experiment)
         session.commit()     
-    except:
-        raise Exception("Error adding experiment")
+    except Exception as e:
+    
+        raise Exception("Error adding experiment" + e.message)
         session.rollback()
         
     session.flush()
@@ -151,7 +152,7 @@ def addExperimentWithState(session, code, statuscode):
         return
 
     experiment = model.Experiment()
-    experiment.code = upper(code)
+    experiment.code = code.upper()
     experiment.number = int(getLastExperimentNumber(session)) + 1
     
     try:
@@ -186,7 +187,7 @@ def deleteExperimentByCode(session, code):
     
     # delete associatons to ExperimentType
     #for type in experiment.types:
-#	experiment.remove(type)
+#       experiment.remove(type)
 
     session.delete(experiment)
     try:

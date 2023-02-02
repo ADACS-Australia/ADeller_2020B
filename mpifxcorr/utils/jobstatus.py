@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #**************************************************************************
-#   Copyright (C) 2008-2019 by Walter Brisken                             *
+#   Copyright (C) 2008-2021 by Walter Brisken                             *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -21,11 +21,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: jobstatus.py 9320 2019-11-15 05:37:30Z HelgeRottmann $
+# $Id: jobstatus.py 9996 2021-04-17 17:44:18Z WalterBrisken $
 # $HeadURL: $
-# $LastChangedRevision: 9320 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-15 16:37:30 +1100 (Fri, 15 Nov 2019) $
+# $LastChangedRevision: 9996 $
+# $Author: WalterBrisken $
+# $LastChangedDate: 2021-04-18 03:44:18 +1000 (Sun, 18 Apr 2021) $
 #
 #============================================================================
 
@@ -35,12 +35,16 @@ import os
 import stat
 
 program = 'jobstatus'
-version = '1.2'
-verdate = '20191114'
+version = '1.3'
+verdate = '20210417'
 author  = 'Walter Brisken'
 
+def printVersion():
+	print('%s ver. %s   %s %s' % (program, version, verdate, author))
+
 def usage():
-	print('\n%s ver. %s   %s %s' % (program, version, verdate, author))
+	print('')
+	printVersion()
 	print('\nA program to list the status of DiFX job files\n')
 	print('Usage: [options] [<dir 1> [<dir 2> [ ... ] ] ]\n')
 	print('<dir> is a directory containing .input files.  Many directories can be')
@@ -179,8 +183,11 @@ if len(argv) == 1:
 else:
 	paths = []
 	for a in argv:
-		if a == '-h' or a == '--help':
+		if a in ['-h', '--help']:
 			usage()
+		elif a == '--version':
+			printVersion()
+			exit(0)
 		elif a[0] == '-':
 			print('Unknown option %s .  Quitting' % a)
 			exit(0)

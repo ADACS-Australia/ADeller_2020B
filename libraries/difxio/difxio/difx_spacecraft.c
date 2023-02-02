@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2015 by Walter Brisken                             *
+ *   Copyright (C) 2008-2021 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_spacecraft.c 9729 2020-09-19 17:57:50Z WalterBrisken $
+// $Id: difx_spacecraft.c 10303 2021-10-27 17:15:44Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_spacecraft.c $
-// $LastChangedRevision: 9729 $
+// $LastChangedRevision: 10303 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-09-20 03:57:50 +1000 (Sun, 20 Sep 2020) $
+// $LastChangedDate: 2021-10-28 04:15:44 +1100 (Thu, 28 Oct 2021) $
 //
 //============================================================================
 
@@ -80,6 +80,8 @@ DifxSpacecraft *dupDifxSpacecraftArray(const DifxSpacecraft *src, int n)
 			dest[s].axisVectors = (RadioastronAxisVectors *)calloc(dest[s].nPoint, sizeof(RadioastronAxisVectors));
 			memcpy(dest[s].axisVectors, src[s].axisVectors, dest[s].nPoint*sizeof(RadioastronAxisVectors));
 		}
+		strncpy(dest[s].ephemFile, src[s].ephemFile, DIFXIO_FILENAME_LENGTH);
+		strncpy(dest[s].ephemObject, src[s].ephemObject, DIFXIO_NAME_LENGTH);
 	}
 
 	return dest;
@@ -125,6 +127,8 @@ void fprintDifxSpacecraft(FILE *fp, const DifxSpacecraft *ds)
 	{
 		fprintf(fp, "    Name = %s\n", ds->name);
 		fprintf(fp, "    Num points = %d\n", ds->nPoint);
+		fprintf(fp, "    Ephemeris file = %s\n", ds->ephemFile);
+		fprintf(fp, "    Ephemeris object id = %s\n", ds->ephemObject);
 	}
 }
 
@@ -550,6 +554,9 @@ int computeDifxSpacecraftEphemeris(DifxSpacecraft *ds, double mjd0, double delta
 
 	/* TODO: add mechanism to just load in state vectors */
 
+	strncpy(ds->ephemFile, ephemFile, DIFXIO_FILENAME_LENGTH);
+	strncpy(ds->ephemObject, objectName, DIFXIO_NAME_LENGTH);
+
 	l = strlen(ephemFile);
 	if(l > 4 && strcmp(ephemFile+l-4, ".bsp") == 0)
 	{
@@ -567,12 +574,91 @@ int computeDifxSpacecraftEphemeris(DifxSpacecraft *ds, double mjd0, double delta
 	}
 }
 
+int computeDifxSpacecraftTwoLineElement(DifxSpacecraft *ds, double mjd0, double deltat, int nPoint, const char *objectName, const char *naifFile, const char *line1, const char *line2, double ephemStellarAber, double ephemClockError)
+{
+#if HAVE_SPICE
+	const int NElement = 10;
+	const SpiceInt MaxLineLength = 128;
+	const SpiceInt firstYear = 2000;
+	int p;
+	SpiceDouble elems[NElement];
+	SpiceDouble epoch;
+	SpiceChar lines[2][MaxLineLength];	/* To store the Two Line Element (TLE) */
+
+	if(naifFile)
+	{
+		ldpool_c(naifFile);
+	}
+
+	strncpy(lines[0], line1, MaxLineLength);
+	lines[0][MaxLineLength-1] = 0;
+	strncpy(lines[1], line2, MaxLineLength);
+	lines[1][MaxLineLength-1] = 0;
+
+	if(!ds->pos || ds->nPoint == 0)	/* state vector array needs allocating and intializing */
+	{
+		ds->nPoint = nPoint;
+		ds->pos = (sixVector *)calloc(nPoint, sizeof(sixVector));
+		
+		for(p = 0; p < ds->nPoint; ++p)
+		{
+			double m = mjd0 + p*deltat;
+
+			ds->pos[p].mjd = m;
+			ds->pos[p].fracDay = m - ds->pos[p].mjd;
+		}
+	}
+
+	getelm_c(firstYear, MaxLineLength, lines, &epoch, elems);
+
+	p = snprintf(ds->name, DIFXIO_NAME_LENGTH, "%s", objectName);
+	if(p >= DIFXIO_NAME_LENGTH)
+	{
+		fprintf(stderr, "Warning: computeDifxSpacecraftEphemeris_tle: spacecraft name %s is too long %d > %d\n", objectName, p, DIFXIO_NAME_LENGTH-1);
+	}
+
+	for(p = 0; p < nPoint; ++p)
+	{
+		long double jd;
+		char jdstr[24];
+		double et;
+		double state[6];
+
+		/* time to evaluate ephemeris */
+		jd = 2400000.5 + ds->pos[p].mjd + ds->pos[p].fracDay + ephemClockError/86400.0;
+		sprintf(jdstr, "JD %18.12Lf", jd);
+		str2et_c(jdstr, &et);
+
+		evaluateTLE(et, elems, state);
+
+		TEME2J2000(et, state);
+
+		ds->pos[p].X = state[0]*1000.0;	/* Convert to m and m/s from km and km/s */
+		ds->pos[p].Y = state[1]*1000.0;
+		ds->pos[p].Z = state[2]*1000.0;
+		ds->pos[p].dX = state[3]*1000.0;
+		ds->pos[p].dY = state[4]*1000.0;
+		ds->pos[p].dZ = state[5]*1000.0;
+	}
+
+	clpool_c();
+
+	return 0;
+#else
+	fprintf(stderr, "Error: computeDifxSpacecraftEphemeris_tle: spice not compiled into difxio.\n");
+	
+	return -1;
+#endif
+}
+
 static void copySpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src)
 {
 	snprintf(dest->name, DIFXIO_NAME_LENGTH, "%s", src->name);
 	dest->nPoint = src->nPoint;
 	dest->pos = (sixVector *)calloc(dest->nPoint, sizeof(sixVector));
 	memcpy(dest->pos, src->pos, dest->nPoint*sizeof(sixVector));
+	strncpy(dest->ephemFile, src->ephemFile, DIFXIO_FILENAME_LENGTH);
+	strncpy(dest->ephemObject, src->ephemObject, DIFXIO_NAME_LENGTH);
 }
 
 static void mergeSpacecraft(DifxSpacecraft *dest, const DifxSpacecraft *src1, const DifxSpacecraft *src2)
@@ -701,7 +787,7 @@ DifxSpacecraft *mergeDifxSpacecraft(const DifxSpacecraft *ds1, int nds1, const D
 }
 
 
-static void evalPoly(long double poly[4], long double t, long double *V)
+static void evalPoly4(long double poly[4], long double t, long double *V)
 {
 	*V = poly[0] + t*(poly[1] + t*(poly[2] + t*poly[3]));
 }
@@ -751,19 +837,19 @@ int evaluateDifxSpacecraft(const DifxSpacecraft *sc, int mjd, double fracMjd, si
 	xPoly[0] = pos[r0].X;
 	xPoly[1] = pos[r0].dX*deltat;
 	xPoly[2] = -3.0L*(pos[r0].X-pos[r1].X) - (2.0L*pos[r0].dX+pos[r1].dX)*deltat;
-	xPoly[3] =  2.0L*(pos[r0].X-pos[r1].X) + (    pos[r0].dX+pos[r1].dX)*deltat;
+	xPoly[3] =  2.0L*(pos[r0].X-pos[r1].X) + (     pos[r0].dX+pos[r1].dX)*deltat;
 	yPoly[0] = pos[r0].Y;
 	yPoly[1] = pos[r0].dY*deltat;
 	yPoly[2] = -3.0L*(pos[r0].Y-pos[r1].Y) - (2.0L*pos[r0].dY+pos[r1].dY)*deltat;
-	yPoly[3] =  2.0L*(pos[r0].Y-pos[r1].Y) + (    pos[r0].dY+pos[r1].dY)*deltat;
+	yPoly[3] =  2.0L*(pos[r0].Y-pos[r1].Y) + (     pos[r0].dY+pos[r1].dY)*deltat;
 	zPoly[0] = pos[r0].Z;
 	zPoly[1] = pos[r0].dZ*deltat;
 	zPoly[2] = -3.0L*(pos[r0].Z-pos[r1].Z) - (2.0L*pos[r0].dZ+pos[r1].dZ)*deltat;
-	zPoly[3] =  2.0L*(pos[r0].Z-pos[r1].Z) + (    pos[r0].dZ+pos[r1].dZ)*deltat;
+	zPoly[3] =  2.0L*(pos[r0].Z-pos[r1].Z) + (     pos[r0].dZ+pos[r1].dZ)*deltat;
 
-	evalPoly(xPoly, t, &X);
-	evalPoly(yPoly, t, &Y);
-	evalPoly(zPoly, t, &Z);
+	evalPoly4(xPoly, t, &X);
+	evalPoly4(yPoly, t, &Y);
+	evalPoly4(zPoly, t, &Z);
 
 #if 0
 	/* linear interpolation of velocity gives smoother results than
@@ -836,6 +922,14 @@ int writeDifxSpacecraftArray(FILE *out, int nSpacecraft, DifxSpacecraft *ds)
 			writeDifxLine(out, "FRAME", ds[i].frame);
 		}
 		writeDifxLine1(out, "SPACECRAFT %d NAME", i, ds[i].name);
+		if(ds[i].ephemFile[0])
+		{
+			writeDifxLine1(out, "SPACECRAFT %d EPHEM", i, ds[i].ephemFile);
+		}
+		if(ds[i].ephemObject[0])
+		{
+			writeDifxLine1(out, "SPACECRAFT %d ID", i, ds[i].ephemObject);
+		}
 		writeDifxLineInt1(out, "SPACECRAFT %d ROWS", i, ds[i].nPoint);
 		if(ds[i].axisVectors == 0 || ds[i].timeFrameOffset == 0)
 		{

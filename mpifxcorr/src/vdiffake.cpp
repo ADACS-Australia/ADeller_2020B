@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2016 by Walter Brisken and Adam Deller             *
+ *   Copyright (C) 2007-2022 by Walter Brisken and Adam Deller             *
  *                                                                         *
  *   This program is free software: you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffake.cpp 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: vdiffake.cpp 10466 2022-05-04 14:45:45Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/nativemk5.cpp $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10466 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-05-05 00:45:45 +1000 (Thu, 05 May 2022) $
 //
 //============================================================================
 
@@ -182,36 +182,7 @@ int VDIFFakeDataStream::dataRead(int buffersegment)
 		readnanoseconds = bufferinfo[buffersegment].scanns;
 		readseconds = bufferinfo[buffersegment].scanseconds;
 
-		// look at difference in data frames consumed and produced and proceed accordingly
-		int deltaDataFrames = vstats.srcUsed/(nthreads*inputframebytes) - vstats.destUsed/(nthreads*(inputframebytes-VDIF_HEADER_BYTES) + VDIF_HEADER_BYTES);
-		if(deltaDataFrames == 0)
-		{
-			startOutputFrameNumber = vstats.startFrameNumber + vstats.nOutputFrame;
-		}
-		else
-		{
-			if(deltaDataFrames < -10)
-			{
-				static int nGapWarn = 0;
-
-				++nGapWarn;
-				if( (nGapWarn & (nGapWarn - 1)) == 0)
-				{
-					cwarn << startl << "Data gap of " << (vstats.destUsed-vstats.srcUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nGapWarn << endl;
-				}
-			}
-			else if(deltaDataFrames > 10)
-			{
-				static int nExcessWarn = 0;
-
-				++nExcessWarn;
-				if( (nExcessWarn & (nExcessWarn - 1)) == 0)
-				{
-					cwarn << startl << "Data excess of " << (vstats.srcUsed-vstats.destUsed) << " bytes out of " << vstats.destUsed << " bytes found. startOutputFrameNumber=" << startOutputFrameNumber << " bytesvisible=" << bytesvisible << " N=" << nExcessWarn << endl;
-				}
-			}
-			startOutputFrameNumber = -1;
-		}
+		startOutputFrameNumber = vstats.startFrameNumber + vstats.nOutputFrame;
 	}
 	else
 	{

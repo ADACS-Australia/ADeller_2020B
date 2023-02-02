@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsAG.c 9280 2019-11-13 07:06:04Z WalterBrisken $
+// $Id: fitsAG.c 10024 2021-05-25 14:53:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsAG.c $
-// $LastChangedRevision: 9280 $
+// $LastChangedRevision: 10024 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2019-11-13 18:06:04 +1100 (Wed, 13 Nov 2019) $
+// $LastChangedDate: 2021-05-26 00:53:00 +1000 (Wed, 26 May 2021) $
 //
 //============================================================================
 #include <stdio.h>
@@ -42,19 +42,12 @@ static double arrayGMST(int mjd)
 	double cent;
 	double daysj;
 	double gmstc[4];
-	/* double sidvel[3]; */
 	int igstmn;
 
 	gmstc[0] = 24110.548410;
 	gmstc[1] = 8640184.8128660;
 	gmstc[2] = 0.0931040;
 	gmstc[3] = -6.2e-6;
-
-	/*
-	sidvel[0] = 1.0027379093507950;
-	sidvel[1] = 5.9006e-11;
-	sidvel[2] = -5.9e-15;
-	*/
 
 	daysj = mjd - mjd2000 + 0.5;
 
@@ -64,7 +57,7 @@ static double arrayGMST(int mjd)
 
 	igstmn = gstmn / (2.0*M_PI);
 	gstmn = gstmn - (double)igstmn * (2.0*M_PI);
-	if (gstmn < 0.0)
+	if(gstmn < 0.0)
 	{
 		gstmn += (2.0*M_PI);
 	}

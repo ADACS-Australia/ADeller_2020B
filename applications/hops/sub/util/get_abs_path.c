@@ -21,9 +21,10 @@
 int
 get_abs_path(char input[], char rootname[])
     {
-    char directory[256], abs_directory[256], r_fname[256];
-    char workdir[256], temp[256];
-    char *ptr, *strrchr();
+    char directory[256], abs_directory[512], r_fname[256];
+    char workdir[256], temp[769];
+    char *ptr;
+    /*char* strrchr(const char*, int);*/
 
     if (getcwd (workdir, 256) == NULL)
         {
@@ -38,7 +39,7 @@ get_abs_path(char input[], char rootname[])
         strcpy (r_fname, input);
         strcpy (abs_directory, workdir);
         }
-    else 
+    else
         {
         strcpy (r_fname, ptr+1);        /* filename follows last '/' */
         ptr[0] = '\0';

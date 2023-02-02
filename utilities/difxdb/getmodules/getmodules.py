@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 # coding: latin-1
 
 #===========================================================================
@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: getmodules.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: getmodules.py 10127 2021-08-27 18:49:04Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/getmodules/getmodules.py $
-# $LastChangedRevision: 9293 $
+# $LastChangedRevision: 10127 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedDate: 2021-08-28 04:49:04 +1000 (Sat, 28 Aug 2021) $
 #
 #============================================================================
 
@@ -36,17 +36,17 @@ from operator import  attrgetter
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
+__build__= "$Revision: 10127 $"
+__date__ ="$Date: 2021-08-28 04:49:04 +1000 (Sat, 28 Aug 2021) $"
 __lastAuthor__="$Author: HelgeRottmann $"
 
 def printUsage():
-    print "%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__)
-    print "A program to list all modules associated with an experiment\n"
-    print "Usage: %s <experiment_code>\n\n"  % __prog__
-    print "NOTE: %s requires the DIFXROOT environment to be defined." % __prog__
-    print "The program reads the database configuration from difxdb.ini located under $DIFXROOT/conf."
-    print "If the configuration is not found a sample one will be created for you."
+    print("%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__))
+    print("A program to list all modules associated with an experiment\n")
+    print("Usage: %s <experiment_code>\n\n"  % __prog__)
+    print("NOTE: %s requires the DIFXROOT environment to be defined." % __prog__)
+    print("The program reads the database configuration from difxdb.ini located under $DIFXROOT/conf.")
+    print("If the configuration is not found a sample one will be created for you.")
 
     
     sys.exit(1)
@@ -82,33 +82,33 @@ if __name__ == "__main__":
         dbConn = Schema(connection)
         session = dbConn.session()
         
-	for expCode in expCodes:
-		expCode = upper(expCode)
-		try:
-			experiment = getExperimentByCode(session, expCode)
-		except:
-			raise Exception("Unknown experiment")
-			sys.exit
+        for expCode in expCodes:
+                expCode = expCode.upper()
+                try:
+                        experiment = getExperimentByCode(session, expCode)
+                except:
+                        raise Exception("Unknown experiment")
+                        sys.exit
 
-		sum = 0
-		count = 0
-		if (experiment is not None):
-			print "------------------"
-			print "%s" % expCode
-			print "------------------"
-			sortedModules = sorted(experiment.modules, key= attrgetter('stationCode'))
-			for module in sortedModules:
-				print module.vsn, module.slot.location, module.stationCode, module.capacity
-				count += 1
-				sum += module.capacity
+                sum = 0
+                count = 0
+                if (experiment is not None):
+                        print("------------------")
+                        print("%s" % expCode)
+                        print("------------------")
+                        sortedModules = sorted(experiment.modules, key= attrgetter('stationCode'))
+                        for module in sortedModules:
+                                print(module.vsn, module.slot.location, module.stationCode, module.capacity)
+                                count += 1
+                                sum += module.capacity
 
-			print "--------------------------------------------"
-			print "Total capacity: ", sum, "GB", " on", count , "modules"
-			print "\n\n"
-		
-	    
+                        print("--------------------------------------------")
+                        print("Total capacity: ", sum, "GB", " on", count , "modules")
+                        print("\n\n")
+                
+            
     except Exception as e:
-	sys.exit(e)
-	    
-	   
-	    
+        sys.exit(e)
+            
+           
+            

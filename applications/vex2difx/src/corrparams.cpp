@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2021 by Walter Brisken                             *
+ *   Copyright (C) 2009-2023 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: corrparams.cpp 9873 2021-01-13 17:23:01Z WalterBrisken $
+ * $Id: corrparams.cpp 10867 2023-01-03 17:22:51Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/corrparams.cpp $
- * $LastChangedRevision: 9873 $
+ * $LastChangedRevision: 10867 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2021-01-14 04:23:01 +1100 (Thu, 14 Jan 2021) $
+ * $LastChangedDate: 2023-01-04 04:22:51 +1100 (Wed, 04 Jan 2023) $
  *
  *==========================================================================*/
 
@@ -33,6 +33,7 @@
 #include <sstream>
 #include <algorithm>
 #include <fstream>
+#include <cassert>
 #include <cstdio>
 #include <cmath>
 #include <cctype>
@@ -134,7 +135,6 @@ int loadBasebandFilelistOld(const std::string &fileName, std::vector<VexBaseband
 bool loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandData> &basebandFiles)
 {
 	DirList D;
-	std::stringstream error;
 	std::string prefix;
 	int v;
 	int n = 0;
@@ -155,24 +155,27 @@ bool loadBasebandFilelist(const std::string &fileName, std::vector<VexBasebandDa
 		{
 			// here the file exists but was not in the dirlist format...
 
-			error.clear();
-			v = loadOldFileList(D, fileName.c_str(), error);
+			std::stringstream errorOldFList, errorOldDList;
+
+			v = loadOldFileList(D, fileName.c_str(), errorOldFList);
 			if(v != 0)	// this file is not an old-style file list
 			{
-				error.clear();
-				v = loadOldDirList(D, fileName.c_str(), error);
+				v = loadOldDirList(D, fileName.c_str(), errorOldDList);
 			}
 
 			if(v != 0)
 			{
-				std::cerr << "Error: cannot get filelist data from " << fileName << ".  The file is not in a recognized format."  << std::endl;
+				std::cerr << "Error: cannot get filelist data from " << fileName << ".  The file is not in a recognized format or it contains invalid MJD times. Error might be related to:"  << std::endl;
+				std::cerr << errorOldFList.str(); // nb: loadOldXXXList() already append a newline themselves
+				std::cerr << errorOldDList.str();
+				std::cerr << std::endl;
 
 				return false;
 			}
 		}
 		else
 		{
-			std::cerr << "Error: cannot get filelist data from " << fileName << ".  Error might be related to: " << error.str() << std::endl;
+			std::cerr << "Error: cannot get filelist data from " << fileName << ".  Error might be related to: " << e.what() << std::endl;
 
 			return false;
 		}
@@ -235,6 +238,27 @@ CorrSetup::CorrSetup(const std::string &name) : corrSetupName(name)
 	minRecordedBandwidth = 0.0;
 	maxRecordedBandwidth = 0.0;
 	onlyPol = ' ';
+}
+
+int CorrSetup::setkv(const std::string &key, const std::string &value, ZoomFreq *outputbandFreq)
+{
+	int nWarn = 0;
+
+	if(key == "freq" || key == "FREQ")
+	{
+		outputbandFreq->frequency = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else if(key == "bw" || key == "BW")
+	{
+		outputbandFreq->bandwidth = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else
+	{
+		std::cerr << "Warning: SETUP: Unknown parameter '" << key << "'." << std::endl;
+		++nWarn;
+	}
+
+	return nWarn;
 }
 
 void CorrSetup::addRecordedBandwidth(double bw)
@@ -722,9 +746,9 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 		ss >> pc->naifFile;
 		if(pc->naifFile < "naif0011.tls")
 		{
-			if(time(0) > 1435708800)	// July 1, 2012
+			if(time(0) > 1435708800)	// July 1, 2015
 			{
-				std::cout << "Error: naif0010.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
+				std::cout << "Error: naif0011.tls or newer is needed for correct ephemeris evaluation.  An old or unrecognized file, " << pc->naifFile << " was supplied." << std::endl;
 
 				exit(EXIT_FAILURE);
 			}
@@ -750,12 +774,12 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 		PhaseCentre * newpc = &(phaseCentres.back());
 		last = 0;
 		at = 0;
-		while(at !=std::string::npos)
+		while(at != std::string::npos)
 		{
 			at = value.find_first_of('/', last);
 			nestedkeyval = value.substr(last, at-last);
 			splitat = nestedkeyval.find_first_of('@');
-			setkv(nestedkeyval.substr(0,splitat), nestedkeyval.substr(splitat+1), newpc);
+			setkv(nestedkeyval.substr(0, splitat), nestedkeyval.substr(splitat+1), newpc);
 			last = at+1;
 		}
 	}
@@ -766,20 +790,6 @@ int SourceSetup::setkv(const std::string &key, const std::string &value, PhaseCe
 	}
 
 	return nWarn;
-}
-
-ZoomFreq::ZoomFreq()
-{
-	initialise(-999, -999, false, -1);
-}
-
-// freq and bw supplied in MHz
-void ZoomFreq::initialise(double freq, double bw, bool corrparent, int specavg)
-{
-	frequency = freq*1000000; //convert to Hz
-	bandwidth = bw*1000000; //convert to Hz
-	correlateparent = corrparent;
-	spectralaverage = specavg;
 }
 
 DatastreamSetup::DatastreamSetup(const std::string &name) : difxName(name)
@@ -957,6 +967,7 @@ int DatastreamSetup::setkv(const std::string &key, const std::string &value)
 			std::cout << "Note: the fake keyword in the DATASTREAM section is deprecated and won't be an option in some future version of vex2difx.  Please instead use: source=fake" << std::endl;
 		}
 		++noteCount;
+
 		dataSource = DataSourceFake;
 		basebandFiles.clear();
 		basebandFiles.push_back(VexBasebandData(value, 0, -1));
@@ -1046,7 +1057,7 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 	{
 		std::cerr << "Error: conflicting threadsAbsent lists" << std::endl;
 
-		return -7;	
+		return -7;
 	}
 
 	if(threadsIgnore.empty())
@@ -1057,7 +1068,7 @@ int DatastreamSetup::merge(const DatastreamSetup *dss)
 	{
 		std::cerr << "Error: conflicting threadsIgnore lists" << std::endl;
 
-		return -8;	
+		return -8;
 	}
 
 	if(dataSampling != dss->dataSampling)
@@ -1165,10 +1176,6 @@ AntennaSetup::AntennaSetup(const std::string &name) : vexName(name), defaultData
 	deltaClockRate = 0.0;
 	clock.mjdStart = -1e9;
 	clockorder = 1;
-	clock2 = 0.0;
-	clock3 = 0.0;
-	clock4 = 0.0;
-	clock5 = 0.0;
 	phaseCalIntervalMHz = -1;
 	toneGuardMHz = -1.0;
 	toneSelection = ToneSelectionSmart;
@@ -1208,6 +1215,8 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 	{
 		polConvert = parseBoolean(value);
 	}
+
+	// Eventually support clock=A,B,C,D
 	else if(key == "clockOffset" || key == "clock0")
 	{
 		if(clock.offset != 0.0)
@@ -1215,8 +1224,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			std::cerr << "Warning: antenna " << vexName << " has multiple clockOffset definitions" << std::endl;
 			++nWarn;
 		}
-		clock.offset = parseDouble(value);
-		clock.offset /= 1.0e6;	// convert from us to sec
+		clock.offset = parseDouble(value) / 1.0e6;	// convert from us to sec
 		clock.mjdStart = 1;
 	}
 	else if(key == "clockRate" || key == "clock1")
@@ -1226,70 +1234,42 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			std::cerr << "Warning: antenna " << vexName << " has multiple clockRate definitions" << std::endl;
 			++nWarn;
 		}
-		clock.rate = parseDouble(value);
-		clock.rate /= 1.0e6;	// convert from us/sec to sec/sec
+		clock.rate = parseDouble(value) / 1.0e6;	// convert from us/sec to sec/sec
+		if(clockorder < 1)
+		{
+			clockorder = 1;
+		}
 		clock.mjdStart = 1;
 	}
-#warning "FIXME: this section of code could be made much nicer"
-	else if(key == "clock2")
+	else if(key == "clockAccel" || key == "clock2")
 	{
-		if(clock2 != 0.0)
+		if(clock.accel != 0.0)
 		{
-			std::cerr << "Warning: antenna " << vexName << " has multiple clock2 definitions" << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " has multiple clockAccel definitions" << std::endl;
 			++nWarn;
 		}
 
-		ss >> clock2;
+		clock.accel = parseDouble(value) / 1.0e6;	// convert from us/sec^2 to sec/sec^2
 		if(clockorder < 2)
 		{
 			clockorder = 2;
 		}
-		clock2 /= 1.0e6;	// convert from us/sec^2 to sec/sec^2
+		clock.mjdStart = 1;
 	}
-	else if(key == "clock3")
+	else if(key == "clockJerk" || key == "clock3")
 	{
-		if(clock3 != 0.0)
+		if(clock.jerk != 0.0)
 		{
-			std::cerr << "Warning: antenna " << vexName << " has multiple clock3 definitions" << std::endl;
+			std::cerr << "Warning: antenna " << vexName << " has multiple clockJerk definitions" << std::endl;
 			++nWarn;
 		}
 
-		ss >> clock3;
+		clock.jerk = parseDouble(value) / 1.0e6;	// convert from us/sec^3 to sec/sec^3
 		if(clockorder < 3)
 		{
 			clockorder = 3;
 		}
-		clock3 /= 1.0e6;	// convert from us/sec^3 to sec/sec^3
-	}
-	else if(key == "clock4")
-	{
-		if(clock4 != 0.0)
-		{
-			std::cerr << "Warning: antenna " << vexName << " has multiple clock4 definitions" << std::endl;
-			++nWarn;
-		}
-
-		ss >> clock4;
-		if(clockorder < 4)
-		{
-			clockorder = 4;
-		}
-		clock4 /= 1.0e6;	// convert from us/sec^4 to sec/sec^4
-	}
-	else if(key == "clock5")
-	{
-		if(clock5 != 0.0)
-		{
-			std::cerr << "Warning: antenna " << vexName << " has multiple clock5 definitions" << std::endl;
-			++nWarn;
-		}
-
-		ss >> clock5;
-		if(clockorder < 5)
-		{
-			clockorder = 5;
-		}
-		clock5 /= 1.0e6;	// convert from us/sec^5 to sec/sec^5
+		clock.mjdStart = 1;
 	}
 	else if(key == "clockEpoch")
 	{
@@ -1308,8 +1288,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			std::cerr << "Warning: antenna " << vexName << " has multiple deltaClock definitions" << std::endl;
 			++nWarn;
 		}
-		deltaClock = parseDouble(value);
-		deltaClock /= 1.0e6;	// convert from us to sec
+		deltaClock = parseDouble(value) / 1.0e6;	// convert from us to sec
 	}
 	else if(key == "deltaClockRate")
 	{
@@ -1318,8 +1297,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			std::cerr << "Warning: antenna " << vexName << " has multiple deltaClockRate definitions" << std::endl;
 			++nWarn;
 		}
-		deltaClockRate = parseDouble(value);
-		deltaClockRate /= 1.0e6;	// convert from us/sec to sec/sec
+		deltaClockRate = parseDouble(value) / 1.0e6;	// convert from us/sec to sec/sec
 	}
 	else if(key == "X" || key == "x")
 	{
@@ -1491,7 +1469,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			std::cout << "Note: the fake keyword in the ANTENNA section is deprecated and won't be an option in some future version of vex2difx.  Please instead use: source=fake" << std::endl;
 		}
 		++noteCount;
-			
+
 		defaultDatastreamSetup.dataSource = DataSourceFake;
 	}
 	else if(key == "phaseCalInt")
@@ -1567,7 +1545,7 @@ int AntennaSetup::setkv(const std::string &key, const std::string &value)
 			}
 		}
 	}
-	else if(key =="loOffsets")
+	else if(key == "loOffsets")
 	{
 		double d;
 
@@ -1762,7 +1740,114 @@ int GlobalZoom::setkv(const std::string &key, const std::string &value)
 	}
 	else
 	{
-		std::cerr << "Warning: ZOOM: Unknown parameter '" << key << "'." << std::endl; 
+		std::cerr << "Warning: ZOOM: Unknown parameter '" << key << "'." << std::endl;
+		++nWarn;
+	}
+
+	return nWarn;
+}
+
+GlobalOutputband::GlobalOutputband(const std::string &name)
+{
+	difxName = name;
+	outputBandwidth = 0;
+	outputBandwidthMode = OutputBandwidthOff;
+	autobands.clear();
+}
+
+int GlobalOutputband::setkv(const std::string &key, const std::string &value, ZoomFreq *zoomFreq)
+{
+	int nWarn = 0;
+
+	if(key == "freq" || key == "FREQ")
+	{
+		zoomFreq->frequency = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else if(key == "bw" || key == "BW")
+	{
+		zoomFreq->bandwidth = atof(value.c_str())*1000000; //convert to Hz
+	}
+	else
+	{
+		std::cerr << "Warning: OUTPUTBAND: Unknown parameter '" << key << "'." << std::endl;
+		++nWarn;
+	}
+
+	return nWarn;
+}
+
+int GlobalOutputband::setkv(const std::string &key, const std::string &value)
+{
+	std::string::size_type at, last, splitat;
+	std::string nestedkeyval;
+	std::stringstream ss;
+	int nWarn = 0;
+
+	ss << value;
+
+	if(key == "outputBandwidth")
+	{
+		if (value == "auto")
+		{
+			outputBandwidthMode = OutputBandwidthAuto;
+		}
+		else
+		{
+			outputBandwidthMode = OutputBandwidthUser;
+			ss >> outputBandwidth;
+			outputBandwidth *= 1e6; // Users use MHz, vex2difx uses Hz
+		}
+	}
+	else if(key == "addOutputBand")
+	{
+		// Register explicit v2d user-specified output band into the autoband logic
+		// The syntax follows ZOOM addZoomFreq.  All parameters must be together, with @ replacing =, and separated by /
+		// e.g., addOutputBand = freq@1649.99/bw@32.0
+		// only freq is compulsory; bandwidth bw only if outputBandwidth=<x> was not specified prior to addOutputBand
+		ZoomFreq outputbandDef;
+		outputbandDef.initialise(0, 0, false, 1);
+		last = 0;
+		at = 0;
+		while(at != std::string::npos)
+		{
+			at = value.find_first_of('/', last);
+			nestedkeyval = value.substr(last, at-last);
+			splitat = nestedkeyval.find_first_of('@');
+			nWarn += setkv(nestedkeyval.substr(0, splitat), nestedkeyval.substr(splitat+1), &outputbandDef);
+			last = at+1;
+		}
+		if(outputbandDef.frequency <= 0)
+		{
+			std::cerr << "Error: Explicit outputband entry '" << value << "' parsed into unexpected frequency of " << outputbandDef.frequency << " MHz." << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+		if(outputBandwidth == 0 && outputbandDef.bandwidth == 0)
+		{
+			std::cerr << "Error: For explicit outputband placement please provide a bandwidth as part of 'addOutputBand' or in a preceding 'outputBandwidth'." << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+		if(outputBandwidth <= 0)
+		{
+			outputBandwidth = outputbandDef.bandwidth;
+		}
+		else if(outputbandDef.bandwidth == 0)
+		{
+			outputbandDef.bandwidth = outputBandwidth;
+		}
+		if(outputBandwidth != outputbandDef.bandwidth)
+		{
+			std::cerr << "Error: Bandwidth of outputBandwidth parameter (" << outputBandwidth*1e-6 << " MHz) conflicts with addOutputBand bw element (" << outputbandDef.bandwidth*1e-6 << " MHz)" << std::endl;
+
+			exit(EXIT_FAILURE);
+		}
+		outputBandwidthMode = OutputBandwidthUser;
+		autobands.addUserOutputband(outputbandDef);
+	}
+	else
+	{
+		std::cerr << "Warning: OUTPUTBAND: Unknown parameter '" << key << "'." << std::endl;
 		++nWarn;
 	}
 
@@ -2123,6 +2208,7 @@ int CorrParams::load(const std::string &fileName)
 		PARSE_MODE_DATASTREAM,
 		PARSE_MODE_ANTENNA,
 		PARSE_MODE_GLOBAL_ZOOM,
+		PARSE_MODE_GLOBAL_OUTPUTBAND,
 		PARSE_MODE_EOP,
 		PARSE_MODE_COMMENT
 	};
@@ -2138,6 +2224,7 @@ int CorrParams::load(const std::string &fileName)
 	DatastreamSetup *datastreamSetup=0;
 	AntennaSetup *antennaSetup=0;
 	GlobalZoom  *globalZoom=0;
+	GlobalOutputband *globalOutputband=0;
 	VexEOP       *eop=0;
 	Parse_Mode parseMode = PARSE_MODE_GLOBAL;
 	int nWarn = 0;
@@ -2376,6 +2463,41 @@ int CorrParams::load(const std::string &fileName)
 			key = "";
 			parseMode = PARSE_MODE_GLOBAL_ZOOM;
 		}
+		else if(*i == "OUTPUTBAND")
+		{
+			if(parseMode != PARSE_MODE_GLOBAL)
+			{
+				std::cerr << "Error: OUTPUTBAND out of place." << std::endl;
+				
+				exit(EXIT_FAILURE);
+			}
+			if(!globalOutputbands.empty())
+			{
+				std::cerr << "Error: Encountered more than one OUTPUTBAND section." << std::endl;
+				
+				exit(EXIT_FAILURE);
+			}
+			++i;
+			std::string blockName(*i);
+			if(*i == "{")
+			{
+				blockName = "default";
+			}
+			else
+			{
+				++i;
+			}
+			globalOutputbands.push_back(GlobalOutputband(blockName));
+			globalOutputband = &globalOutputbands.back();
+			if(*i != "{")
+			{
+				std::cerr << "Error: OUTPUTBAND " << globalOutputband->difxName << ": '{' expected." << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+			key = "";
+			parseMode = PARSE_MODE_GLOBAL_OUTPUTBAND;
+		}
 		else if(*i == "EOP")
 		{
 			if(parseMode != PARSE_MODE_GLOBAL)
@@ -2469,6 +2591,9 @@ int CorrParams::load(const std::string &fileName)
 			case PARSE_MODE_GLOBAL_ZOOM:
 				nWarn += globalZoom->setkv(key, value);
 				break;
+			case PARSE_MODE_GLOBAL_OUTPUTBAND:
+				nWarn += globalOutputband->setkv(key, value);
+				break;
 			case PARSE_MODE_COMMENT:
 				// nothing to do here
 				break;
@@ -2530,6 +2655,10 @@ int CorrParams::load(const std::string &fileName)
 
 			it->copyGlobalZoom(*z);
 		}
+
+		// copy the custom v2d zoomFreqs into vector v2dZoomFreqs which the Outputbands does not tamper with
+		it->v2dZoomFreqs.clear();
+		std::copy(it->zoomFreqs.begin(), it->zoomFreqs.end(), std::back_inserter(it->v2dZoomFreqs));
 	}
 
 	// populate datastream structures
@@ -2704,6 +2833,21 @@ int CorrParams::checkSetupValidity()
 		}
 	}
 
+	// Automatically switch to exhaustiveAutocorrs if corr params use the outputbands feature.
+	// This keeps the mpifxcorr implementation of outputbands simple and autocorrs need no special code path
+	if(!exhaustiveAutocorrs && globalOutputbands.size() >= 1)
+	{
+		GlobalOutputband* ob = &globalOutputbands.back();
+		if(ob->outputBandwidthMode != OutputBandwidthOff)
+		{
+			exhaustiveAutocorrs = true;
+		}
+		if(exhaustiveAutocorrs)
+		{
+			std::cerr << "Note: configuration provided outputBandwidth, but exhaustiveAutocorrs was not specified. Auto-enabling it." << std::endl;
+		}
+	}
+
 	// check that all setups are sensible
 	for(std::vector<CorrSetup>::const_iterator c = corrSetups.begin(); c != corrSetups.end(); ++c)
 	{
@@ -2771,7 +2915,7 @@ int CorrParams::sanityCheck()
 			std::cerr << "Warning: the default antenna's coordinates are set!" << std::endl;
 			++nWarn;
 		}
-		if(a->clock.offset != 0 || a->clock.rate != 0 || a->clock2 != 0 || a->clock3 != 0 || a->clock4 != 0 || a->clock5 != 0 || a->clock.offset_epoch != 0 || a->deltaClock != 0 || a->deltaClockRate != 0)
+		if(a->clock.offset != 0 || a->clock.rate != 0 || a->clock.accel != 0 || a->clock.jerk != 0 || a->clock.offset_epoch != 0 || a->deltaClock != 0 || a->deltaClockRate != 0)
 		{
 			std::cerr << "Warning: the default antenna's clock parameters are set!" << std::endl;
 			++nWarn;
@@ -2990,6 +3134,232 @@ const GlobalZoom *CorrParams::getGlobalZoom(const std::string &name) const
 	}
 
 	return z;
+}
+
+/// If outputbands processing was requested, introduces automatic global zoom definitions and adds them to AntennaSetups where applicable
+void CorrParams::updateZoomBandsForOutputBands(const std::vector<Job>& alljobs, const VexData *V, int verbose)
+{
+	assert(globalOutputbands.size() <= 1);
+
+	if(globalOutputbands.empty() || alljobs.empty() || V == NULL)
+	{
+		return;
+	}
+
+	GlobalOutputband* ob = &globalOutputbands.back();
+	ob->autobands.setVerbosity(verbose);
+	if(ob->outputBandwidthMode == OutputBandwidthOff)
+	{
+		return;
+	}
+
+	// Need to know which antennas are active and which recorded bands they have,
+	// then map pieces of (or entire) recorded bands into the requested output bands.
+
+	// 1. Work through the scan(s) and their antennas in the current job,
+	// noting down which VEX Mode(s) are active
+
+	typedef std::map<std::string,std::set<std::string> > antmodemap_t;
+
+	antmodemap_t enabledAntennaModes;
+
+	for(std::vector<Job>::const_iterator J = alljobs.begin(); J != alljobs.end(); ++J)
+	{
+		if(verbose > 2)
+		{
+			std::cout << "The currently inspected Job has " << J->jobAntennas.size() << " antennas, " << J->scans.size() << " scans." << std::endl;
+		}
+
+		for(std::vector<std::string>::const_iterator si = J->scans.begin(); si != J->scans.end(); ++si)
+		{
+			const VexScan *vexScan = V->getScanByDefName(*si);
+			if(!vexScan)
+			{
+				std::cerr << "Developer error: scan[" << *si << "] not found!  This cannot be!" << std::endl;
+
+				exit(EXIT_FAILURE);
+			}
+
+			if(verbose > 2)
+			{
+				std::cout << "Job scan " << vexScan->defName << " mode " << vexScan->modeDefName << std::endl;
+			}
+
+			for(std::vector<std::string>::const_iterator a = J->jobAntennas.begin(); a != J->jobAntennas.end(); ++a)
+			{
+				if(vexScan->hasAntenna(*a))
+				{
+					if(enabledAntennaModes.find(*a) == enabledAntennaModes.end())
+					{
+						enabledAntennaModes[*a] = std::set<std::string>();
+					}
+					enabledAntennaModes[*a].insert(vexScan->modeDefName);
+				}
+			}
+		}
+
+	}
+
+	// 2. For each antenna, look up the VEX chan_defs under its VEX Modes active in current Job.
+	// The chan_defs are found in <VexMode>vmode.<VexSetup>setups[antname].<VexChannel>channels[..]
+
+	typedef std::map<std::string,std::vector<freq> > antfreqsmap_t;
+
+	antfreqsmap_t availableAntennaRecfreqs;
+
+	for(antmodemap_t::const_iterator ai = enabledAntennaModes.begin(); ai != enabledAntennaModes.end(); ++ai)
+	{
+		if(verbose > 2)
+		{
+			std::cout << "Antenna " << ai->first << " had scans in these mode(s) :" << std::endl;
+			for(std::set<std::string>::const_iterator mi = ai->second.begin(); mi != ai->second.end(); ++mi)
+			{
+				std::cout << " " << *mi;
+			}
+			std::cout << std::endl;
+		}
+
+		std::vector<freq> antennaAllFreqs;
+		for(std::set<std::string>::const_iterator mi = ai->second.begin(); mi != ai->second.end(); ++mi)
+		{
+			const VexMode *vmode = V->getModeByDefName(*mi);
+			const VexSetup *vsetup = vmode->getSetup(ai->first);
+
+			if(verbose > 2)
+			{
+				std::cout << "   Mode " << *mi << std::endl;
+				std::cout << "   Channels:" << std::endl;
+				for(std::vector<VexChannel>::const_iterator ch = vsetup->channels.begin(); ch != vsetup->channels.end(); ++ch)
+				{
+					const VexSubband& vband = vmode->subbands[ch->subbandId];
+					std::cout << "      " << vband << std::endl;
+				}
+				std::cout << std::endl;
+			}
+
+			for(std::vector<VexChannel>::const_iterator ch = vsetup->channels.begin(); ch != vsetup->channels.end(); ++ch)
+			{
+				const VexSubband& vband = vmode->subbands[ch->subbandId];
+				const freq recfreq(vband.freq, vband.bandwidth, vband.sideBand, /*inputSpecRes[Hz]:*/1e6);
+				antennaAllFreqs.push_back(recfreq);
+			}
+		}
+
+		ob->autobands.addRecbands(antennaAllFreqs);
+
+		if(availableAntennaRecfreqs.find(ai->first) == availableAntennaRecfreqs.end())
+		{
+			availableAntennaRecfreqs[ai->first] = antennaAllFreqs;
+		}
+		else
+		{
+			// note, appending here occurs when the antenna is in multiple VEX modes e.g. 43G/86G frequency switched observations
+			availableAntennaRecfreqs[ai->first].insert(availableAntennaRecfreqs[ai->first].end(), antennaAllFreqs.begin(), antennaAllFreqs.end());
+		}
+
+	}
+
+	// 3. Run auto-zoom segmentation
+	double bw = 0;
+	if(ob->outputBandwidthMode == OutputBandwidthAuto)
+	{
+		bw = ob->autobands.autoBandwidth();
+		std::cout << "Note: Determined outputBand 'auto' bandwidth of " << std::fixed << bw*1e-6 << "MHz" << std::endl;
+	}
+
+	if(bw <= 0)
+	{
+		bw = ob->outputBandwidth;
+		std::cout << "Note: Using user-specified outputBand bandwidth of " << std::fixed << bw*1e-6 << "MHz" << std::endl;
+	}
+
+	if(bw <= 0)
+	{
+		std::cerr << "Error: outputBand mode failed! You can try specifying 'auto' or a different bandwidth." << std::endl;
+
+		exit(EXIT_FAILURE);
+	}
+
+	ob->autobands.setBandwidth(bw);
+	ob->autobands.generateOutputbands(this->minSubarraySize);
+	if(verbose > 2)
+	{
+		std::cout << ob->autobands << std::endl;
+	}
+
+	// append explicitly user-defined v2d Zooms (if any) into the autoband logic as output bands
+	for(antmodemap_t::const_iterator ai = enabledAntennaModes.begin(); ai != enabledAntennaModes.end(); ++ai)
+	{
+		const AntennaSetup *as = this->getAntennaSetup(ai->first);
+		if(as->v2dZoomFreqs.size() > 0)
+		{
+			if(verbose > 2)
+	        {
+				std::cout << "Antenna " << ai->first << " has " << as->v2dZoomFreqs.size() << " zoom freqs in v2d, keeping these as outputbands." << std::endl;
+			}
+			ob->autobands.addUserOutputbands(as->v2dZoomFreqs);
+		}
+	}
+
+	// make a final list of zooms needed
+	GlobalZoom autozooms("autozooms");
+	for(std::vector<AutoBands::Outputband>::const_iterator oband=ob->autobands.outputbands.begin(); oband != ob->autobands.outputbands.end(); ++oband)
+	{
+		if (!oband->isComplete())
+		{
+			std::cerr << "Developer error: encountered internal incomplete Outputband " << *oband << " during GlobalZoom construction!" << std::endl;
+			continue;
+		}
+		// grow the list of all-band constituent zooms
+		for(std::vector<AutoBands::Band>::const_iterator zm = oband->constituents.begin(); zm != oband->constituents.end(); ++zm)
+		{
+			ZoomFreq zoom;
+			zoom.initialise(zm->flow, zm->bandwidth(), false, 0); // specAvg:0 means default to parent
+			autozooms.zoomFreqs.push_back(zoom);
+		}
+	}
+
+	// 4. Add the zooms into each AntennaSetup's zoom freq set, discarding corner cases
+	for(antmodemap_t::const_iterator ai = enabledAntennaModes.begin(); ai != enabledAntennaModes.end(); ++ai)
+	{
+		//const AntennaSetup *as = this->getAntennaSetup(ai->first);
+		AntennaSetup *as = this->getNonConstAntennaSetup(ai->first);
+		const std::vector<freq>* antfreqs = &availableAntennaRecfreqs[ai->first];
+
+		// determine which automatic zooms are required for *this* antenna (string ai->first), while
+		// filtering out a corner case: any zoom that is identical to a USB freq
+		// recorded by this antenna is redundant (and detrimental)
+		GlobalZoom antautozooms("antennaextrazooms");
+		for(std::vector<ZoomFreq>::const_iterator zfit = autozooms.zoomFreqs.begin(); zfit != autozooms.zoomFreqs.end(); ++zfit)
+		{
+			bool redundant = false;
+			for(std::vector<freq>::const_iterator fqit = antfreqs->begin(); fqit != antfreqs->end(); ++fqit)
+			{
+				//if(zfit->matchesFreqSense(fqit)) // g++: 'no known conversion for argument 1 from ‘std::vector<freq>::const_iterator {aka __gnu_cxx::__normal_iterator<const freq*, std::vector<freq> >}’ to ‘const freq*’' !?
+				if(zfit->matchesFreqSense(&(*fqit)))
+				{
+					if(verbose > 2)
+					{
+						std::cout << "Ignoring auto-zoom at antenna " << ai->first << " of " << *zfit << " since identical to recband " << *fqit << std::endl;
+					}
+					redundant = true;
+					break;
+				}
+			}
+			if(!redundant)
+			{
+				antautozooms.zoomFreqs.push_back(*zfit);
+			}
+		}
+
+		// append the useful zooms into this antennas zoom band list
+		if(verbose > 2)
+		{
+			std::cout << "For antenna " << ai->first << ", adding " << antautozooms.zoomFreqs.size() << " out of " << autozooms.zoomFreqs.size() << " auto-determined zooms "
+			  << "to its " << as->zoomFreqs.size() << " existing v2d-defined zooms." << std::endl;
+		}
+		as->copyGlobalZoom(antautozooms); // NB: is called "copy()" but actually appends
+	}
 }
 
 void CorrParams::addSourceSetup(const SourceSetup &toAdd)

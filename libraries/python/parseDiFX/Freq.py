@@ -16,15 +16,15 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: Freq.py 9229 2019-10-28 09:45:16Z JanWagner $
+# $Id: Freq.py 10474 2022-05-12 16:32:23Z JayBlanchard $
 # $HeadURL: $
-# $LastChangedRevision: 9229 $
-# $Author: JanWagner $
-# $LastChangedDate: 2019-10-28 20:45:16 +1100 (Mon, 28 Oct 2019) $
+# $LastChangedRevision: 10474 $
+# $Author: JayBlanchard $
+# $LastChangedDate: 2022-05-13 02:32:23 +1000 (Fri, 13 May 2022) $
 #
 #============================================================================
 
-from __future__ import division
+
 
 class Freq:
 
@@ -38,10 +38,11 @@ class Freq:
         self.decimfac = 1
         self.npcal = 0
         self.pcalindices = []
+        self.rxname = ""
 
     def str(self):
         sideband = "LSB" if self.lsb else "USB"
-        summary = "%12.6f MHz %3s [%4d-ch/%d-avg] @ %.6f MHz" % (self.bandwidth,sideband,self.numchan,self.specavg,self.freq)
+        summary = "%s %12.6f MHz %3s [%4d-ch/%d-avg] @ %.6f MHz" % (self.rxname, self.bandwidth,sideband,self.numchan,self.specavg,self.freq)
         return summary
 
     def low_edge(self):

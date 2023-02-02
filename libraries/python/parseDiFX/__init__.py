@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: __init__.py 9222 2019-10-17 12:09:33Z JanWagner $
+# $Id: __init__.py 10549 2022-07-26 12:21:49Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9222 $
-# $Author: JanWagner $
-# $LastChangedDate: 2019-10-17 23:09:33 +1100 (Thu, 17 Oct 2019) $
+# $LastChangedRevision: 10549 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2022-07-26 22:21:49 +1000 (Tue, 26 Jul 2022) $
 #
 #============================================================================
 
@@ -41,6 +41,7 @@ from .Freq import Freq
 from .Telescope import Telescope
 from .Baseline import Baseline
 from .Datastream import Datastream
+from .Data import Data
 
 # DiFX full set: .input and .difx/DIFX_*
 from .InputFile import InputFile

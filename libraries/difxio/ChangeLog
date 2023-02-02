@@ -1,3 +1,7 @@
+3.8.0
+* Post DiFX 2.8
+* New function DifxInputGetMaxDatastreamsPerAntenna()
+
 3.7.0
 * Post DiFX 2.6
 * Add new column to antenna database: ivsName: the name used by IVS
@@ -12,7 +16,17 @@
 * fix incorrect FITS PCal tone freq due rounding error in >1 MHz spacing cases, found by L.Petrov
 * tabulatedelays: allow backing out axis offset effects, allow external file to provide list of MJDs
 * tabulatedelays: option added to print the antenna coordinates as comments in the output
+* tabulatedelays: fix print formatting (missing new lines)
+* tabulatedelays: in mjdfile mode, allow (by default) printing values between scans, if neighboring scans are on the same source and the model is valid.
 * read and write J2000 station position polynomials; option in tabulatedelays to evaluate
+* new utility: difxfilelist: read through .input file(s) and list files to be read, data format, ...
+* capture ephemeris file and object number in .calc file
+* new function: DifxInputGetSourceId()
+* when checking equality of antennas, verify mount type is the same
+* remove polxy2hv from DifxInput structure -- this was effectively a difx2fits private variable that slipped in.
+* increase observation code string length to 24
+* write FREQ table frequencies only to 1 Hz resolution when it is clear that no additional precision is needed to avoid numerical issues
+* Version for DiFX-2.8, Nov 4, 2022
 
 3.6.0
 * Post DiFX 2.5

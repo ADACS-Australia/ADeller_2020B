@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: model.py 8309 2018-05-16 12:48:54Z HelgeRottmann $
+# $Id: model.py 10706 2022-10-31 07:44:33Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/model/model.py $
-# $LastChangedRevision: 8309 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2018-05-16 22:48:54 +1000 (Wed, 16 May 2018) $
+# $LastChangedRevision: 10706 $
+# $Author: JanWagner $
+# $LastChangedDate: 2022-10-31 18:44:33 +1100 (Mon, 31 Oct 2022) $
 #
 #============================================================================
 class Module(object):
@@ -38,6 +38,10 @@ class Experiment(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash("")
+
     
 
 class ExperimentStatus(object):

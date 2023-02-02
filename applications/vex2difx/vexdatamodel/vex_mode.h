@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_mode.h 8036 2017-10-18 15:09:20Z WalterBrisken $
+ * $Id: vex_mode.h 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 8036 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2017-10-19 02:09:20 +1100 (Thu, 19 Oct 2017) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -49,6 +49,9 @@ public:
 	int getBits() const;
 	int getMinBits() const;
 	int getMaxBits() const;
+	int zBits() const;		// returns zero if not consistent
+	int zRecordChan() const;	// returns zero if not consistent
+	double zBandwidth() const;	// [Hz] channel bandwidth, or zero if not consistent
 	int getMinSubbands() const;
 	int nRecordChan(const std::string &antName) const;
 	int nStream() const;

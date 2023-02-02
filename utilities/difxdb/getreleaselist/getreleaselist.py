@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 # coding: latin-1
 
 #===========================================================================
@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: getreleaselist.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: getreleaselist.py 10128 2021-08-27 18:51:47Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/getreleaselist/getreleaselist.py $
-# $LastChangedRevision: 9293 $
+# $LastChangedRevision: 10128 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedDate: 2021-08-28 04:51:47 +1000 (Sat, 28 Aug 2021) $
 #
 #============================================================================
 
@@ -41,15 +41,15 @@ from optparse import OptionParser
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
+__build__= "$Revision: 10128 $"
+__date__ ="$Date: 2021-08-28 04:51:47 +1000 (Sat, 28 Aug 2021) $"
 __lastAuthor__="$Author: HelgeRottmann $"
 
 def getUsage():
 
-	usage = "%prog [options] [<experiment1> [<experiment2>] ...]\n\n"
-	usage += '\nA program to list all releasable modules.'
-	usage += '\nOptionally one or more experiment codes can be given in order'
+        usage = "%prog [options] [<experiment1> [<experiment2>] ...]\n\n"
+        usage += '\nA program to list all releasable modules.'
+        usage += '\nOptionally one or more experiment codes can be given in order'
         usage += '\nto limit output to modules associated with these experiment(s).'
         usage += '\nFor possibilties to further filter the results please consult the options below.\n\n'
         usage += 'NOTE: The program requires the DIFXROOT environment to be defined.\n'
@@ -61,8 +61,8 @@ def printLine(module):
 
     info = ""
     if module.numScans == None:
-	info = "This module has never been scanned. Confirm contents before releasing." 
-    print "%4s %8s %4s %5s %5s %s" % (module.slot.location, module.vsn, module.stationCode, module.datarate, module.capacity, info)
+        info = "This module has never been scanned. Confirm contents before releasing." 
+    print("%4s %8s %4s %5s %5s %s" % (module.slot.location, module.vsn, module.stationCode, module.datarate, module.capacity, info))
     
     
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             try:
                 experiment = getExperimentByCode(session, code)
             except:
-                print "Unknown experiment %s" % code
+                print("Unknown experiment %s" % code)
                 continue
                     
             expCodes.add(experiment.code)
@@ -161,15 +161,15 @@ if __name__ == "__main__":
             totalCapacity += slot.module.capacity
             moduleCount += 1 
         
-	# sort experiments alphabetically
-	expCodes = sorted(expCodes)
+        # sort experiments alphabetically
+        expCodes = sorted(expCodes)
 
         if (options.extended):
             for code in expCodes:
 
-                print "\n------"
-                print code
-                print "------"
+                print("\n------")
+                print(code)
+                print("------")
                 for module in modules:
                     moduleExpCodes = []
                     for experiment in module.experiments:
@@ -179,20 +179,20 @@ if __name__ == "__main__":
                         printLine(module)
             
             if (len(orphanModules) > 0):
-                print "\n------"
-                print "No exp."
-                print "------"
+                print("\n------")
+                print("No exp.")
+                print("------")
                 
                 for module in orphanModules:
                     printLine(module)
             
 
         
-        print "\n-------"
-        print "Summary"
-        print "-------"
-        print "Number of modules: %d" % (moduleCount)
-        print "Total capacity: %d" % (totalCapacity)
+        print("\n-------")
+        print("Summary")
+        print("-------")
+        print("Number of modules: %d" % (moduleCount))
+        print("Total capacity: %d" % (totalCapacity))
         
         sys.exit(0)
     

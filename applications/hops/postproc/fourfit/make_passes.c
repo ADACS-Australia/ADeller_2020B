@@ -16,11 +16,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "msg.h"
 #include "mk4_data.h"
+#include "mk4_util.h"
 #include "vex.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 #include "control.h"
+#include "ffcontrol.h"
 
 int
 make_passes (
@@ -32,6 +35,8 @@ int *npass)
     {
     char fgroups[10], baseline[3], source[32], group;
     struct freq_corel *fc;
+    extern void clear_pass (struct type_pass*);
+    extern int generate_cblock (struct scan_struct*, struct type_pass*);
     int i,j, k, sb, nsub, start_offset, stop_offset, nindices, usb, lsb, f,
         ngpt, n, m, ipass,igrp,
         scantime,f_c_index, pol, sbpol, ng, nsbind,     
@@ -240,6 +245,12 @@ int *npass)
                         corel[j].freq_code = p->control.chid[k];
                         msg("corel freq code %c overwrite for freq %d",1, corel[j].freq_code,j);
                         break;
+                        }
+                    else
+                        {
+                        double diff = fabs(corel[j].frequency - p->control.chid_rf[k]);
+                        if (diff < 0.1) msg("corel freq code %c miss: |%f - %f| = %f", 1,
+                            p->control.chid[k], corel[j].frequency, p->control.chid_rf[k], diff);
                         }
                     }
             else

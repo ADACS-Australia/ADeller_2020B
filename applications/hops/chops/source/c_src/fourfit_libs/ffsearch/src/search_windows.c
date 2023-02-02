@@ -7,13 +7,15 @@
 * 2016.5.27 -  rjc  save windows 1st pass of ion code *
 ******************************************************/
 
+#include "msg.h"
 #include "mk4_data.h"
+#include "mk4_util.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 #include <stdio.h>
 #include <math.h>
 
-search_windows(struct type_pass* pass)
+void search_windows(struct type_pass* pass)
     {
     extern struct type_param param;
     extern struct type_status status;
@@ -25,8 +27,8 @@ search_windows(struct type_pass* pass)
            max_sb_win, 
            max_mb_win, 
            mb_ambiguity,
-           dwin(),
            snr_approx;              // rough approximation to snr for ion speedup code
+                                    // snr_approx used only to identify large SNR case
    
                                     // parameters for current sb lag
     static int saved = FALSE,
@@ -78,6 +80,7 @@ search_windows(struct type_pass* pass)
 
 
                                /* Calculate integer indices for search params */
+                               // estimate not valid if passband/notches in use
     snr_approx = 1e-4 * status.delres_max * param.inv_sigma 
                       * sqrt((double)status.total_ap_frac * 2.0);
     msg("loopion %d snr_approx %f", -2, status.loopion, snr_approx);

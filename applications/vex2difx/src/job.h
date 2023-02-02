@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2022 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: job.h 7719 2017-04-30 01:47:14Z WalterBrisken $
+ * $Id: job.h 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 7719 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2017-04-30 11:47:14 +1000 (Sun, 30 Apr 2017) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -33,6 +33,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <set>
 #include "interval.h"
 #include "vex_data.h"
 #include "event.h"
@@ -49,6 +50,10 @@ public:
 	// return the approximate number of Operations required to compute this scan
 	double calcOps(const VexData *V, int fftSize, bool doPolar) const;
 	double calcSize(const VexData *V) const;
+
+	unsigned int getCorrelationSourceSet(const VexData *V, std::set<std::string> &sourceSet) const;
+
+	VexAntenna::NasmythType getJobNasmythType(const VexData *V, const std::string &ant) const;
 
 	std::string jobSeries;
 	int jobId;

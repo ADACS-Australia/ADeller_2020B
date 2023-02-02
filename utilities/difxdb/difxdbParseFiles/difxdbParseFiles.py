@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 # coding: latin-1
 
 #===========================================================================
@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: difxdbParseFiles.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: difxdbParseFiles.py 10123 2021-08-27 17:45:36Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/difxdbParseFiles/difxdbParseFiles.py $
-# $LastChangedRevision: 9293 $
+# $LastChangedRevision: 10123 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedDate: 2021-08-28 03:45:36 +1000 (Sat, 28 Aug 2021) $
 #
 #============================================================================
 
@@ -41,8 +41,8 @@ from difxdb.model import model
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
+__build__= "$Revision: 10123 $"
+__date__ ="$Date: 2021-08-28 03:45:36 +1000 (Sat, 28 Aug 2021) $"
 __lastAuthor__="$Author: HelgeRottmann $"
 
 logger = None
@@ -61,7 +61,7 @@ def setupLoggers(logPath):
 
 
     if args.verbose:
-	level = logging.DEBUG
+        level = logging.DEBUG
     else:
         level = logging.INFO
 
@@ -87,107 +87,107 @@ def setupLoggers(logPath):
 
 def storeItem(session, storedFiles, exp, item):
 
-	if not item:
-		return
+        if not item:
+                return
 
-	logger.debug("Validating {}".format(item["location"]))
-		
-	# check if this is a new entry
-	update = False
-	for f in storedFiles:
-		if f.location == item["location"]:
-			# compare sizes and number of files
-			if f.size == item["totalSize"] and f.numScans == item["fileCount"]:
-				logger.debug("Not updating: Identical entry in database for path={}".format(f.location))
-				return
+        logger.debug("Validating {}".format(item["location"]))
+                
+        # check if this is a new entry
+        update = False
+        for f in storedFiles:
+                if f.location == item["location"]:
+                        # compare sizes and number of files
+                        if f.size == item["totalSize"] and f.numScans == item["fileCount"]:
+                                logger.debug("Not updating: Identical entry in database for path={}".format(f.location))
+                                return
 
-			# record needs to be updated
-			update = True
-			break
-			
-	if update:
-		fileData = f
-		fileData.size = item["totalSize"]
-		fileData.numScans = item["fileCount"]
-		fileData.received = datetime.now()
-	else: # new record
-		fileData = model.FileData()
-		fileData.stationCode = item["stationCode"]
-		fileData.location = item["location"]
-		fileData.experimentID = item["expId"]
-		fileData.size = item["totalSize"]
-		fileData.numScans = item["fileCount"]
-		session.add(fileData)
+                        # record needs to be updated
+                        update = True
+                        break
+                        
+        if update:
+                fileData = f
+                fileData.size = item["totalSize"]
+                fileData.numScans = item["fileCount"]
+                fileData.received = datetime.now()
+        else: # new record
+                fileData = model.FileData()
+                fileData.stationCode = item["stationCode"]
+                fileData.location = item["location"]
+                fileData.experimentID = item["expId"]
+                fileData.size = item["totalSize"]
+                fileData.numScans = item["fileCount"]
+                session.add(fileData)
 
-	if not args.dryRun:
-		session.commit()
-		session.flush()
-		
-	if update:
-		logger.info("Updated database entry for path={}".format(f.location))
-	else:
-		logger.info("Added database entry for path={}".format(item["location"]))
-		
-	
-	
+        if not args.dryRun:
+                session.commit()
+                session.flush()
+                
+        if update:
+                logger.info("Updated database entry for path={}".format(f.location))
+        else:
+                logger.info("Added database entry for path={}".format(item["location"]))
+                
+        
+        
 def parseFS(session, rootPath):
 
-	logger.info("Parsing directory {}".format(rootPath))
-	# assume to level directory is equal to experiment code
-	for top in os.listdir(rootPath):
-		expDir = rootPath + "/" + top
-		if not os.path.isdir(expDir):
-			continue
-		item = {}
-		item["code"] = string.upper(top)
-		code = string.upper(top)
+        logger.info("Parsing directory {}".format(rootPath))
+        # assume to level directory is equal to experiment code
+        for top in os.listdir(rootPath):
+                expDir = rootPath + "/" + top
+                if not os.path.isdir(expDir):
+                        continue
+                item = {}
+                item["code"] = top.upper()
+                code = top.upper()
 
-		# check if a corresponing experimt exists in the database
-		exp = getExperimentByCode(session, code)
-		if not exp:
-			logger.info ("Skipping subdirectory: {}. No experiment with code {} found in database.".format(expDir, code))
-			continue
+                # check if a corresponing experimt exists in the database
+                exp = getExperimentByCode(session, code)
+                if not exp:
+                        logger.info ("Skipping subdirectory: {}. No experiment with code {} found in database.".format(expDir, code))
+                        continue
 
-		item["expId"] = exp.id
+                item["expId"] = exp.id
 
-		# get list of files already stored for this experiment
-		storedFiles = getFilesByExperimentId(session, exp.id)
+                # get list of files already stored for this experiment
+                storedFiles = getFilesByExperimentId(session, exp.id)
 
-		# assume second level directories represent the 2-letter station code
-		for second in os.listdir(expDir):
-			stationDir = expDir + "/" + second
+                # assume second level directories represent the 2-letter station code
+                for second in os.listdir(expDir):
+                        stationDir = expDir + "/" + second
 
-			if not os.path.isdir(stationDir):
-	                        continue
+                        if not os.path.isdir(stationDir):
+                                continue
 
-			if len(second) != 2:
-				stationCode = ""
-			else:
-				stationCode = string.upper(second)
+                        if len(second) != 2:
+                                stationCode = ""
+                        else:
+                                stationCode = second.upper()
 
-			item["stationCode"] = stationCode
+                        item["stationCode"] = stationCode
 
-			# count the files
-			fileCount = 0
-			totalSize = 0
-			for file in os.listdir(stationDir):
-				filePath = stationDir + "/" + file
-			
-				if not os.path.isfile(filePath):
-					logger.warning("The station directory {} contains a subdirectory {}. Skipping.".format(stationDir, file))
- 	                        	continue
-				fileCount += 1
-				totalSize += os.path.getsize(filePath)
-				
-			item["location"] = stationDir
-			item["fileCount"] = fileCount
-			item["totalSize"] = totalSize
+                        # count the files
+                        fileCount = 0
+                        totalSize = 0
+                        for file in os.listdir(stationDir):
+                                filePath = stationDir + "/" + file
+                        
+                                if not os.path.isfile(filePath):
+                                        logger.warning("The station directory {} contains a subdirectory {}. Skipping.".format(stationDir, file))
+                                        continue
+                                fileCount += 1
+                                totalSize += os.path.getsize(filePath)
+                                
+                        item["location"] = stationDir
+                        item["fileCount"] = fileCount
+                        item["totalSize"] = totalSize
 
-			storeItem(session, storedFiles, exp, item)
+                        storeItem(session, storedFiles, exp, item)
 
-			
-	session.close
-	return
+                        
+        session.close
+        return
 
 if __name__ == "__main__":
     
@@ -200,9 +200,9 @@ if __name__ == "__main__":
     parser.add_argument('--version', action='version', version=version)
 
     if len(sys.argv) == 1:
-	parser.print_help()
-	sys.exit(1)
-	
+        parser.print_help()
+        sys.exit(1)
+        
     args = parser.parse_args()
 
     try:
@@ -227,9 +227,9 @@ if __name__ == "__main__":
         dbConn = Schema(connection)
         session = dbConn.session()
 
-	logger = setupLoggers(args.logPath)
-	parseFS(session, args.rootPath)
-	exit(0)
+        logger = setupLoggers(args.logPath)
+        parseFS(session, args.rootPath)
+        exit(0)
 
     except Exception as e:
        

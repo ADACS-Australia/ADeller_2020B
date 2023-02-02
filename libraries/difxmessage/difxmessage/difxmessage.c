@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difxmessage.c 8355 2018-06-21 20:17:53Z MarkWainright $
+// $Id: difxmessage.c 10566 2022-07-29 16:26:50Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxmessage.c $
-// $LastChangedRevision: 8355 $
-// $Author: MarkWainright $
-// $LastChangedDate: 2018-06-22 06:17:53 +1000 (Fri, 22 Jun 2018) $
+// $LastChangedRevision: 10566 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2022-07-30 02:26:50 +1000 (Sat, 30 Jul 2022) $
 //
 //============================================================================
 
@@ -112,12 +112,13 @@ const char DifxStateStrings[][24] =
 };
 
 /* Note! Keep this in sync with enum DifxMessageType in difxmessage.h */
-const char DifxMessageTypeStrings[][24] =
+const char DifxMessageTypeStrings[][25] =
 {
 	"Unknown",
 	"DifxLoadMessage",
 	"DifxAlertMessage",
 	"Mark6StatusMessage",
+	"Mark6SlotStatusMessage",
 	"Mark5StatusMessage",
 	"DifxStatusMessage",
 	"DifxInfoMessage",
@@ -218,5 +219,5 @@ enum DriveStatsType stringToDriveStatsType(const char *str)
 
 const char *difxMessageGetVersion()
 {
-	return PACKAGE_STRING " svn: $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxmessage.c $ $Revision: 8355 $";
+	return PACKAGE_STRING " svn: $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxmessage.c $ $Revision: 10566 $";
 }

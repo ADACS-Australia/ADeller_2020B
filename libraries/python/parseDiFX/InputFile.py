@@ -16,15 +16,15 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: InputFile.py 9760 2020-10-13 09:47:05Z JanWagner $
+# $Id: InputFile.py 10549 2022-07-26 12:21:49Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9760 $
-# $Author: JanWagner $
-# $LastChangedDate: 2020-10-13 20:47:05 +1100 (Tue, 13 Oct 2020) $
+# $LastChangedRevision: 10549 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2022-07-26 22:21:49 +1000 (Tue, 26 Jul 2022) $
 #
 #============================================================================
 
-from .Common import get_common_settings, get_freqtable_info, get_telescopetable_info, get_datastreamtable_info, get_baselinetable_info
+from .Common import get_common_settings, get_freqtable_info, get_telescopetable_info, get_datastreamtable_info, get_baselinetable_info, get_datatable_info
 
 class InputFile:
 
@@ -43,6 +43,7 @@ class InputFile:
         self.numfreqs, self.freqs = get_freqtable_info(inputfile)
         self.numtelescopes, self.telescopes = get_telescopetable_info(inputfile)
         self.numdatastreams, self.datastreams = get_datastreamtable_info(inputfile)
+        self.data = get_datatable_info(inputfile, self.numdatastreams)
         self.numbaselines, self.baselines = get_baselinetable_info(inputfile)
         self.numoutputfreqs, self.outputfreqs = self.determine_outputfreqs()
         self.version = self.determine_version() # TODO: currently relies on baseline table infos, make independent of that

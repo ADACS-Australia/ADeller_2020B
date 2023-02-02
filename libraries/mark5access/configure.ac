@@ -1,6 +1,6 @@
-AC_INIT([mark5access], [1.5.5], [Walter Brisken <wbrisken@nrao.edu>])
+AC_INIT([mark5access], [1.7], [Walter Brisken <wbrisken@nrao.edu>])
 
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS(config.h)
 
 AC_C_BIGENDIAN
 
@@ -31,10 +31,10 @@ AC_SYS_LARGEFILE
 AC_PATH_PROG([PYTHON],[python])
 AC_PROG_CC
 AM_PROG_CC_C_O
-AM_PROG_LIBTOOL
+LT_INIT
 AM_SANITY_CHECK
 
-AC_CHECK_LIB(m, erf,,[AC_MSG_ERROR("need libm")])
+AC_SEARCH_LIBS([sqrt], [m])
 PKG_CHECK_MODULES(FFTW3, fftw3, [hasfftw=true], [hasfftw=false])
 
 AC_SUBST(FFTW3_CFLAGS)
@@ -65,28 +65,27 @@ if test -n "$PYTHON" -a "x$REQUESTED_PYTHON_CTYPES" = "xyes"; then
 fi
 AM_CONDITIONAL([ENABLE_PYTHON_CTYPES], [test -n "$PYTHON" -a "x$REQUESTED_PYTHON_CTYPES" = "xyes" -a -n "$GOT_PYTHON_CTYPES"])
 
-PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.1], [HAVE_MARK6SG=true], [HAVE_MARK6SG=false])
-AM_CONDITIONAL(USE_MARK6SG, $HAVE_MARK6SG)
-if test ${HAVE_MARK6SG} = true; then
-  AC_DEFINE(HAVE_MARK6SG, 1, [Define if you have mark6sg library.])
-  CFLAGS="${CFLAGS} ${MARK6SG_CFLAGS}"
-  LIBS="${LIBS} ${MARK6SG_LIBS}"
-  AC_SUBST(MARK6SG_LIBS)
-fi
-
 PKG_CHECK_MODULES([CODIFIO], [codifio >= 0.2], [HAVE_CODIFIO=true], [HAVE_CODIFIO=false])
 AM_CONDITIONAL(USE_CODIFIO, $HAVE_CODIFIO)
 if test ${HAVE_CODIFIO} = true; then
-  AC_DEFINE(HAVE_CODIFIO, 1, [Define if you have codifio library.])
+  AC_DEFINE([HAVE_CODIFIO], 1, [1=has CODIFIO])
   CFLAGS="${CFLAGS} ${CODIFIO_CFLAGS}"
   LIBS="${LIBS} ${CODIFIO_LIBS}"
-  AC_SUBST(CODIFIO_LIBS)
 fi
+
+PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.2], [HAVE_MARK6SG=true], [HAVE_MARK6SG=false])
+AM_CONDITIONAL(USE_MARK6SG, $HAVE_MARK6SG)
+if test $HAVE_MARK6SG = true; then
+  AC_DEFINE([HAVE_MARK6SG], 1, [1=has MARK5SG])
+  CFLAGS="${CFLAGS} ${MARK6SG_CFLAGS}"
+  LIBS="${LIBS} ${MARK6SG_LIBS}"
+fi
+
 
 version=AC_PACKAGE_VERSION
 AC_SUBST(version)
 
-AC_OUTPUT([ \
+AC_CONFIG_FILES([ \
 	Makefile \
 	mark5access.pc \
 	vlbi-mark5access.spec \
@@ -96,4 +95,6 @@ AC_OUTPUT([ \
 	doc/Makefile \
         python/Makefile \
 ])
+
+AC_OUTPUT()
 

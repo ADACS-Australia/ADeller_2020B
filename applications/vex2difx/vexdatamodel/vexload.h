@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2019 by Walter Brisken                             *
+ *   Copyright (C) 2009-2022 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vexload.h 9321 2019-11-18 00:34:59Z WalterBrisken $
+ * $Id: vexload.h 10845 2022-12-02 21:37:56Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vexload.h $
- * $LastChangedRevision: 9321 $
+ * $LastChangedRevision: 10845 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-11-18 11:34:59 +1100 (Mon, 18 Nov 2019) $
+ * $LastChangedDate: 2022-12-03 08:37:56 +1100 (Sat, 03 Dec 2022) $
  *
  *==========================================================================*/
 
@@ -32,6 +32,8 @@
 
 #include <string>
 #include <vex_data.h>
+
+void setReportIncompleteModes(int report);
 
 VexData *loadVexFile(const std::string &vexFile, unsigned int *numWarnings);
 

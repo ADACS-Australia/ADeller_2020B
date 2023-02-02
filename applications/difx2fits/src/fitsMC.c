@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2022 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsMC.c 7652 2017-02-19 21:27:27Z WalterBrisken $
+// $Id: fitsMC.c 10864 2022-12-30 16:24:23Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsMC.c $
-// $LastChangedRevision: 7652 $
+// $LastChangedRevision: 10864 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-02-20 08:27:27 +1100 (Mon, 20 Feb 2017) $
+// $LastChangedDate: 2022-12-31 03:24:23 +1100 (Sat, 31 Dec 2022) $
 //
 //============================================================================
 #include <stdlib.h>
@@ -32,8 +32,7 @@
 #include "config.h"
 #include "difx2fits.h"
 
-const DifxInput *DifxInput2FitsMC(const DifxInput *D,
-	struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phaseCentre)
+const DifxInput *DifxInput2FitsMC(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, const struct CommandLineOptions *opts)
 {
 	char bandFormFloat[8];
 
@@ -66,7 +65,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
  	int nRowBytes;
 	char *p_fitsbuf, *fitsbuf;
 	int nBand, nPol;
-	int b, j, s, p, np, a;
+	int b, j, s, p, np;
 	float LOOffset[array_MAX_BANDS];
 	float LORate[array_MAX_BANDS];
 	float dispDelay;
@@ -78,7 +77,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 	double delay, delayRate;
 	double atmosDelay, atmosRate;
 	double clock, clockRate, c1, c2;
-	int configId, dsId, antId;
+	int configId, antId;
 	int *skip;
 	int skipped=0;
 	int printed=0;
@@ -112,11 +111,12 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		return 0;
 	}
   
-	for(a = 0; a < D->nAntenna; ++a)
+	/* look for first possible valid duration and use that */
+	for(antId = 0; antId < D->nAntenna; ++antId)
 	{
-		if(D->scan->im[a])
+		if(D->scan->im[antId])
 		{
-			polyDuration = D->scan->im[a][0][0].validDuration;
+			polyDuration = D->scan->im[antId][0][0].validDuration;
 			break;
 		}
 	}
@@ -156,13 +156,13 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 		{
 			continue;
 		}
-		if(phaseCentre >= scan->nPhaseCentres)
+		if(opts->phaseCentre >= scan->nPhaseCentres)
 		{
 			continue;
 		}
 		config = D->config + configId;
 		freqId1 = config->freqSetId + 1;
-		sourceId1 = D->source[scan->phsCentreSrcs[phaseCentre]].fitsSourceIds[config->freqSetId] + 1;
+		sourceId1 = D->source[scan->phsCentreSrcs[opts->phaseCentre]].fitsSourceIds[config->freqSetId] + 1;
 
 		if(scan->im)
 		{
@@ -176,23 +176,10 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 
 		for(p = 0; p < np; ++p)
 		{
-			/* loop over original .input file antenna list */
-			for(a = 0; a < config->nAntenna; ++a)
+			/* loop over antennas that might be used by this scan */
+			for(antId = 0; antId < scan->nAntenna; ++antId)
 			{
 				DifxAntenna *da;
-
-				dsId = config->ant2dsId[a];
-				if(dsId < 0 || dsId >= D->nDatastream)
-				{
-					continue;
-				}
-				/* convert to D->antenna[] index ... */
-				antId = D->datastream[dsId].antennaId;
-
-				if(antId < 0 || antId >= scan->nAntenna)
-				{
-					continue;
-				}
 
 				da = D->antenna + antId;	/* pointer to DifxAntenna structure */
 
@@ -203,8 +190,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 				{
 					if(skip[antId] == 0)
 					{
-						printf("\n    Polynomial model error : skipping antId %d = %s", 
-						antId, da->name);
+						printf("\n    Polynomial model error : skipping antId %d = %s", antId, da->name);
 						++skip[antId];
 						++printed;
 						++skipped;
@@ -212,7 +198,7 @@ const DifxInput *DifxInput2FitsMC(const DifxInput *D,
 					continue;
 				}
 
-				P = scan->im[antId][phaseCentre] + p;
+				P = scan->im[antId][opts->phaseCentre] + p;
 
 				time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
 

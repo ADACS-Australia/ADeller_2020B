@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark6_sg_vfs.c 9384 2019-12-26 16:36:16Z WalterBrisken $
+// $Id: mark6_sg_vfs.c 10551 2022-07-26 12:41:48Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark6sg/trunk/mark6sg/mark6_sg_vfs.c $
-// $LastChangedRevision: 9384 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2019-12-27 03:36:16 +1100 (Fri, 27 Dec 2019) $
+// $LastChangedRevision: 10551 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-07-26 22:41:48 +1000 (Tue, 26 Jul 2022) $
 //
 //============================================================================
 #include "mark6sg.h"
@@ -194,6 +194,7 @@ int mark6_sg_open(const char *scanname, int flags)
     memset((void*)vfd, 0, sizeof(m6sg_virt_filedescr_t));
     vfd->valid = 1;
     vfd->mode = O_RDONLY;
+    snprintf(vfd->activeMSN, sizeof(vfd->activeMSN), "none");
     snprintf(vfd->scanname, sizeof(vfd->scanname)-1, "%s", scanname);
     pthread_mutex_init(&vfd->lock, NULL);
     pthread_mutex_unlock(&vfs_lock);
@@ -267,6 +268,7 @@ int mark6_sg_open(const char *scanname, int flags)
     if (1) {
         DifxMessageMark6Activity m6act;
         memset(&m6act, 0x00, sizeof(m6act));
+        memcpy(m6act.activeVsn, vfd->activeMSN, sizeof(vfd->activeMSN));
         m6act.state = MARK6_STATE_OPEN;
         snprintf(m6act.scanName, sizeof(m6act.scanName)-1, "%s", vfd->scanname);
         difxMessageSendMark6Activity(&m6act);
@@ -437,6 +439,7 @@ int mark6_sg_close(int fd)
     if (1) {
         DifxMessageMark6Activity m6act;
         memset(&m6act, 0x00, sizeof(m6act));
+        memcpy(m6act.activeVsn, vfd->activeMSN, sizeof(vfd->activeMSN));
         m6act.state = MARK6_STATE_CLOSE;
         snprintf(m6act.scanName, sizeof(m6act.scanName)-1, "%s", vfd->scanname);
         difxMessageSendMark6Activity(&m6act);
@@ -648,6 +651,7 @@ ssize_t mark6_sg_pread(int fd, void* buf, size_t count, off_t rdoffset)
             dt = (now.tv_sec - prev_time.tv_sec) + 1e-6*(now.tv_usec - prev_time.tv_usec);
 
             memset(&m6act, 0x00, sizeof(m6act));
+            memcpy(m6act.activeVsn, vfd->activeMSN, sizeof(vfd->activeMSN));
             m6act.state = MARK6_STATE_PLAY;
             m6act.position = rdoffset;
             m6act.rate = (delta_read*8e-6)/dt;
@@ -1039,6 +1043,40 @@ ssize_t mark6_sg_stripesize(int fd)
     }
 
     return 0;
+}
+
+/**
+ * Returns or optionally also sets Active MSN label.
+ * The "active MSN" is not written onto modules, it is only
+ * used as a label in difxmessage Mark6Activity multicast messages.
+ */
+const char* mark6_sg_active_msn(int fd, const char* new_label)
+{
+    m6sg_virt_filedescr_t* vfd;
+
+    // Catch some error conditions
+    if ((fd < 0) || (fd >= MARK6_SG_VFS_MAX_OPEN_FILES))
+    {
+        errno = EBADF;
+        return NULL;
+    }
+
+    vfd = m6sg_open_files_list.fd_list[fd];
+    if (!vfd->valid)
+    {
+        errno = EBADF;
+        return NULL;
+    }
+
+    // Get/set info about "active MSN", pad to 8 characters long plus Null
+    if (new_label != NULL)
+    {
+        memset(vfd->activeMSN, ' ', 8);
+        vfd->activeMSN[8] = '\0';
+        strncpy(vfd->activeMSN, new_label, 8);
+    }
+
+    return vfd->activeMSN; // or return strdup(vfd->activeMSN)?
 }
 
 //////////////////////////////////////////////////////////////////////////////////////

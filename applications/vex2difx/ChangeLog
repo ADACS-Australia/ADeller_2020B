@@ -1,3 +1,44 @@
+Version 3.0.0
+-------------
+* Version bump prior to DiFX 2.8 branching
+* vexpeek: --scanfreqs option
+
+Version 2.99.3
+~~~~~~~~~~~~~~
+* Merge of vex2 branch into trunk, Jan 27, 2022, from revision 10279 of https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/vex2
+* vex2: parse equip, equip_set, and equip_info from $DAS
+* add some sample vex2 files for the VLBA (other groups encouraged to add vex2 samples as well!)
+* add option to oms2v2d to override a station format from external file
+* introduce feature (a bit of a hack) to allow correlation of recorded interlaced VDIF data with non 2^n channels
+* in cases where it is known (e.g., vex2-based files) and the same across antennas, populate the "RX NAME" field in the .input file
+* increase maximum project code length to 24 (from 7)
+* Support for output band configuration
+* Note: fanout_def is now required for every data format, even VDIF.  See https://www.atnf.csiro.au/vlbi/dokuwiki/doku.php/difx/formatdef for more info.
+
+Version 2.99.2
+~~~~~~~~~~~~~~
+* Support Nasmyth antenna mounts
+* Propagate nBit from track_frame_format
+* Modernize configure.ac a bit
+
+Version 2.99.1
+~~~~~~~~~~~~~
+* vex2 branch created on Aug 2, 2021 from rev. 10089
+* Updated Goddard/NVI Vex parser to version supporting vex2
+* Significant updates to vexdatamodel/ source to better match vex2
+* General trend to move more of the .v2d / .vex merge to applycorrparams
+* vex2difx.cpp getting streamlined a bit
+* Break up some large functions into smaller units
+* vex2 concepts that are now supported in vex2difx (that were not previously supported)
+  - $BITSTREAMS
+  - $DATASTREAM
+  - $CLOCK with up to 4 terms
+  - $SCHED blocks specifying multiple correlation centers
+  - $SOURCE entities that are non-sidereal
+  - $EXPER section with separately-specified experiment code/segment
+* As of Oct 27, 2021 (ver 2.99.1) sufficient testing has been performed successfully to 
+  designate this SVN snapshot as a beta version, leading up to a fully
+  vex2 supported ver 3.0.
 
 
 Version 2.7.0
@@ -13,7 +54,7 @@ Version 2.7.0
 * Don't quit if unused antenna's filelist is absent
 * In ANTENNA {} now can set ds_filelist to a list of filelists, each one creating its own DATASTREAM
 * oms2v2d: some new functionality to assist VLBA eVLBI
-* vex2difx: support override of data frame size with frameSize parametr of DATASTREAM
+* vex2difx: support override of data frame size with frameSize parameter of DATASTREAM
 * vexpeek: new verbose mode
 * oms2v2d: fix crash in some modes if no data for project is found
 * vexpeek: option to view station coordinates
@@ -32,6 +73,10 @@ Version 2.7.0
 * Implement "threadsAbsent" DATASTREAM parameter to specify VDIF threads that were identified in the .vex file but not in the recorded data
 * Implement "threadsIgnore" DATASTREAM parameter to specify VDIF threads that are present but should not be correlated
 * Add vex2v2d -- a tool to create a skeleton (and possibly final) .v2d file based on the contents of a .vex file
+* vexpeek: new scan summary mode: --scans2; add --scans2 twice to command line for nChan, nBit, Bandwidth info
+* oms2v2d: force max length to be 3200 (sec)
+* vex2difx: fix bug preventing "canonical VDIF" setups from using other than 2 bits per sample
+* Fix: Constructor of VexStream: initialize format()
 
 Version 2.6.0
 ~~~~~~~~~~~~~

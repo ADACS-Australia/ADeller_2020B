@@ -7,7 +7,8 @@ standard_library.install_aliases()
 from builtins import filter
 from builtins import next
 from builtins import str
-import os
+import os, sys
+import json
 #set up module level logger
 import logging
 processing_logger = logging.getLogger(__name__)
@@ -54,6 +55,83 @@ def load_directory_fringe_files(dir_name, baselines_list, include_autos=False):
 
     return fringe_objects
 
+
+################################################################################
+def gather_fringe_files(base_directory, control_file, blines, pol_products=['I'], include_autos=False, exclude_list=None, max_depth=2):
+    """
+    Returns a list of all the fringe (type-2) files found in any directory up to max_depth under the base_directory 
+    In a typical VGOS experiment directory, the fringe files are two levels below the base_directory (the first 
+    level below the base directory is the scan name).
+
+    Assumes fringe files have a six-digit extension with three '.' in the filename.
+    """
+    if exclude_list == None:
+        exclude_list=['prepass', 'pre_production', 'make_links', 'test', 'bad_eop', 'setup']
+    exclude = set(exclude_list)
+    assert os.path.isdir(base_directory)
+
+    fringe_file_list = []
+    
+    base_dir = base_directory.rstrip(os.path.sep)
+    num_sep = base_dir.count(os.path.sep)
+    
+    control_file_hash = ffcontrol.get_control_file_hash(control_file)
+    
+    counter=0
+    for current_root, subdirectories, files in os.walk(base_directory, topdown=True):
+
+        for filename in files:
+
+            # apply the exclude filter
+            if any([e in current_root for e in exclude]):
+                continue
+            
+            # apply the max depth filter
+            if current_root.count(os.path.sep) > num_sep+max_depth:
+                continue
+
+            abs_filename = os.path.abspath(filename)
+            filename_base = os.path.split(abs_filename)[1]
+            
+            
+            #look for root files using some simple checks
+            if filename_base.count('.') == 3: #check that there are three dots in the filename base
+                bline = filename_base.split('.')[0]
+                if len(bline)==2 and bline in blines: #make sure leading section of file name is 2-char baseline
+                    full_name = os.path.join(current_root, filename)
+                    if (include_autos is True) or (bline[0] != bline[1]): #check that this is a cross correlation if autos excluded
+                        extension = filename_base.split('.')[3] #get the file extension (root_id)
+                        if len(extension) == 6:     #check that the extension has a length of 6 chars
+                            
+                            counter+=1
+                            
+                            ff_cf_hash = ht.get_control_file_hash_from_fringe(full_name)
+                        
+                            if control_file_hash == ff_cf_hash:
+                                fringe_file_list.append(full_name)
+                                
+
+    # Now we have a list of fringe files that used the prescribed control file.  Check for the correct polproduct:                                
+    ff_list = []
+                                
+    # apply the check on pol products
+    for ff in fringe_file_list:
+        ff_pp_list = ht.get_file_polarization_product_provisional(ff)
+                                    
+        for pp in ff_pp_list:
+            if pp in pol_products:
+
+                # Now that we are sure we have the correct polproduct, create a FringeFileHandle object and append to the list
+                f_obj = ffm.FringeFileHandle()
+                f_obj.load(ff)
+                ff_list.append(f_obj)
+                                            
+                    
+    print(base_directory, 'Number of fringe files considered:', counter)
+    return ff_list
+                
+
+
 ################################################################################
 def join_fringes_into_baseline_collection(exp_directory, fringe_object_list, station_list, include_autos=False, required_polprod_list=None, only_complete=True):
     """this function takes individual fringe files (for each scan, baseline, and polarization product)
@@ -81,6 +159,9 @@ def join_fringes_into_baseline_collection(exp_directory, fringe_object_list, sta
                 bline_collection_set.add(sflist)
             categorized_objs.append(obj)
 
+    
+    processing_logger.info("join_fringes_into_baseline_collection: found a total of " + str(len(bline_collection_set)) + " scans")
+            
     ret_list = []
     if only_complete is True:
         ret_list = [blc for blc in bline_collection_set if blc.is_complete() ]
@@ -259,7 +340,8 @@ def apply_fringe_file_cuts(ff_list, control_file_hash, min_snr=0.0, max_snr=1e30
 def load_and_batch_fourfit(exp_directory, network_reference_station, remote_stations, \
                            control_file_path, set_commands, \
                            network_reference_baselines_only=True, num_processes=1, \
-                           start_scan_limit=None, stop_scan_limit=None, pol_products=None, use_progress_ticker=True, log_fourfit_processes=False):
+                           start_scan_limit=None, stop_scan_limit=None, pol_products=None, use_progress_ticker=True, \
+						   log_fourfit_processes=False, use_ionex_file=None):
 
     """loads any pre-existing fringe files which match the criteria and batch fourfits
     any missing items, then returns a list of the fringe-files"""
@@ -281,9 +363,13 @@ def load_and_batch_fourfit(exp_directory, network_reference_station, remote_stat
             work_dir = os.path.join(work_dir, start_scan_limit)
 
     #determine all possible (existing) baselines
+    print('Finding baselines')
     baseline_list = construct_valid_baseline_list( work_dir, network_reference_station, remote_stations, network_reference_baselines_only=network_reference_baselines_only, include_autos=False)
+    
+    print(baseline_list)
 
     #collect a list of all the root files that are present
+    print('Finding root files')
     root_file_list = ht.recursive_find_root_files(work_dir, True)
 
     #now strip out the root files which are outside of the specified time-range
@@ -296,11 +382,13 @@ def load_and_batch_fourfit(exp_directory, network_reference_station, remote_stat
                 tmp_root_file_list.append(rf)
     else:
         tmp_root_file_list = root_file_list
-
+		
     processing_logger.info("load_and_batch_fourfit: attempting to load cached fringe files from: " + work_dir)
 
     #now load the fringe files (no-auto-corrs) meta data for this directory
+    print('Finding fringe files')
     ff_list = load_directory_fringe_files(work_dir, baseline_list)
+    print('Found '+str(len(ff_list))+' fringe files')
 
     #strip out the ones which do not match the control file used
     #compute the control file hash so we know which fringe files to look for
@@ -308,6 +396,8 @@ def load_and_batch_fourfit(exp_directory, network_reference_station, remote_stat
 
     hash_filter = DiscreteQuantityFilter("control_file_hash", [control_file_hash])
     ff_list = list(filter(hash_filter.does_object_pass_filter, ff_list))
+
+    print(str(len(ff_list))+' fringe files remaining after control file hash filter')
 
     if len(ff_list) != 0:
         processing_logger.info("load_and_batch_fourfit: loaded " + str(len(ff_list)) + " previously generated fringe-files" )
@@ -320,35 +410,70 @@ def load_and_batch_fourfit(exp_directory, network_reference_station, remote_stat
     for rf in tmp_root_file_list:
         root_file_bl_pp_dict[os.path.abspath(rf)] = set()
 
+    root_bl_pp_dict_counter = 0
     for ff in ff_list:
         ff_pp_list = ht.get_file_polarization_product_provisional(ff.filename)
         ff_bl = ff.baseline
         for pp in ff_pp_list:
             if ff.associated_root_file in root_file_bl_pp_dict:
+                root_bl_pp_dict_counter += 1
                 root_file_bl_pp_dict[ os.path.abspath(ff.associated_root_file) ].add( (ff_bl, pp) ) #add baseline, pol-product tuple
-
+                
     #now construct a list of arg lists for each process we need to run
     #eliminating tasks corresponding to fringe files which already exist as we go along
     arg_list = []
+    missing_fringe_counter = 0
     for root in tmp_root_file_list:
-        for base in baseline_list:
+        for base in baseline_list:                
             for pp in pol_products:
                 if (base,pp) not in root_file_bl_pp_dict[root]:
                     #construct the expected corel file and check if it is present
                     root_code = ( os.path.basename(root).split('.') )[1]
                     needed_corel_file = os.path.join( os.path.dirname( os.path.abspath(root) ), base + ".." + root_code )
                     if os.path.isfile(needed_corel_file):
+                        missing_fringe_counter += 1
+                        #print(root)
                         #now we check to make sure this type of pol-product is actually available in the corel file
                         #this is to avoid problems with mixed-mode
                         pp_present_list = ht.get_polarization_products_present(needed_corel_file)
-                        required_pp = ht.get_required_pol_products(pp)
+                        required_pp = ht.get_required_pol_products(pp)                        
                         if set(required_pp).issubset( set(pp_present_list) ):
                             pol_opt = " -P " + pp + " "
-                            arg_list.append( [ pol_opt, base, control_file_path, root, False, set_commands, False ] )
+                            if use_ionex_file is not None:
+                                # if we want to use the ionex dtec estimates, load the ionex dict
+                                # and build a dict matching them
+                                if os.path.exists(use_ionex_file):
+                                    #load the ionex dict
+                                    with open(use_ionex_file) as handle:
+                                        tec_dict = json.load(handle)
+                                    rf_scan_name = os.path.abspath(root).split('/')[-2]
+                                    #print(rf_scan_name, tec_dict[rf_scan_name], base[0], base[1])
+                                    dtec = tec_dict[rf_scan_name][base[0]] - tec_dict[rf_scan_name][base[1]]
+                                    #print(rf_scan_name, tec_dict[rf_scan_name][base[0]], tec_dict[rf_scan_name][base[1]], dtec)
+                                    # set dTEC search range: +/-50 TECU around the ionex prediction, or 30% of the (absolute) dTEC value, whichever is larger
+                                    dtec_window = max(50,0.3*abs(dtec))
+                                    set_cmd = set_commands + ' ion_win '+str(dtec-dtec_window)+' '+str(dtec+dtec_window)
+                                    #print(set_cmd)
+                                else:
+                                    print('IONEX file does not exist')
+                                    sys.exit(1)
+                            else:
+                                set_cmd = set_commands
+
+                            arg_list.append( [ pol_opt, base, control_file_path, root, False, set_cmd, False ] )
+                                                    
 
     if len(arg_list) != 0:
         processing_logger.info("load_and_batch_fourfit: will run a total of " + str(len(arg_list)) + " fourfit processes, with up to: " + str(num_processes) + " running simultaneously" )
 
+
+    print('Number of root-baseline-pol combinations in the list of found fringe files: '+str(root_bl_pp_dict_counter))
+    print('Number of combinations missing from the fringe file list, with the needed correl file: '+str(missing_fringe_counter))
+
+    print("load_and_batch_fourfit: will run a total of " + str(len(arg_list)) + " fourfit processes, with up to: " + str(num_processes) + " running simultaneously")
+    #for ii in range(len(arg_list)):
+    #	print(arg_list[ii])
+        
     #run the fourfit processes
     processed_args_list = []
     generated_fringe_files = []

@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5d.c 9397 2020-01-14 16:16:59Z WalterBrisken $
+// $Id: m5d.c 10373 2022-02-06 12:17:59Z ShaoguangGuo $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_stream.c $
-// $LastChangedRevision: 9397 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-01-15 03:16:59 +1100 (Wed, 15 Jan 2020) $
+// $LastChangedRevision: 10373 $
+// $Author: ShaoguangGuo $
+// $LastChangedDate: 2022-02-06 23:17:59 +1100 (Sun, 06 Feb 2022) $
 //
 //============================================================================
 
@@ -496,15 +496,14 @@ int main(int argc, char **argv)
 
 		buffer = malloc(bufferlen);
 
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
 			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
-
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
 			fclose(in);
 			free(buffer);
-
-			return EXIT_FAILURE;
+			return -1;
 		}
 		else
 		{

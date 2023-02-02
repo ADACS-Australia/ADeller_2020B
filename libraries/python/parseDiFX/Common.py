@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: Common.py 9861 2020-12-11 19:04:07Z JanWagner $
+# $Id: Common.py 10549 2022-07-26 12:21:49Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9861 $
-# $Author: JanWagner $
-# $LastChangedDate: 2020-12-12 06:04:07 +1100 (Sat, 12 Dec 2020) $
+# $LastChangedRevision: 10549 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2022-07-26 22:21:49 +1000 (Tue, 26 Jul 2022) $
 #
 #============================================================================
 
@@ -31,6 +31,7 @@ from .Freq import Freq
 from .Telescope import Telescope
 from .Baseline import Baseline
 from .Datastream import Datastream
+from .Data import Data
 
 M_SYNC_WORD = 0xFF00FF00
 
@@ -42,7 +43,7 @@ def parse_output_header(input):
         return toreturn
     if struct.unpack("I", buffer)[0] != M_SYNC_WORD:
         if buffer != "BASE": #Some weird stuff.  Return empty
-            print ("Non-recognised sync word: ascii " + buffer + ", binary %x" % (struct.unpack("I", buffer)[0]))
+            print(("Non-recognised sync word: ascii " + buffer + ", binary %x" % (struct.unpack("I", buffer)[0])))
             return toreturn
         #Must be the old style file.  Suck it up.
         orgbuffer += buffer
@@ -280,6 +281,34 @@ def put_baselinetable_info(fo,bl):
                 fo.write("%-20s%d\n" % ("D/STREAM B BAND %d:"%(k),b.dsbbandindex[f][k]))
     fo.write("\n")
 
+def get_datatable_info(inputfile, numDatastreams):
+    '''
+    Parses the DATA TABLE section and stores
+    information in a Data object
+    '''
+    input = open(inputfile)
+    lines = input.readlines()
+    input.close()
+
+    at = 0
+    while at < len(lines) and lines[at] != "# DATA TABLE #######!\n":
+        at += 1
+
+    val, lines = nextinputline(lines[at:])
+    datalines = []
+    for i in range(numDatastreams):
+        data = Data()
+        data.datastreamindex = i
+        media = []
+        val, lines = nextinputline(lines[1:])
+        for i in range(int(val)):
+            val, lines = nextinputline(lines[1:])
+            data.media.append(val)
+        
+        datalines.append(data)
+    return (datalines)
+        
+
 def get_datastreamtable_info(inputfile):
     input = open(inputfile)
     lines = input.readlines()
@@ -455,6 +484,10 @@ def get_freqtable_info(inputfile):
         freqs[-1].bandwidth = float(lines[at+1][20:])
         if lines[at+2][20:21] == 'L':
             freqs[-1].lsb = True
+        #handle possible RX NAME field.
+        if "RX NAME" in lines[at+3]:
+            freqs[-1].rxname = lines[at+3].split(":")[-1].strip()
+            at += 1
         freqs[-1].numchan = int(lines[at+3][20:])
         freqs[-1].specavg = int(lines[at+4][20:])
         freqs[-1].oversamplefac = int(lines[at+5][20:])

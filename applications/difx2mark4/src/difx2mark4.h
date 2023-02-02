@@ -30,7 +30,7 @@
 #define EXP_CODE_LEN 4
 #define NUMFILS 500                 // max number of type 1 output files
 #define MAGLIM 10000.0              // threshold magnitude for vis. rejection
-#define MAX_FPPAIRS 10000           // dimensioned for b-lines x chans x pol_prods
+#define MAX_FPPAIRS 12000           // dimensioned for b-lines x chans x pol_prods
 #define MAX_DFRQ 800                // allowed max number of *DiFX* frequencies
 #define NVRMAX 8000000              // max # of vis records
 
@@ -48,6 +48,7 @@ struct CommandLineOptions
     int pretend;
     double scale;
     int verbose;
+    int localdir;
     /* some overrides */
     int specAvg;
     int doalldifx;
@@ -137,7 +138,7 @@ struct fblock_tag
                                     // conv2date.c
 void conv2date (double, struct date *);
                                     // createRoot.c
-int createRoot (DifxInput *, struct fblock_tag *, int, int, char *, char *, 
+int createRoot (DifxInput *, struct fblock_tag *, int, int, char *, char *, char *, 
                 struct stations *, struct CommandLineOptions *, char *);
 char getband (double);
                                     // createType1s.c

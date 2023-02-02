@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difxsend.c 9014 2019-06-14 07:33:32Z ChrisPhillips $
+// $Id: difxsend.c 10566 2022-07-29 16:26:50Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxsend.c $
-// $LastChangedRevision: 9014 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-06-14 17:33:32 +1000 (Fri, 14 Jun 2019) $
+// $LastChangedRevision: 10566 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2022-07-30 02:26:50 +1000 (Sat, 30 Jul 2022) $
 //
 //============================================================================
 #include <stdio.h>
@@ -459,6 +459,71 @@ int difxMessageSendDriveStats(const DifxMessageDriveStats *driveStats)
 	return 0;
 }
 
+/**
+ * Sends out a message containing the Mark6 slot status information. 
+ * @return 0 in case of success; -1 otherwise
+ */
+int difxMessageSendMark6SlotStatus(const DifxMessageMark6SlotStatus *mark6slotstatus)
+{
+	int i;
+	int size = 0;
+	char body[DIFX_MESSAGE_LENGTH];
+	char message[DIFX_MESSAGE_LENGTH];
+
+	char msn[DIFX_MESSAGE_MARK6_MSN_LENGTH+2]; 
+	
+	// validate msn and covert to upper case
+	if(strlen(mark6slotstatus->msn) != 8)
+        {
+                strcpy(msn, "none");
+        }
+        else
+        {
+                for(i = 0; i < 9; ++i)
+                {
+                        msn[i] = toupper(mark6slotstatus->msn[i]);
+                }
+        }
+        size = snprintf(body, DIFX_MESSAGE_LENGTH,
+
+                "<mark6SlotStatus>"
+                  "%s"
+                  "<slot>%d</slot>"
+                  "<msn>%s</msn>"
+                  "<group>%s</group>"
+                  "<numDisks>%d</numDisks>"
+                  "<numMissingDisks>%d</numMissingDisks>"
+                "</mark6SlotStatus>",
+
+                difxMessageInputFilenameTag,
+                mark6slotstatus->slot,
+                msn,
+		mark6slotstatus->group,	
+		mark6slotstatus->numDisks,	
+		mark6slotstatus->numMissingDisks);
+
+	if(size >= DIFX_MESSAGE_LENGTH)
+	{
+		fprintf(stderr, "difxMessageSendMark6SlotStatus: message body overflow (%d >= %d)\n", size, DIFX_MESSAGE_LENGTH);
+		return -1;
+	}
+
+	size = snprintf(message, DIFX_MESSAGE_LENGTH,
+		difxMessageXMLFormat, 
+		DifxMessageTypeStrings[DIFX_MESSAGE_MARK6SLOTSTATUS],
+		difxMessageSequenceNumber++, body);
+
+	if(size >= DIFX_MESSAGE_LENGTH)
+	{
+		fprintf(stderr, "difxMessageSendMark6SlotStatus: message overflow (%d >= %d)\n", size, DIFX_MESSAGE_LENGTH);
+		return -1;
+	}
+	
+	return difxMessageSend2(message, size);
+
+
+	return(0);
+}
 /**
  * Sends out a message containing the Mark6 status information. 
  * @return 0 in case of success; -1 otherwise

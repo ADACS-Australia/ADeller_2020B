@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken & John Morgan               *
+ *   Copyright (C) 2008-2022 by Walter Brisken & John Morgan & Leonid Petrov *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsPH.c 9730 2020-09-19 18:42:14Z WalterBrisken $
+// $Id: fitsPH.c 10863 2022-12-29 19:23:42Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsPH.c $
-// $LastChangedRevision: 9730 $
+// $LastChangedRevision: 10863 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-09-20 04:42:14 +1000 (Sun, 20 Sep 2020) $
+// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
 //
 //============================================================================
 
@@ -34,6 +34,8 @@
 #include "difx2fits.h"
 #include "other.h"
 #include "util.h"
+#define  TIM__SMALL 0.001	/* [s] */
+#define  FITSPH_DEBUG 0
 
 const float pcaltiny = 1e-10;
 
@@ -252,7 +254,7 @@ static int getNTone(const char *filename, const char *antenna, double t1, double
 				maxnTone = nTone;
 			}
 		}
-		else if (nTone > maxnToneNearby)
+		else if(nTone > maxnToneNearby)
 		{
 			maxnToneNearby = nTone;
 		}
@@ -286,7 +288,7 @@ static int parsePulseCal(const char *line,
 	float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
 	float pulseCalRate[2][array_MAX_TONES],
 	int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int doAll, int year)
+	int doAll, int year, const struct CommandLineOptions *opts)
 {
 	int IFs[array_MAX_BANDS];
 	int states[array_MAX_STATES];
@@ -384,12 +386,12 @@ static int parsePulseCal(const char *line,
 		}
 	}
 
-	if(phaseCentre >= D->scan[scanId].nPhaseCentres)
+	if(opts->phaseCentre >= D->scan[scanId].nPhaseCentres)
 	{
 		return -3;
 	}
 
-	*sourceId = D->scan[scanId].phsCentreSrcs[phaseCentre];
+	*sourceId = D->scan[scanId].phsCentreSrcs[opts->phaseCentre];
 	*configId = D->scan[scanId].configId;
 	if(*sourceId < 0 || *configId < 0)	/* not in scan */
 	{
@@ -489,7 +491,7 @@ static int parsePulseCal(const char *line,
  * will be discarded */
 static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int *scanId,
 	double *time, float *timeInt, double *cableCal, int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int year)
+	int year, const struct CommandLineOptions *opts)
 {
 	int n, p;
 	double mjd;
@@ -540,12 +542,12 @@ static int parsePulseCalCableCal(const char *line, int antId, int *sourceId, int
 		return -3;
 	}
 
-	if(phaseCentre >= D->scan[*scanId].nPhaseCentres)
+	if(opts->phaseCentre >= D->scan[*scanId].nPhaseCentres)
 	{
 		return -3;
 	}
 
-	*sourceId = D->scan[*scanId].phsCentreSrcs[phaseCentre];
+	*sourceId = D->scan[*scanId].phsCentreSrcs[opts->phaseCentre];
 	*configId = D->scan[*scanId].configId;
 	if(*sourceId < 0 || *configId < 0)	/* not in scan */
 	{
@@ -582,7 +584,7 @@ static int parseDifxPulseCal(const char *line,
 	float stateCount[2][array_MAX_STATES*array_MAX_BANDS],
 	float pulseCalRate[2][array_MAX_TONES],
 	int refDay, const DifxInput *D, int *configId, 
-	int phaseCentre, int year)
+	int year, const struct CommandLineOptions *opts)
 {
 	const DifxFreq *df;
 	const DifxDatastream *dd;
@@ -747,12 +749,12 @@ static int parseDifxPulseCal(const char *line,
 		return -3;
 	}
 
-	if(phaseCentre >= D->scan[*scanId].nPhaseCentres)
+	if(opts->phaseCentre >= D->scan[*scanId].nPhaseCentres)
 	{
 		return -4;
 	}
 
-	*sourceId = D->scan[*scanId].phsCentreSrcs[phaseCentre];
+	*sourceId = D->scan[*scanId].phsCentreSrcs[opts->phaseCentre];
 	*configId = D->scan[*scanId].configId;
 	if(*sourceId < 0 || *configId < 0)	/* not in scan */
 	{
@@ -815,7 +817,7 @@ static int parseDifxPulseCal(const char *line,
 			/* set up pcal information for this recFreq (only up to nRecTones)*/
 			/* nRecTone is simply the number of tones that fall within the recorded band */
 			/* not all of them may be desired. */
-			nRecTone = DifxDatastreamGetPhasecalTones(toneFreq, dd, df, nt, D->AllPcalTones);
+			nRecTone = DifxDatastreamGetPhasecalTones(toneFreq, dd, df, nt, opts->allpcaltones);
 
 			nSkip = 0;				/* number of tones skipped because they weren't selected in the .input file */
 			if(nRecTone <= tone)
@@ -837,7 +839,7 @@ static int parseDifxPulseCal(const char *line,
 				static int nPolMatchError = 0;
 
 				++nPolMatchError;
-				if(nPolMatchError <= 20 && D->AntPol ==  0)
+				if(nPolMatchError <= 20 && !opts->antpol)
 				{
 					printf("\nWarning: parseDifxPulseCal: polarization in PCAL file '%c' doesn't match expected '%c' for antenna %d, mjd %12.6f  slot=%d  bandPol=%d\n", P[0], D->polPair[bandPol], dd->antennaId, mjd, slot, bandPol);
 				}
@@ -866,44 +868,50 @@ static int parseDifxPulseCal(const char *line,
 			if(fabs(B) > pcaltiny || fabs(C) > pcaltiny)
 			{
 				++nonTiny;	/* there is something here! */
-
-				/* fill in actual pcal info */
-				nIF = DifxInputGetIFsByRecFreq(IFs, D, currentDsId, *configId, recFreq, bandPol, array_MAX_BANDS);
-				if(nIF > 0)
-				{
-					for(i = 0; i < nIF; ++i)
-					{
-						if(dfs->IF[IFs[i]].sideband == 'U')
-						{
-							/* ensure the IF does indeed contain the tone; one recFreq may have several IFs (zooms) and not all have this tone! */
-							if((toneFreq[tone] < dfs->IF[IFs[i]].freq) || (toneFreq[tone] > (dfs->IF[IFs[i]].freq + dfs->IF[IFs[i]].bw)))
-							{
-								continue;
-							}
-						}
-						else
-						{
-							if((toneFreq[tone] < (dfs->IF[IFs[i]].freq - dfs->IF[IFs[i]].bw) || (toneFreq[tone] > dfs->IF[IFs[i]].freq)))
-							{
-								continue;
-							}
-						}
-						if(df->sideband == 'U')
-						{
-							toneIndex = IFs[i]*nTone + toneCount;
-						}
-						else
-						{
-							toneIndex = (IFs[i]+1)*nTone - toneCount - 1;	/* make LSB ascend in frequency */
-						}
-						pulseCalFreq[bandPol][toneIndex] = toneFreq[tone]*1.0e6;	/* MHz to Hz */
-						pulseCalRe[bandPol][toneIndex] = B;
-						pulseCalIm[bandPol][toneIndex] = C;
-					}
-				}
-
-				++toneCount;
 			}
+			else
+			{
+				/* Replace bad pcal values with zeroes */
+				B = 0.0;
+				C = 0.0;
+			}
+
+			/* fill in actual pcal info */
+			nIF = DifxInputGetIFsByRecFreq(IFs, D, currentDsId, *configId, recFreq, bandPol, array_MAX_BANDS);
+			if(nIF > 0)
+			{
+				for(i = 0; i < nIF; ++i)
+				{
+					if(dfs->IF[IFs[i]].sideband == 'U')
+					{
+						/* ensure the IF does indeed contain the tone; one recFreq may have several IFs (zooms) and not all have this tone! */
+						if((toneFreq[tone] < dfs->IF[IFs[i]].freq) || (toneFreq[tone] > (dfs->IF[IFs[i]].freq + dfs->IF[IFs[i]].bw)))
+						{
+							continue;
+						}
+					}
+					else
+					{
+						if((toneFreq[tone] < (dfs->IF[IFs[i]].freq - dfs->IF[IFs[i]].bw) || (toneFreq[tone] > dfs->IF[IFs[i]].freq)))
+						{
+							continue;
+						}
+					}
+					if(df->sideband == 'U')
+					{
+						toneIndex = IFs[i]*nTone + toneCount;
+					}
+					else
+					{
+						toneIndex = (IFs[i]+1)*nTone - toneCount - 1;	/* make LSB ascend in frequency */
+					}
+					pulseCalFreq[bandPol][toneIndex] = toneFreq[tone]*1.0e6;	/* MHz to Hz */
+					pulseCalRe[bandPol][toneIndex] = B;
+					pulseCalIm[bandPol][toneIndex] = C;
+				}
+			}
+			++toneCount;
+
 			if(toneCount > nTone)
 			{
 				static int nTooManyError;
@@ -949,10 +957,8 @@ static int countTones(const DifxDatastream *dd)
  */
 const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	struct fits_keywords *p_fits_keys, struct fitsPrivate *out,
-	int phaseCentre, double avgSeconds, int verbose)
+	const struct CommandLineOptions *opts)
 {
-	const int maxDatastreams = 8;	// per antenna
-
 	char stateFormFloat[8];
 	char toneFormDouble[8];
 	char toneFormFloat[8];
@@ -1018,15 +1024,19 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	double windowDuration=0.0, dumpWindow=0.0;
 	FILE *inTSM=0;	/* file pointer for TSM-derived (VLBA classic) pulse cal data */
 	FILE *inDifx=0;	/* file pointer for DiFX-derived pulse cal data */
-	char *rv;
+	char *rv, *rv_cable;
 	int year, month, day;
 	/* The following are 1-based indices for FITS format */
 	int32_t antId1, arrayId1, sourceId1, freqId1;
 	char **pcalSourceFile;	/* [antId] : points to non-DiFX source of pcal information */
 	int pcalExists = 0;
 	int firstDsId;
-
+	int *jobxref;
+	int use_cable_cal;
+	const char* use_cable_cal_str;
 	char antName[DIFXIO_NAME_LENGTH];
+	int maxDatastreams;	/* per antenna */
+	int *originalDsIds;	/* datastream IDs in the jobs that were run */
 
 	/* Note: This is a particular NaN variant the FITS-IDI format/convention 
 	 * wants, namely 0xFFFFFFFF, or 0xFFFFFFFFFFFFFFFF for double */
@@ -1043,10 +1053,27 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		return D;
 	}
 
+	maxDatastreams = DifxInputGetMaxDatastreamsPerAntenna(D);
+	originalDsIds = (int *)malloc(maxDatastreams * sizeof(int));
+
 	printf("\n");
 	nBand = D->nIF;
 	nPol = D->nPol;
 	scanId = -1;
+
+	/* Check DIFX_USE_CABLE_CAL whether to use cable cal. Default: to use (1). 
+	 * if DIFX_USE_CABLE_CAL is not 1, then not to use.
+	 */
+	use_cable_cal = 1; 
+	use_cable_cal_str = getenv("DIFX_USE_CABLE_CAL");
+	if(use_cable_cal_str != NULL)
+	{
+		use_cable_cal = atoi(use_cable_cal_str);
+	}
+	rv       = NULL;
+	rv_cable = NULL;
+
+	jobxref = malloc(D->nJob * sizeof(scanId));
 
 	mjd2dayno((int)(D->mjdStart), &refDay);
 	mjd2date((int)(D->mjdStart), &year, &month, &day);
@@ -1107,7 +1134,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 			}
 		}
 
-		v = getNTone(pcalFile, D->antenna[antennaId].name, refDay + start, refDay + stop, verbose);
+		v = getNTone(pcalFile, D->antenna[antennaId].name, refDay + start, refDay + stop, opts->verbose);
 		pcalSourceFile[antennaId] = strdup(pcalFile);
 		if(v != 0)
 		{
@@ -1130,12 +1157,16 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		nTone = -nTone;
 		doAll = 1;
 	}
-	if(verbose)
+	if(opts->verbose)
 	{
-		printf("    Number of tones: %d\n", nTone);
+		printf("    Number of pcal tones from external files: %d\n", nTone);
 	}
 
 	nDifxTone = DifxInputGetMaxTones(D);
+	if(opts->verbose)
+	{
+		printf("    Number of DiFX exteracted pcal tones:     %d\n", nDifxTone);
+	}
 	if(nDifxTone == 0)
 	{
 		printf("    No Tones extracted by DiFX\n");
@@ -1159,6 +1190,9 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	if(nTone == 0)
 	{
 		free(pcalSourceFile);
+		free(fitsbuf);
+		free(jobxref);
+		free(originalDsIds);
 
 		return D;
 	}
@@ -1200,13 +1234,12 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	for(antennaId = 0; antennaId < D->nAntenna; ++antennaId)
 	{
 		int maxDifxTones;	/* maximum number of tones expected for any job on a given antenna, summed over all datastreams */
-		int jobId;
+		int jobId, jobIdUnsorted;
 
 		maxDifxTones = 0;
 
 		for(jobId = 0; jobId < D->nJob; ++jobId)
 		{
-			int originalDsIds[maxDatastreams];	/* datastream IDs in the jobs that was run */
 			int nds, nt;
 			int d;
 
@@ -1252,14 +1285,21 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 			}
 		}
 
-		if(pcalSourceFile[antennaId])
+		if(pcalSourceFile[antennaId] && use_cable_cal == 1)
 		{
+			/* Open cable calibration file */
+			
 			inTSM = fopen(pcalSourceFile[antennaId], "r");
 			if(inTSM == 0)
 			{
 				fprintf(stderr, "Error: cannot open %s.  This should never happen!\n", pcalSourceFile[antennaId]);
 
 				continue;
+			}
+			if(FITSPH_DEBUG > 1)
+			{
+				printf("%s line %4d D->antenna[antennaId].name: %s jobId: %d opened cable cal file %s\n",
+					__FILE__, __LINE__, D->antenna[antennaId].name, jobId, pcalSourceFile[antennaId]);
 			}
 		}
 		else
@@ -1285,7 +1325,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		printf(" %s", D->antenna[antennaId].name);
 		fflush(stdout);
 
-		for(jobId = 0; jobId < D->nJob; ++jobId)
+		/* Generate the cross-reference table jobxref in order to process jobs in the chronological orer */
+		v = sortjobpcal(D, antennaId, jobxref);
+
+		for(jobIdUnsorted = 0; jobIdUnsorted < D->nJob; ++jobIdUnsorted)
 		{
 			glob_t globBuffer;
 			int nDifxFile = 0;
@@ -1293,14 +1336,26 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 			double mjdLast = 0.0;
 			int nDifxAntennaTones;
 			int freqSetId;
-			int originalDsIds[maxDatastreams];
 			int originalDsId = -1;
 			int nds;	// number of datastreams for this antenna for this job
 			int d;
+			int ndumps = 0;	// How many times pcal data have been dumped
+			int nLine, nLines;
 
 			printf(".");
 			fflush(stdout);
 
+			jobId = jobxref[jobIdUnsorted]; /* Get sorted Job Id index */
+			if(FITSPH_DEBUG > 0)
+			{
+				printf("%s line %4d D->antenna[antennaId].name: %s jobIdUnsorted: %d jobId: %d use_cable_cal: %d inTSM: %p\n",
+					__FILE__, __LINE__, D->antenna[antennaId].name, jobIdUnsorted, jobId, use_cable_cal, inTSM);
+			}
+			if(jobId < 0)
+			{
+				/* Antenna antennaId did not observe in this job and did not produce a phase calibration file to parse */
+				break;
+			}
 			nds = DifxInputGetOriginalDatastreamIdsByAntennaIdJobId(originalDsIds, D, antennaId, jobId, maxDatastreams);
 
 			if(nds <= 0)
@@ -1349,6 +1404,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 				}
 
 				v = glob2(__FUNCTION__, globPattern, 0, 0, &globBuffer);
+				
+				/* Sort PCAL files chronologically */
+				v = glob2_sort_pcal_files( &globBuffer);
+
 				nDifxFile = globBuffer.gl_pathc;
 
 				if(nDifxFile == 0)	/* no files found */
@@ -1366,6 +1425,11 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					fprintf(stderr, "Warning: PCAL file %s could not be opened for read!\n", globBuffer.gl_pathv[curDifxFile]);
 				
 					continue;
+				}
+				if(FITSPH_DEBUG > 1)
+				{
+					printf ( "%s line %4d D->antenna[antennaId].name: %s opened pcal file %s inDifx: %p\n",
+						__FILE__, __LINE__, D->antenna[antennaId].name, globBuffer.gl_pathv[curDifxFile], inDifx);
 				}
 			}
 			else
@@ -1399,13 +1463,41 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 			nextCablePeriod = -1.0;
 			lineCableScanId = -1;
 			lastnWindow = nWindow;
+			nLines = 0;
 
+			if(inDifx && opts->DifxPcalAvgSeconds < TIM__SMALL)
+			{
+				/* Count the number lines in the pcal difx file that are used for computation of the accumulated pcal (nLines) */
+				while(1)
+				{
+					rv = fgets(line, MaxLineLength, inDifx);
+					if(!rv)
+					{
+						break;
+					}
+					if(line[0] == '#')
+					{
+						continue;	/* to next line in file */
+					}
+					originalDsId = parseDifxPulseCal(line, originalDsIds, nds, nBand, nTone, &newSourceId, &newScanId, &time, jobId,
+							pulseCalFreq, pulseCalRe, pulseCalIm, stateCount, pulseCalRate, refDay, D, &newConfigId, year, opts);
+					if(originalDsId >= 0)
+					{
+						nLines++;
+					}
+				}
+				fclose(inDifx);
+				inDifx = fopen(globBuffer.gl_pathv[curDifxFile], "r");
+			}
+
+			nLine = 0;
 			while(1)	/* each pass here reads one line from a pcal file */
 			{
 				if(inTSM && !nDifxTone)	/* try reading pcal file if no DiFX-supplied pulse cal is available */
 				{
 					rv = fgets(line, MaxLineLength, inTSM);
 					if(rv)
+					nLine++;
 					{
 						/* ignore possible comment lines */
 						if(line[0] == '#')
@@ -1414,12 +1506,16 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 						}
 						else 
 						{
+							if(FITSPH_DEBUG > 1)
+							{
+								printf("%s line %4d %.64s \n", __FILE__, __LINE__, line);
+							}
 							n = sscanf(line, "%31s", antName);
 							if(n != 1 || strcmp(antName, D->antenna[antennaId].name))
 							{
 								continue;	/* to next line in file */	
 							}
-							v = parsePulseCal(line, antennaId, &sourceId, &time, &timeInt, &cableCal, pulseCalFreqAcc, pulseCalReAcc, pulseCalImAcc, pulseCalDeltaT, stateCount, pulseCalRate, refDay, D, &configId, phaseCentre, doAll, year);
+							v = parsePulseCal(line, antennaId, &sourceId, &time, &timeInt, &cableCal, pulseCalFreqAcc, pulseCalReAcc, pulseCalImAcc, pulseCalDeltaT, stateCount, pulseCalRate, refDay, D, &configId, doAll, year, opts);
 							if(v < 0)
 							{
 								continue;	/* to next line in file */
@@ -1476,8 +1572,13 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							
 							originalDsId = parseDifxPulseCal(line, originalDsIds, nds, nBand, nTone, &newSourceId, &newScanId, &time, jobId,
 										pulseCalFreq, pulseCalRe, pulseCalIm, stateCount, pulseCalRate,
-										refDay, D, &newConfigId, phaseCentre, year);
+										refDay, D, &newConfigId, year, opts);
 
+							if(FITSPH_DEBUG > 2)
+							{
+								printf("%s line %4d file: %s nLine: %d nLines: %d line: %.80s originalDsId: %d \n",
+									__FILE__, __LINE__, globBuffer.gl_pathv[curDifxFile], nLine, nLines, line, originalDsId);
+							}
 							if(originalDsId < 0)
 							{
 								continue;	/* to next line in file */
@@ -1496,17 +1597,17 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 								mjdLast = mjdRecord;
 							}
 						}
+						nLine++;
 						if(scanId != newScanId)
 						{
 							double s, e;
-							int nWindow;
 							DifxScan *scan;
 
 							/* Get ready to dump last scan (if it's not the first run through)
 							 * Work out time average windows so that there is an integer number within the scan
 							 * Get all of the relevant cable cal values for this antenna
-							 * n.b. we can safely assume that we are at a valid pcal entry since v > 0 */
-							if(scanId != -2)
+							 * n.b. we can safely assume that we are at  valid pcal entry since v > 0 */
+							if(scanId != -2 && opts->DifxPcalAvgSeconds > TIM__SMALL)
 							{
 								doDump = 1;
 							}
@@ -1521,7 +1622,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							s = time;	/* time of first pcal record */
 							e = scan->mjdEnd - (int)(D->mjdStart);
 
-							nWindow = (int)((e - s + (0.5*D->config[newConfigId].tInt/86400.))/(avgSeconds/86400.0) + 0.5);
+							nWindow = (int)((e - s + (0.5*D->config[newConfigId].tInt/86400.))/(opts->DifxPcalAvgSeconds/86400.0) + 0.5);
 
 							if(nWindow < 1)
 							{
@@ -1529,6 +1630,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 							}
 							windowDuration = (e - s)/nWindow;
 							dumpWindow = s + windowDuration;
+							ndumps = 0;
 						}
 						else if(time > dumpWindow && dumpWindow > 0.0)
 						{
@@ -1539,8 +1641,25 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 								dumpWindow += windowDuration;
 							}
 						}
+						else if(nWindow == 1 && ndumps == 0 && D->config[newConfigId].tInt*nAccum > opts->DifxPcalAvgSeconds - TIM__SMALL && opts->DifxPcalAvgSeconds > TIM__SMALL)
+						{
+							doDump = 1;
+						}
+						else if(nLines > 0 && nLine == nLines && ndumps == 0 && opts->DifxPcalAvgSeconds < TIM__SMALL && nAccum > 0)
+						{
+							/* This is the last useable line in the file, but we still did not dump it.
+							 * when DifxPcalAvgSeconds == 0.0, we are in the pcal over a whole scan mode,
+							 * therefore, we need dump it.
+							 */
+							doDump = 1;
+							if(FITSPH_DEBUG > 1)
+							{
+								printf ( "%s line %4d D->antenna[antennaId].name: %s pcal_file: %s Reached last line nAccum: %d\n",
+									__FILE__, __LINE__, D->antenna[antennaId].name, globBuffer.gl_pathv[curDifxFile], nAccum);
+							}
+						}
 					}
-					else if(jobId == D->nJob-1)
+					else if(jobIdUnsorted == D->nJob-1)
 					{
 						/* end of last job reached */
 						doDump = 1;
@@ -1559,7 +1678,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					{
 						dumpTime = (accumStart + accumEnd)*0.5;
 						dumpTimeInt = nAccum*D->config[configId].tInt/86400;
-
+						if(nAccum > 0)
+						{
+							ndumps = ndumps + 1;
+						}
 						/* Divide pcals through by integration time in seconds */
 						for(k = 0; k < nPol; ++k)
 						{
@@ -1578,9 +1700,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 						{
 							while(nextCableTime < dumpTime || lineCableScanId < 0)
 							{
-								rv = fgets(line, MaxLineLength, inTSM);
-								if(!rv)
+								rv_cable = fgets(line, MaxLineLength, inTSM);
+								if(!rv_cable)
 								{
+							                cableCalOut = 0.0;
 									break;	/* to out of cablecal search */
 								}
 									
@@ -1596,7 +1719,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 									{
 										continue;	/* to next line in file */	
 									}
-									v = parsePulseCalCableCal(line, antennaId, &lineCableSourceId, &lineCableScanId, &lineCableTime, &lineCablePeriod, &lineCableCal, refDay, D, &lineCableConfigId, phaseCentre, year);
+									v = parsePulseCalCableCal(line, antennaId, &lineCableSourceId, &lineCableScanId, &lineCableTime, &lineCablePeriod, &lineCableCal, refDay, D, &lineCableConfigId, year, opts);
 									if(v < 0)
 									{
 										continue;	/* to next line in file */
@@ -1671,7 +1794,7 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					}
 					antId1 = antennaId + 1;
 					p_fitsbuf = fitsbuf;
-					if(!nDifxTone || nAccum*D->config[configId].tInt > 0.25*avgSeconds || (nAccum > 0 && lastnWindow == 1)) /* only write a row if a reasonable amount of data were averaged */
+					if(!nDifxTone || nAccum*D->config[configId].tInt > 0.25*opts->DifxPcalAvgSeconds || (nAccum > 0 && lastnWindow == 1)) /* only write a row if a reasonable amount of data were averaged */
 					{
 						FITS_WRITE_ITEM(dumpTime, p_fitsbuf);
 						FITS_WRITE_ITEM(dumpTimeInt, p_fitsbuf);
@@ -1738,6 +1861,10 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					/* after dumping, if needed, we go to the next job */
 					break;
 				}
+				if(nLines > 0 && nLine == nLines && opts->DifxPcalAvgSeconds < TIM__SMALL)
+				{
+					break;
+				}
 
 				/* Accumulate data of current line into joint output array (multi-datastream multi-line pcal => joint record) */
 				if(originalDsId >= 0)
@@ -1746,18 +1873,21 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 					{
 						for(t = 0; t < nTone*nBand; ++t)
 						{
-							if (pulseCalFreq[k][t] > 0) /* tone has data on current phase-cal line */
+							if(pulseCalFreq[k][t] > 0) /* tone has data on current phase-cal line */
 							{
-								if (pulseCalFreqAcc[k][t] == 0)
+								if(pulseCalFreqAcc[k][t] == 0)
 								{
 									pulseCalFreqAcc[k][t] = pulseCalFreq[k][t];
 								}
 
-								if (pulseCalFreqAcc[k][t] != pulseCalFreq[k][t])
+								if(pulseCalFreqAcc[k][t] != pulseCalFreq[k][t])
 								{
-									fprintf(stderr, "Weird: existing pulseCalFreqAcc[PC tone %d] of %.3f MHz and difx pcal file pulseCalFreq[PC tone %d] of %.3f MHz do not match, possible FITS IF numbering issue\n",
+									fprintf(stderr, "Fatal error in processing phase calibrition. Weird: existing pulseCalFreqAcc[PC tone %d] of %.3f MHz and difx pcal file pulseCalFreq[PC tone %d] of %.3f MHz do not match, possible FITS IF numbering issue\n",
 										t, pulseCalFreqAcc[k][t]*1e-6, t, pulseCalFreq[k][t]*1e-6);
-
+									if(nDifxTone)
+									{
+										fprintf(stderr, "Error in processing PCAL file %s\n", globBuffer.gl_pathv[curDifxFile]);
+									}
 									exit(EXIT_FAILURE);
 								}
 								pulseCalReAcc[k][t] += pulseCalRe[k][t];
@@ -1803,8 +1933,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 
 	}	/* end antenna loop */
 
-	free(fitsbuf);
-
 	for(antennaId = 0; antennaId < D->nAntenna; ++antennaId)
 	{
 		if(pcalSourceFile[antennaId])
@@ -1813,6 +1941,9 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 		}
 	}
 	free(pcalSourceFile);
+	free(fitsbuf);
+	free(jobxref);
+	free(originalDsIds);
 
 	printf("\n");
 

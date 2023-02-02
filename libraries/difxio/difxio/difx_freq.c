@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken, Adam Deller & Helge Rottmann *
+ *   Copyright (C) 2008-2022 by Walter Brisken, Adam Deller & Helge Rottmann *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,17 +19,18 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_freq.c 9728 2020-09-19 02:40:01Z LeonidPetrov $
+// $Id: difx_freq.c 10817 2022-11-11 22:25:27Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_freq.c $
-// $LastChangedRevision: 9728 $
-// $Author: LeonidPetrov $
-// $LastChangedDate: 2020-09-19 12:40:01 +1000 (Sat, 19 Sep 2020) $
+// $LastChangedRevision: 10817 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-11-12 09:25:27 +1100 (Sat, 12 Nov 2022) $
 //
 //============================================================================
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "difxio/difx_input.h"
 #include "difxio/difx_write.h"
 
@@ -432,6 +433,11 @@ int reorderDifxFreqs(DifxInput *D)
 		}
 	}
 
+	for(j = 0; j < D->nFreqUnsimplified; j++)
+	{
+		D->freqIdRemap[j] = newOrder[D->freqIdRemap[j]];
+	}
+
 	/* 6. Final cleanup */
 
 	deleteDifxFreqArray(oldFreq, n);
@@ -443,14 +449,59 @@ int reorderDifxFreqs(DifxInput *D)
 
 int simplifyDifxFreqs(DifxInput *D)
 {
-	int f, n0, v;
+	int f, n0, v, b;
+	const int DEBUG_BOOKKEEPING = 0;
+	DifxFreq *oldFreq = NULL; // note: use only in if(DEBUG_BOOKKEEPING){} blocks!
 
 	n0 = D->nFreq;
+	D->nFreqUnsimplified = D->nFreq;
 	if(n0 < 2)
 	{
 		return 0;
 	}
 
+	if(DEBUG_BOOKKEEPING)
+	{
+		oldFreq = newDifxFreqArray(D->nFreqUnsimplified);
+		for(f = 0; f < D->nFreqUnsimplified; ++f)
+		{
+			copyDifxFreq(oldFreq+f, D->freq+f);
+		}
+
+		printf("simplifyDifxFreqs(): pre-simplify status is nFreqUnsimplified=%d nFreq=%d freqIdRemap={", D->nFreqUnsimplified, D->nFreq);
+		for(f = 0; f < D->nFreqUnsimplified; ++f)
+		{
+		  printf(" %d:%d", f, D->freqIdRemap[f]);
+		}
+		printf(" }\n");
+	}
+
+	/* Pass I: make a linear remapping list to weed out duplicate D->freqs, without modifying D->freqs in the loop */
+	for(f = 1; f < D->nFreqUnsimplified; f++)
+	  {
+		int f1, f2;
+
+		for(f1 = 0; f1 < f; ++f1)
+		{
+			if(isSameDifxFreq(D->freq+f, D->freq+f1, D->AllPcalTones))
+			{
+				break;
+			}
+		}
+		if(f1 != f) /* found match */
+		{
+			/* repoint the top freq 'f' to the matching earlier freq 'f1' */
+			D->freqIdRemap[f] = f1;
+
+			/* simulate deletion of duplicate freq 'f' as under Pass II, by shifting down the block of remaining freqs */
+			for(f2 = f + 1; f2 < D->nFreqUnsimplified; f2++)
+			{
+				--D->freqIdRemap[f2];
+			}
+		}
+	}
+
+	/* Pass II: actually simplify, modifying the D->freqs list during the loop */
 	for(f = 1;;)
 	{
 		int f1;
@@ -462,7 +513,7 @@ int simplifyDifxFreqs(DifxInput *D)
 
 		for(f1 = 0; f1 < f; ++f1)
 		{
-			if(isSameDifxFreq(D->freq+f, D->freq+f1, D->AllPcalTones) )
+			if(isSameDifxFreq(D->freq+f, D->freq+f1, D->AllPcalTones))
 			{
 				break;
 			}
@@ -515,7 +566,7 @@ int simplifyDifxFreqs(DifxInput *D)
 			/* 2. reduce number of freqs */
 			--D->nFreq;
 
-			/* 3. Delete this freq and bump up higher ones */
+			/* 3. Delete this freq and drop down higher ones */
 			if(f < D->nFreq)
 			{
 				for(f1 = f; f1 < D->nFreq; ++f1)
@@ -526,7 +577,43 @@ int simplifyDifxFreqs(DifxInput *D)
 		}
 	}
 
-	v = reorderDifxFreqs(D);
+	/* 4. Reorder the frequency table so that Datastream rec freq indices precede zoom freq indices */
+	v = reorderDifxFreqs(D); // note: also keeps D->freqIdRemap[] in sync with the reordering
+
+	/* 5. DiFX Outputbands -specific: adjust Baseline TARGET FREQ refs to reflect the above remap+reorder */
+	// note: difx_baseline.c might be another place to apply this, otoh all messing with the original FREQ table is confined here
+	for(b = 0; b < D->nBaseline; b++)
+	{
+		for(f = 0; f < D->baseline[b].nFreq; f++)
+		{
+			D->baseline[b].destFq[f] = D->freqIdRemap[D->baseline[b].destFq[f]];
+		}
+	}
+
+	if(DEBUG_BOOKKEEPING)
+	{
+		printf("simplifyDifxFreqs(): post-reorder status is nFreqUnsimplified=%d nFreq=%d freqIdRemap={", D->nFreqUnsimplified, D->nFreq);
+		for(f = 0; f < D->nFreqUnsimplified; ++f)
+		{
+			printf(" %d:%d", f, D->freqIdRemap[f]);
+		}
+		printf(" }\n");
+
+		/* Verify that the remapping table is intact */
+		for(f = 0; f < D->nFreqUnsimplified; ++f)
+		{
+			if(!isSameDifxFreq(oldFreq+f, D->freq+D->freqIdRemap[f], D->AllPcalTones))
+			{
+				printf("Programmer error in difxio simplifyDifxFreqs: freq Id %d after simplification now points to incompatible freq %d\n", f, D->freqIdRemap[f]);
+				printf("old %d ", f);
+				printDifxFreq(oldFreq+f);
+				printf("new %d ", D->freqIdRemap[f]);
+				printDifxFreq(D->freq+D->freqIdRemap[f]);
+			}
+		}
+
+		deleteDifxFreqArray(oldFreq, D->nFreqUnsimplified);
+	}
 
 	if(v < 0)
 	{
@@ -584,6 +671,18 @@ DifxFreq *mergeDifxFreqArrays(const DifxFreq *df1, int ndf1, const DifxFreq *df2
 	return df;
 }
 
+/* Use this to see if a frequency or bandwidth (in Hz) has meaningful
+ * non-integral value (e.g., differs from integer by more than 1 part
+ * in 10^4 or 100 microHz, less than ten turns per day)
+ *
+ * Note that use of DiFX with fractional Hz bandwidth or frequency
+ * likely results in unstable phases
+ */
+static int isQuasiInteger(double d)
+{
+	return fabs(d - (long long int)d) < 0.0001 ? 1 : 0;
+}
+
 int writeDifxFreqArray(FILE *out, int nFreq, const DifxFreq *df)
 {
 	int n, i;
@@ -595,8 +694,26 @@ int writeDifxFreqArray(FILE *out, int nFreq, const DifxFreq *df)
 
 	for(i = 0; i < nFreq; ++i)
 	{
-		writeDifxLineDouble1(out, "FREQ (MHZ) %d", i, "%17.15f", df[i].freq);
-		writeDifxLineDouble1(out, "BW (MHZ) %d", i, "%17.15f", df[i].bw);
+		/* For FREQ and BW: use the above function to determine
+		 * how many digits to write.  It seems that some spurious
+		 * non-zero digits can be appended in some cases.
+		 */
+		if(isQuasiInteger(df[i].freq*1000000.0))
+		{
+			writeDifxLineDouble1(out, "FREQ (MHZ) %d", i, "%8.6f", df[i].freq);
+		}
+		else
+		{
+			writeDifxLineDouble1(out, "FREQ (MHZ) %d", i, "%17.15f", df[i].freq);
+		}
+		if(isQuasiInteger(df[i].bw*1000000.0))
+		{
+			writeDifxLineDouble1(out, "BW (MHZ) %d", i, "%8.6f", df[i].bw);
+		}
+		else
+		{
+			writeDifxLineDouble1(out, "BW (MHZ) %d", i, "%17.15f", df[i].bw);
+		}
 		sb[0] = df[i].sideband;
 		writeDifxLine1(out, "SIDEBAND %d", i, sb);
 		if(strlen(df[i].rxName) > 0)

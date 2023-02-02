@@ -1,10 +1,10 @@
 #
-# $Id: Makefile.am 265 2011-05-20 15:39:47Z gbc $
+# $Id: Makefile.am 3399 2021-10-26 20:05:16Z barrettj $
 #
 
 SUBDIRS = .
 
-AM_CPPFLAGS = @HOPS_INC@
+AM_CPPFLAGS = @HOPS_INC@ -DPS2PDF=\"@PS2PDF@\"
 
 noinst_HEADERS = fplot.h
 
@@ -14,8 +14,8 @@ if HAVE_X11
 
 fplot_SOURCES = fplot.c parse_cmdline.c
 
-fplot_LDADD = @DFIO_LIB@ @UTIL_LIB@ @X_FPLOT_LIB@ @X11_LIB@
-fplot_DEPENDENCIES = @DFIO_DEP@ @UTIL_DEP@
+fplot_LDADD = @MSG_LIB@ @DFIO_LIB@ @UTIL_LIB@ @X_FPLOT_LIB@ @X11_LIB@
+fplot_DEPENDENCIES = @MSG_DEP@ @DFIO_DEP@ @UTIL_DEP@
 
 else !HAVE_X11
 fplot_SOURCES = you_lose.c

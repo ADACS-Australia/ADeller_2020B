@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2019 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: applycorrparams.h 9321 2019-11-18 00:34:59Z WalterBrisken $
+ * $Id: applycorrparams.h 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9321 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2019-11-18 11:34:59 +1100 (Mon, 18 Nov 2019) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -36,6 +36,6 @@
 #include "vex_data.h"
 #include "corrparams.h"
 
-int applyCorrParams(VexData *V, const CorrParams &params, unsigned int &nWarn, unsigned int &nError, std::set<std::string> &canonicalVDIFUsers);
+void applyCorrParams(VexData *V, const CorrParams &params, unsigned int &nWarn, unsigned int &nError, std::set<std::string> &canonicalVDIFUsers);
 
 #endif

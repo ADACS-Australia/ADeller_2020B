@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013-2020 Walter Brisken                                *
+ *   Copyright (C) 2013-2021 Walter Brisken                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffile.c 9868 2020-12-20 15:51:00Z WalterBrisken $
+// $Id: vdiffile.c 10237 2021-10-06 15:56:21Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 9868 $
+// $LastChangedRevision: 10237 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
+// $LastChangedDate: 2021-10-07 02:56:21 +1100 (Thu, 07 Oct 2021) $
 //
 //============================================================================
 
@@ -61,10 +61,10 @@ void printvdiffilesummary(const struct vdif_file_summary *sum)
 		}
 	}
 	printf("\n");
-	printf("  frame size = %d bytes\n", sum->frameSize);
+	printf("  frame size = %d bytes (includes header)\n", sum->frameSize);
 	if(sum->framesPerSecond > 0)
 	{
-		printf("  frame rate = %d per second\n", sum->framesPerSecond);
+		printf("  frame rate = %d per thread per second\n", sum->framesPerSecond);
 	}
 	else
 	{
@@ -78,6 +78,10 @@ void printvdiffilesummary(const struct vdif_file_summary *sum)
 	printf("  end second = %d\n", sum->endSecond % 86400);
 	printf("  end frame = %d\n", sum->endFrame);
 	printf("  first frame offset = %d bytes\n", sum->firstFrameOffset);
+	if(sum->framesPerSecond > 0)
+	{
+		printf("  data rate = %lld Mbps\n", (long long)(sum->nThread)*(long long)(sum->framesPerSecond)*(long long)(sum->frameSize - 32)/125000LL);
+	}
 }
 
 void snprintvdiffilesummary(char *str, int maxLength, const struct vdif_file_summary *sum)
@@ -122,6 +126,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	char hasThread[VDIF_MAX_THREAD_ID + 1];
 	struct vdif_header *vh0;	/* pointer to the prototype header */
 	int hasEDV3 = 0;		/* no VLBA headers found yet */
+	int lasts;
 
 	/* Initialize things */
 
@@ -206,6 +211,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 	vh0 = (struct vdif_header *)(buffer + sum->firstFrameOffset);
 	sum->epoch = getVDIFEpoch(vh0);
 	sum->nBit = getVDIFBitsPerSample(vh0);
+	lasts = getVDIFFrameEpochSecOffset(vh0);
 
 	for(i = sum->firstFrameOffset; i < N; )
 	{
@@ -218,7 +224,7 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 		if(getVDIFFrameBytes(vh) == frameSize &&
 		   getVDIFEpoch(vh) == sum->epoch &&
 		   getVDIFBitsPerSample(vh) == sum->nBit &&
-		   abs(s - getVDIFFrameEpochSecOffset(vh0)) < 2)
+		   abs(s - lasts) < 2)
 		{
 			hasThread[getVDIFThreadID(vh)] = 1;
 			f = getVDIFFrameNumber(vh);
@@ -261,6 +267,8 @@ int summarizevdiffile(struct vdif_file_summary *sum, const char *fileName, int f
 			}
 
 			i += frameSize;
+
+			lasts = s;
 		}
 		else
 		{

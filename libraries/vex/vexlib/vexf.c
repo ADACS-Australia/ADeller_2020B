@@ -4,11 +4,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vexf.c 9132 2019-09-03 23:59:12Z ChrisPhillips $
+// $Id: vexf.c 10188 2021-09-17 05:39:03Z ChrisPhillips $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vex/trunk/vexlib/vexf.c $
-// $LastChangedRevision: 9132 $
+// $LastChangedRevision: 10188 $
 // $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-04 09:59:12 +1000 (Wed, 04 Sep 2019) $
+// $LastChangedDate: 2021-09-17 15:39:03 +1000 (Fri, 17 Sep 2021) $
 //
 //============================================================================
 
@@ -1232,7 +1232,7 @@ doublereal *double__;
     { "min" , 60.0 },
     { "hr"  , 60.0*60.0 },
     { "day" , 60.0*60.0*24.0 },
-    { "yr"  , 60.0*60.0*24.0*365.2425 },
+    { "yr"  , 60.0*60.0*24.0*365.25 },
     { NULL  , 0.0 }
   };
 

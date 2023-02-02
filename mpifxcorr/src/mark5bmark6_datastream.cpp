@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bmark6_datastream.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
+// $Id: mark5bmark6_datastream.cpp 9925 2021-02-23 15:43:09Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 9674 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
+// $LastChangedRevision: 9925 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
 //
 //============================================================================
 #include <cmath>

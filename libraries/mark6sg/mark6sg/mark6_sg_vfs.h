@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark6_sg_vfs.h 8476 2018-09-17 10:05:29Z JanWagner $
+// $Id: mark6_sg_vfs.h 10547 2022-07-26 09:07:43Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark6sg/trunk/mark6sg/mark6_sg_vfs.h $
-// $LastChangedRevision: 8476 $
+// $LastChangedRevision: 10547 $
 // $Author: JanWagner $
-// $LastChangedDate: 2018-09-17 20:05:29 +1000 (Mon, 17 Sep 2018) $
+// $LastChangedDate: 2022-07-26 19:07:43 +1000 (Tue, 26 Jul 2022) $
 //
 //============================================================================
 #ifndef MARK6_SG_VFS__H
@@ -57,6 +57,8 @@ extern ssize_t mark6_sg_recvfile(int fd, int sd, size_t nitems, size_t itemlen);
 extern int     mark6_sg_packetsize(int fd);
 extern int     mark6_sg_packetsize_hint(int size_hint);
 extern ssize_t mark6_sg_stripesize(int fd);
+
+extern const char* mark6_sg_active_msn(int fd, const char* new_label);
 
 #ifdef __cplusplus
 }

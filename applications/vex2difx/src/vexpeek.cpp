@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2009-2021 by Walter Brisken and Jan Wagner              *
+ *   Copyright (C) 2009-2022 by Walter Brisken and Jan Wagner              *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vexpeek.cpp 9875 2021-01-13 22:40:18Z WalterBrisken $
+ * $Id: vexpeek.cpp 10851 2022-12-09 17:35:10Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/vexpeek.cpp $
- * $LastChangedRevision: 9875 $
+ * $LastChangedRevision: 10851 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2021-01-14 09:40:18 +1100 (Thu, 14 Jan 2021) $
+ * $LastChangedDate: 2022-12-10 04:35:10 +1100 (Sat, 10 Dec 2022) $
  *
  *==========================================================================*/
 
@@ -41,8 +41,8 @@
 #include "testvex.h"
 
 const std::string program("vexpeek");
-const std::string version("0.13");
-const std::string verdate("20210113");
+const std::string version("0.18");
+const std::string verdate("20221209");
 const std::string author("Walter Brisken");
 
 void usage(const char *pgm)
@@ -61,6 +61,10 @@ void usage(const char *pgm)
 	std::cout << "  -t or --doTime : add detailed time data to some output" << std::endl;
 	std::cout << "  -b or --bands : print list of band codes" << std::endl;
 	std::cout << "  -s or --scans : print list of scans and their stations" << std::endl;
+	std::cout << "        --scans2 : print list of scans with bands, number of stations and times" << std::endl;
+	std::cout << "                 - include twice to see nChan, nBit and bandwidth as well" << std::endl;
+	std::cout << "  --scans=<ant> : print list of scans for antenna <ant>" << std::endl;
+	std::cout << "  --scanfreqs : print tuning information for each scan" << std::endl;
 	std::cout << "  -r or --sources : print list of sources and their coordinates" << std::endl;
 	std::cout << "  -u or --diskusage : print disk usage (GB)" << std::endl;
 	std::cout << "  -m or --modules : print disk modules used (from TAPELOG_OBS)" << std::endl;
@@ -260,6 +264,26 @@ void scanList(const VexData *V)
 	}
 }
 
+void scanFreqs(const VexData *V)
+{
+	for(unsigned int s = 0; s < V->nScan(); ++s)
+	{
+		const VexScan *scan = V->getScan(s);
+		const VexMode *mode = V->getModeByDefName(scan->modeDefName);
+
+		std::cout << std::left << std::setw(8) << scan->defName << " ";
+		std::cout << std::left << std::setw(12) << scan->sourceDefName << " ";
+		std::cout << std::left << std::setw(12) << scan->modeDefName << "   ";
+
+		for(std::vector<VexSubband>::const_iterator it = mode->subbands.begin(); it != mode->subbands.end(); ++it)
+		{
+			std::cout << (it->freq *1.0e-6) << " " << (it->bandwidth*1.0e-6) << " " << it->sideBand << " " << it->pol << "  ";
+		}
+		std::cout << std::endl;
+	}
+
+}
+
 void scanListWithTimes(const VexData *V)
 {
 	for(unsigned int s = 0; s < V->nScan(); ++s)
@@ -274,6 +298,67 @@ void scanListWithTimes(const VexData *V)
 		{
 			std::cout << it->first << " " << it->second.mjdStart << " " << it->second.mjdStop << "  ";
 		}
+		std::cout << std::endl;
+	}
+}
+
+void scanListByAntenna(const VexData *V, const char *ant)
+{
+	for(unsigned int s = 0; s < V->nScan(); ++s)
+	{
+		const VexScan *scan = V->getScan(s);
+
+		std::cout.precision(14);
+		for(std::map<std::string,Interval>::const_iterator it = scan->stations.begin(); it != scan->stations.end(); ++it)
+		{
+			if(strcasecmp(ant, it->first.c_str()) == 0)
+			{
+				std::cout << std::left << std::setw(8) << scan->defName << " ";
+				std::cout << std::left << std::setw(12) << scan->sourceDefName << " ";
+				std::cout << std::left << std::setw(12) << scan->modeDefName << "   ";
+				std::cout << it->first << " " << it->second.mjdStart << " " << it->second.mjdStop;
+				std::cout << std::endl;
+			}
+		}
+	}
+}
+
+// print: ScanName SourceName Band NAntenna startMJD stopMJD
+void scan2List(const VexData *V, int level)
+{
+	std::set<char> bands;
+
+	for(unsigned int s = 0; s < V->nScan(); ++s)
+	{
+		const VexScan *scan = V->getScan(s);
+		const VexMode *M = V->getModeByDefName(scan->modeDefName);
+		std::cout << std::left << std::setw(8) << scan->defName << " ";
+		std::cout << std::left << std::setw(12) << scan->sourceDefName << " ";
+
+		bands.clear();
+		for(std::map<std::string,VexSetup>::const_iterator s = M->setups.begin(); s != M->setups.end(); ++s)
+		{
+			for(std::vector<VexChannel>::const_iterator v = s->second.channels.begin(); v != s->second.channels.end(); ++v)
+			{
+				bands.insert(v->bandCode());
+			}
+		}
+
+		for(std::set<char>::const_iterator b=bands.begin(); b != bands.end(); ++b)
+		{
+			std::cout << *b;
+		}
+
+		std::cout << " " << scan->stations.size() << " ";
+
+		std::cout.precision(14);
+		std::cout << scan->mjdStart << " " << scan->mjdStop;
+
+		if(level > 1)
+		{
+			std::cout << " " << M->zRecordChan() << " " << M->zBits() << " " << (M->zBandwidth()/1000000.0);
+		}
+
 		std::cout << std::endl;
 	}
 }
@@ -358,7 +443,9 @@ int main(int argc, char **argv)
 	int verbose = 0;
 	int doBandList = 0;
 	int doScanList = 0;
+	int doScan2List = 0;
 	int doSourceList = 0;
+	int doScanFreqs = 0;
 	int doFormat = 0;
 	int doUsage = 0;
 	int doModules = 0;
@@ -366,6 +453,7 @@ int main(int argc, char **argv)
 	int doCoords = 0;
 	int a;
 	const char *fileName = 0;
+	const char *scanAnt = 0;
 
 	for(a = 1; a < argc; ++a)
 	{
@@ -408,6 +496,16 @@ int main(int argc, char **argv)
 			++doScanList;
 			doSummary = 0;
 		}
+		else if(strcmp(argv[a], "--scans2") == 0)
+		{
+			++doScan2List;
+			doSummary = 0;
+		}
+		else if(strcmp(argv[a], "--scanfreqs") == 0)
+		{
+			++doScanFreqs;
+			doSummary = 0;
+		}
 		else if(strcmp(argv[a], "-r") == 0 ||
 		        strcmp(argv[a], "--sources") == 0)
 		{
@@ -430,6 +528,11 @@ int main(int argc, char **argv)
 		        strcmp(argv[a], "--Bands") == 0)
 		{
 			++doBandList;
+		}
+		else if(strncmp(argv[a], "--scans=", 8) == 0 && argv[a][8] != 0)
+		{
+			++doScanList;
+			scanAnt = argv[a]+8;
 		}
 		else if(strcmp(argv[a], "-S") == 0 ||
 		        strcmp(argv[a], "--Scans") == 0)
@@ -506,14 +609,14 @@ int main(int argc, char **argv)
 		int p = std::cout.precision();
 
 		std::cout.precision(13);
-		std::cout << V->getExper()->name << " " << V->obsStart() << " " << V->obsStop() << std::endl;
+		std::cout << V->getExper()->getFullName() << " " << V->obsStart() << " " << V->obsStop() << std::endl;
 		std::cout.precision(p);
 	}
 	if(doSummary)
 	{
 		if(!doModules && !doTime)
 		{
-			std::cout << V->getExper()->name << std::endl;
+			std::cout << V->getExper()->getFullName() << std::endl;
 		}
 		antennaSummary(V, doFormat, doUsage);
 	}
@@ -527,7 +630,11 @@ int main(int argc, char **argv)
 	}
 	if(doScanList)
 	{
-		if(doTime)
+		if(scanAnt != 0)
+		{
+			scanListByAntenna(V, scanAnt);
+		}
+		else if(doTime)
 		{
 			scanListWithTimes(V);
 		}
@@ -536,6 +643,10 @@ int main(int argc, char **argv)
 			scanList(V);
 		}
 	}
+	if(doScan2List)
+	{
+		scan2List(V, doScan2List);
+	}
 	if(doModules)
 	{
 		moduleSummary(V);
@@ -543,6 +654,10 @@ int main(int argc, char **argv)
 	if(doCoords)
 	{
 		antCoords(V);
+	}
+	if(doScanFreqs)
+	{
+		scanFreqs(V);
 	}
 
 	delete V;

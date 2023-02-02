@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013-2019 by Walter Brisken                             *
+ *   Copyright (C) 2013-2022 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vmux.c 9497 2020-04-23 12:05:07Z JanWagner $
+// $Id: vmux.c 10448 2022-04-29 16:13:22Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 9497 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-04-23 22:05:07 +1000 (Thu, 23 Apr 2020) $
+// $LastChangedRevision: 10448 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-04-30 02:13:22 +1000 (Sat, 30 Apr 2022) $
 //
 //============================================================================
 
@@ -35,8 +35,8 @@
 
 const char program[] = "vmux";
 const char author[]  = "Walter Brisken <wbrisken@nrao.edu>";
-const char version[] = "0.11";
-const char verdate[] = "20191031";
+const char version[] = "0.14";
+const char verdate[] = "20220429";
 
 const int defaultChunkSize = 10000000;
 const int defaultNGap = 100;
@@ -65,9 +65,16 @@ void sigintHandler(int i)
 	die = 1;
 }
 
+static void printVersion()
+{
+	fprintf(stderr, "%s ver. %s  %s  %s\n", program, version, author, verdate);
+}
+
 void usage(const char *pgm)
 {
-	fprintf(stderr, "\n%s ver. %s  %s  %s\n\n", program, version, author, verdate);
+	fprintf(stderr, "\n");
+	printVersion();
+	fprintf(stderr, "\n");
 	fprintf(stderr, "Usage: %s [options] <inputFile> <inputFrameSize> <framesPerSecond>\n   <threadList> <outputFile> [<offset> [<chunkSize>] ]\n", pgm);
 	fprintf(stderr, "\nA program to take a multi-thread VDIF file and multiplex into\n"
 			"a multi-channel, single thread file.  <thread list> should be\n"
@@ -84,14 +91,15 @@ void usage(const char *pgm)
 	fprintf(stderr, "Options can include:\n");
 	fprintf(stderr, "  --help\n");
 	fprintf(stderr, "  -h        Print this help info and quit\n\n");
+	fprintf(stderr, "  --version Print version info and quit\n\n");
 	fprintf(stderr, "  --verbose\n");
 	fprintf(stderr, "  -v        Increase verbosity\n\n");
 	fprintf(stderr, "  --quiet\n");
 	fprintf(stderr, "  -q        Decrease verbosity\n\n");
 	fprintf(stderr, "  --noEDV4\n");
-	fprintf(stderr, "  -n        Don't make use of EDV4 (per-thread validity) in output\n\n");
+	fprintf(stderr, "  -n        Don't make use of EDV4 (per-thread validity) in output [default]\n\n");
 	fprintf(stderr, "  --EDV4\n");
-	fprintf(stderr, "  -e        Use EDV4 (per-thread validity) in output [default]\n\n");
+	fprintf(stderr, "  -e        Use EDV4 (per-thread validity) in output (use with caution!)\n\n");
 	fprintf(stderr, "  --align\n");
 	fprintf(stderr, "  -a        Pre-align multithreaded VDIF threads in problematic recordings (note: do not set 'sort').\n\n");
 	fprintf(stderr, "  --fanout <f>\n");
@@ -102,6 +110,8 @@ void usage(const char *pgm)
 	fprintf(stderr, "  -s <s>    Set the max sort horizon in frames to <s> [default = %d]\n\n", defaultNSort);
 	fprintf(stderr, "  --zero\n");
 	fprintf(stderr, "  -z        Set nGap and nSort to 0 (same as '-g 0 -s 0')\n\n");
+	fprintf(stderr, "  --1bit\n");
+	fprintf(stderr, "  -1        Force to operate on 1-bit data streams\n\n");
 	fprintf(stderr, "Note: as of version 0.5 this program supports multi-channel multi-thread input data.\n\n");
 }
 
@@ -132,7 +142,8 @@ int main(int argc, char **argv)
 	const int MaxThreads=128;
 	unsigned char *src;
 	unsigned char *dest;
-	FILE *in, *out;
+	FILE *in = 0;
+	FILE *out;
 	struct vdif_file_reader reader;
 	struct vdif_file_reader_stats readerstats;
 	int useStdin = 0;
@@ -162,7 +173,7 @@ int main(int argc, char **argv)
 	int fanoutFactor = 1;
 	const vdif_header *vh;
 	struct vdif_mux vm;
-	int flags = VDIF_MUX_FLAG_PROPAGATEVALIDITY | VDIF_MUX_FLAG_RESPECTGRANULARITY;
+	int flags = VDIF_MUX_FLAG_RESPECTGRANULARITY;
 	int a;
 
 	if(argc <= 1)
@@ -179,6 +190,12 @@ int main(int argc, char **argv)
 			if(strcmp(argv[a], "-h") == 0 || strcmp(argv[a], "--help") == 0)
 			{
 				usage(argv[0]);
+
+				return EXIT_SUCCESS;
+			}
+			else if(strcmp(argv[a], "--version") == 0)
+			{
+				printVersion();
 
 				return EXIT_SUCCESS;
 			}
@@ -206,6 +223,10 @@ int main(int argc, char **argv)
 			else if(strcmp(argv[a], "-a") == 0 || strcmp(argv[a], "--align") == 0)
 			{
 				prealign = 1;
+			}
+			else if(strcmp(argv[a], "-1") == 0 || strcmp(argv[a], "--1bit") == 0)
+			{
+				bitsPerSample = 1;
 			}
 			else if(a < argc - 1 && (strcmp(argv[a], "-g") == 0 || strcmp(argv[a], "--gap") == 0))
 			{
@@ -412,7 +433,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, "Error encountered in seek to position %lld\n", (long long)offset);
 				fclose(in);
 
-                return EXIT_FAILURE;
+                		return EXIT_FAILURE;
 			}
 		}
 	}
@@ -480,6 +501,7 @@ int main(int argc, char **argv)
 	if(n != VDIF_HEADER_BYTES)
 	{
 		fprintf(stderr, "Error reading first header.  Only %d of %d bytes were read\n", n, VDIF_HEADER_BYTES);
+
 		return EXIT_FAILURE;
 	}
 	leftover = VDIF_HEADER_BYTES;
@@ -580,7 +602,7 @@ int main(int argc, char **argv)
 		{
 			if(stats.nCall == 0)
 			{
-				if(V == -3)
+				if(V == EVDIFBADFRAMENUMBER)
 				{
 					fprintf(stderr, "No valid frames (matching expected parameters) were found in the first %d bytes, so there will be no output.  Perhaps use printVDIFheader to determine correct frame parameters.\n", n);
 				}
@@ -634,18 +656,18 @@ int main(int argc, char **argv)
 		}
 
 		/* if we encountered fill pattern at the seam between two chunkSizes we will need to write some dummy frames */
-		if(nextFrame >= 0 && nextFrame != stats.startFrameNumber)
+		if(stats.destUsed > 0 && nextFrame >= 0 && nextFrame != stats.startFrameNumber)
 		{
 			int64_t nJump = (int64_t)(stats.startFrameNumber - nextFrame);
 			int64_t j;
 
-			fprintf(stderr, "JUMP %zd\n", nJump);
+			fprintf(stderr, "JUMP %zd  %zd %zd\n", nJump, nextFrame/framesPerSecond, nextFrame%framesPerSecond);
 
 			/* borrow one output frame of src memory... */
 			memcpy(src, dest, VDIF_HEADER_BYTES);
 			for(j = 0; j < nJump; ++j)
 			{
-				setVDIFFrameSecond((vdif_header *)src, (nextFrame+j)/framesPerSecond);
+				((vdif_header *)src)->seconds = (nextFrame+j)/framesPerSecond;
 				setVDIFFrameNumber((vdif_header *)src, (nextFrame+j)%framesPerSecond);
 				setVDIFFrameInvalid((vdif_header *)src, 1);
 				fwrite(src, 1, stats.outputFrameSize, out);
@@ -656,8 +678,8 @@ int main(int argc, char **argv)
 
 		if(stats.srcUsed <= 0)
 		{
-				fprintf(stderr, "Weird: %d/%d bytes were consumed. Maybe input was all fill-pattern.\n", stats.srcUsed, stats.srcSize);
-				leftover = stats.srcSize % inputframesize;
+			fprintf(stderr, "Weird: %d/%d bytes were consumed. Maybe input was all fill-pattern.\n", stats.srcUsed, stats.srcSize);
+			leftover = stats.srcSize % inputframesize;
 		}
 		else
 		{
