@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5bsum.c 7717 2017-04-26 16:01:21Z WalterBrisken $
+// $Id: m5bsum.c 9925 2021-02-23 15:43:09Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 7717 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-04-27 02:01:21 +1000 (Thu, 27 Apr 2017) $
+// $LastChangedRevision: 9925 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
 //
 //============================================================================
 

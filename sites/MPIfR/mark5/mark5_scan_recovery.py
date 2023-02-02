@@ -1,14 +1,28 @@
 #!/usr/bin/env python
 '''
-Tries to recover data from files (or block devices) containing data of the
-individual disks from a StreamStor Mark5B/5C disk pack.
+Recovers VLBI recordings from raw disk images or directly from block
+devices (/dev/sd*/) of disks of a broken StreamStor Mark5A/B/C module.
 
-Supports modules that were only partially populated at recording time and where
-some disk(s) have failed later. Recovered scans are copied to indivual
-files under a new directory ./recovered/ under the current working directory.
+If the Mark5 module had SATA drives these can be relocated into an empty
+Mark6 module after which scans can be extracted directly via e.g.
+
+  $ sudo chmod a+rx /dev/sd{c,d,e,r,s,t,u}
+  $ mark5_scan_recovery.py /dev/sd{c,d,e,r,s,t,u}
+
+If the Mark5(A) module had PATA drives one could use eight USB-PATA dongles
+or PCIe 1xIDE cards and access them directly, as above, or alternatively
+use  'dd if=/dev/<blkdevice> of=disk0.img bs=16M'  or similar to store
+drive content as disk images first and then extract scans via e.g.
+
+  $ mark5_scan_recovery.py --mark5a /data/raw/MPI+1200/disk{0,1,4,5,6,7}.raw
+
+This script supports recordings on modules that were only partially
+populated at recording time, and/or where some disk(s) may have failed later.
+The recovered scans are copied to files under a new directory ./recovered/
+located under the current working directory.
 '''
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "Bob Eldering, Jan Wagner"
 
 import argparse
@@ -19,7 +33,7 @@ from socket import create_connection
 
 debug = False
 Nmaxdisks = 8             # expected nr of disks
-usedir_offset = 11272704  # location of user dir before from EOF
+userdir_offset = 11272704 # location of user dir before from EOF
 block_size = 2**16-8      # StreamStor hardware block size, without 8-byte block header
 outdir = './recovered/'
 
@@ -54,6 +68,21 @@ class UserDirMark5BCEntry(ctypes.LittleEndianStructure):
                 ("writeoffset", ctypes.c_uint32),
                 ("bitstreammask", ctypes.c_uint32),
                 ("filler", ctypes.c_char * 40)]
+
+MK5A_DIR_MAXSCANS = 1024
+MK5A_EXTNAME_MAXLEN = 64
+class UserDirMark5A(ctypes.LittleEndianStructure):
+    _fields_ = [("numscans", ctypes.c_uint32),
+                ("nextscan", ctypes.c_uint32),
+                #("allnames", ctypes.c_char * (MK5A_EXTNAME_MAXLEN*MK5A_DIR_MAXSCANS)),
+                ("allnames", ctypes.c_ubyte * (MK5A_EXTNAME_MAXLEN*MK5A_DIR_MAXSCANS)),
+                ("startbyte", ctypes.c_uint64 * MK5A_DIR_MAXSCANS),
+                ("length", ctypes.c_uint64 * MK5A_DIR_MAXSCANS),
+                ("writeoffset", ctypes.c_uint64),
+                ("readoffset", ctypes.c_uint64),
+                ("playrate", ctypes.c_double),
+                ("vsn", ctypes.c_char * 32)]
+
 
 def read_sequence_number(file_):
     header = Header()
@@ -103,6 +132,46 @@ def analyze_disks(inputs_):
 
 ##############################################################################################
 
+def get_scans_mark5a(inputs_):
+    '''
+    Reads a really old Mark5A-format user directory from Mark5 raw disks.
+    Inspects the first valid file descriptor only.
+    '''
+    scans = []
+    udirinfo = UserDirMark5A()
+    for input in inputs_:
+        if input == None: continue
+        input.seek(-userdir_offset, 2)
+        input.readinto(udirinfo)
+        if udirinfo.numscans > MK5A_DIR_MAXSCANS:
+            continue
+        print("Module has VSN %s and %d scans" % (udirinfo.vsn,udirinfo.numscans))
+        print(udirinfo.allnames, len(udirinfo.allnames))
+
+        for n in range(udirinfo.numscans):
+            fileext = '.m5a'
+            scanname = ''.join([chr(i) for i in udirinfo.allnames[(n*MK5A_EXTNAME_MAXLEN):((n+1)*MK5A_EXTNAME_MAXLEN)]]).rstrip('\x00')
+            print(n,fileext,scanname)
+
+            try:
+                scanfile = open(outdir+scanname+fileext, 'r+b')
+            except Exception as e:
+                scanfile = open(outdir+scanname+fileext, 'wb')
+
+            scans.append(
+                {'name': scanname,
+                'start': udirinfo.startbyte[n],
+                'stop':  udirinfo.startbyte[n] + udirinfo.length[n],
+                'size':  udirinfo.length[n],
+                'fdout': scanfile })
+        input.seek(0)
+        break # look just at the first user directory in disk set
+
+    print ("Module has {n} scans in the Mark5A-format user directory".format(n=len(scans)))
+
+    return scans
+
+
 def get_scans_mark5bc(inputs_):
     '''
     Reads the user directory from Mark5 raw disks.
@@ -113,7 +182,7 @@ def get_scans_mark5bc(inputs_):
     scan = UserDirMark5BCEntry()
     for input in inputs_:
         if input == None: continue
-        input.seek(-usedir_offset, 2)
+        input.seek(-userdir_offset, 2)
         input.readinto(udir)
         print('Module has VSN %s' % (udir.VSN))
         for n in range(8192):
@@ -222,10 +291,11 @@ def module_offset_to_file(mod_offset_, inputs_):
 ##############################################################################################
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("inputfile",
                         help="Input file to read data blocks from",
                         nargs="+")
+    parser.add_argument('--mark5a', default=False, action='store_true', help='Raw data are from a Mark5A module, rather than 5B/5C')
     parser.add_argument('--version', action='version', version=__version__)
     opts = parser.parse_args()
 
@@ -235,11 +305,13 @@ if __name__ == "__main__":
         print (str(e))
 
     rawsources = [open(filename, "rb") for filename in opts.inputfile]
-    scans = get_scans_mark5bc(rawsources)
+    if opts.mark5a:
+        scans = get_scans_mark5a(rawsources)
+    else:
+        scans = get_scans_mark5bc(rawsources)
     inputs = analyze_disks(rawsources)
     Nscans = len(scans)
 
-    output = open('tmp', 'wb')
     nfilled = 0
     linearoffset = 0
     currscan = 0
@@ -288,5 +360,6 @@ if __name__ == "__main__":
         previous_sequence_number = number
 
         # reporting
-        if (number % 1000) == 0:
-            print (scans[currscan]['name'], linearoffset, scans[currscan]['stop'], '%.1f%%' % (100.0*(linearoffset-scans[currscan]['start'])/scans[currscan]['stop']))
+        if (number % 1000) == 0 and currscan >= 0 and currscan < len(scans):
+            scanlen = scans[currscan]['stop'] - scans[currscan]['start']
+            print (scans[currscan]['name'], linearoffset, scans[currscan]['stop'], '%.1f%%' % (100.0*(linearoffset-scans[currscan]['start'])/scanlen))

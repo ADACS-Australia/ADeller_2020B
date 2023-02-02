@@ -20,10 +20,14 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include "msg.h"
 #include "mk4_data.h"
+#include "mk4_util.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 #include "mk4_sizes.h"
+#include "ffmath.h"
+
 
 #define TWO31 2147483648.0
 #define TWO32 4294967296.0
@@ -34,7 +38,8 @@ enum {LCP, RCP};
 int pcal_interp (struct mk4_sdata *sd1,
                  struct mk4_sdata *sd2,
                  struct type_param *param,
-                 struct freq_corel *corel)
+                 struct freq_corel *corel,
+                 struct mk4_corel *pcdata)
     {
     int stn, j, pc, ap, ch, f, ipc, ipcmin, ipcmax, i, n,
         pc_index[MAX_CHAN],
@@ -52,7 +57,6 @@ int pcal_interp (struct mk4_sdata *sd1,
     struct type_309 *t309;
     struct interp_sdata *isd;
     extern int do_accounting;
-    extern struct mk4_corel cdata;
     
     for (i=0; i<MAX_CHAN; i++)
         pc_index[i] = -1;
@@ -71,8 +75,10 @@ int pcal_interp (struct mk4_sdata *sd1,
             isd = &(fc->data[ap].ref_sdata);
             for (j=0; j<MAX_PCF; j++)
                 {
-                isd->phasecal_lcp[j] = 0.0;
-                isd->phasecal_rcp[j] = 0.0;
+                    zero_complex( &(isd->phasecal_lcp[j]) );
+                    zero_complex( &(isd->phasecal_rcp[j]) );
+                // isd->phasecal_lcp[j] = 0.0;
+                // isd->phasecal_rcp[j] = 0.0;
                 }
             isd->pcweight_lcp = 0.0;
             isd->pcweight_rcp = 0.0;
@@ -80,8 +86,10 @@ int pcal_interp (struct mk4_sdata *sd1,
             isd = &(fc->data[ap].rem_sdata);
             for (j=0; j<MAX_PCF; j++)
                 {
-                isd->phasecal_lcp[j] = 0.0;
-                isd->phasecal_rcp[j] = 0.0;
+                    zero_complex( &(isd->phasecal_lcp[j]) );
+                    zero_complex( &(isd->phasecal_rcp[j]) );
+                // isd->phasecal_lcp[j] = 0.0;
+                // isd->phasecal_rcp[j] = 0.0;
                 }
             isd->pcweight_lcp = 0.0;
             isd->pcweight_rcp = 0.0;
@@ -89,7 +97,7 @@ int pcal_interp (struct mk4_sdata *sd1,
         }
 
                                         // test for correlation date after pcal sign flip
-    sscanf (cdata.id->date, "%4d%3d", &iyr, &idoy);
+    sscanf (pcdata->id->date, "%4d%3d", &iyr, &idoy);
     idate = 1000 * iyr + idoy;
     after_2012_124 = idate > 2012124;
                                         /* Do it one station at a time */
@@ -339,7 +347,7 @@ int pcal_interp (struct mk4_sdata *sd1,
                                 {
                                     // if there is DSB data, then don't allow the LSB
                                     // pcal to overwrite what is already there
-                                if (ch == LSB_LCP && cabs(isd->phasecal_lcp[ipc]) != 0.0)
+                                if (ch == LSB_LCP && abs_complex( isd->phasecal_lcp[ipc] ) != 0.0)
                                     break;
                                     // must renormalize to account for fraction of high data
                                     // see rjc's normalization notes from 2006.10.16
@@ -352,7 +360,8 @@ int pcal_interp (struct mk4_sdata *sd1,
                                     }
                                 }
 
-                            isd->phasecal_lcp[ipc] = -realval + I * imagval;
+                            // isd->phasecal_lcp[ipc] = -realval + I * imagval;
+                            set_complex( &(isd->phasecal_lcp[ipc]), -realval, imagval);
                             if ((realval != 0.0) || (imagval != 0.0))
                                 isd->pcweight_lcp = 1.0;
                             break;
@@ -362,7 +371,7 @@ int pcal_interp (struct mk4_sdata *sd1,
                                 {
                                     // if there is DSB data, then don't allow the LSB
                                     // pcal to overwrite what is already there
-                                if (ch == LSB_RCP && cabs (isd->phasecal_rcp[ipc]) != 0.0)
+                                if (ch == LSB_RCP && abs_complex( isd->phasecal_rcp[ipc] ) != 0.0)
                                     break;
                                     // must renormalize to account for fraction of high data
                                     // see rjc's normalization notes from 2006.10.16
@@ -375,7 +384,8 @@ int pcal_interp (struct mk4_sdata *sd1,
                                     }
                                 }
 
-                            isd->phasecal_rcp[ipc] = -realval + I * imagval;
+                            // isd->phasecal_rcp[ipc] = -realval + I * imagval;
+                            set_complex( &(isd->phasecal_rcp[ipc]), -realval, imagval);
                             if ((realval != 0.0) || (imagval != 0.0))
                                 isd->pcweight_rcp = 1.0;
                             break;

@@ -82,7 +82,8 @@ int MeanStdDev(const float *src, int length, float *mean, float *StdDev);
 int pack2bit1chan(Ipp32f **in, int off, Ipp8u *out, float mean, float stddev, int len);
 int pack2bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len);
 int pack2bitNchan_complex(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len);
-int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len);
+int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len, int iscodif, int iscomplex);
+int pack16bitNchan(Ipp32f **in, int nchan, int off, Ipp16u *out, float mean, float stddev, int len, int iscodif, int iscomplex);
 void dayno2cal (int dayno, int year, int *day, int *month);
 double cal2mjd(int day, int month, int year);
 double tm2mjd(struct tm date);
@@ -115,7 +116,7 @@ int main (int argc, char * const argv[]) {
   char *filename, msg[MAXSTR], *header;
   int i, frameperbuf, loopframes, status, outfile, opt, tmp, flipGroup, headerBytes=0;
   int complexOutput;
-  uint64_t nframe;
+  uint64_t nframe, tmp64;
   float **data, ftmp, *stdDev, *mean;
   Ipp64f *taps64;
   Ipp32f *taps;
@@ -133,7 +134,7 @@ int main (int argc, char * const argv[]) {
   int channels = 1;
   int seed = 0;
   int ntap = DEFAULTTAP;
-  int framesize = 8000;
+  int framesize = 9000;
   int iscomplex = 0;
   int dohilbert = 0;
   int nobandpass = 0;
@@ -145,6 +146,8 @@ int main (int argc, char * const argv[]) {
   int month = -1;
   int day = -1;
   int dayno = -1;
+  uint64_t totalsamples=0;
+  int period = 1;
   double mjd = -1;
   float tone =  0;  // MHz
   float tone2 = 0;  // MHz
@@ -183,6 +186,8 @@ int main (int argc, char * const argv[]) {
     {"help", 0, 0, 'h'},
 #if USE_CODIFIO
     {"codifio", 0, 0, 'Z'},
+    {"period", 1, 0, 'p'},
+    {"totalsamples", 1, 0, 'Q'},
 #endif
     {"help", 0, 0, 'h'},
     {0, 0, 0, 0}
@@ -192,7 +197,7 @@ int main (int argc, char * const argv[]) {
   
   /* Read command line options */
   while (1) {
-    opt = getopt_long_only(argc, argv, "s:w:C:d:D:m:M:y:t:F:l:a:A:T:2:x:B:b:cNnZLh", options, NULL);
+    opt = getopt_long_only(argc, argv, "s:w:C:d:D:m:M:y:t:F:l:a:A:T:2:x:B:b:cNnZLhp:", options, NULL);
     if (opt==EOF) break;
     
 #define CASEINT(ch,var)                                     \
@@ -204,6 +209,15 @@ int main (int argc, char * const argv[]) {
       var = tmp;                                            \
     break
 
+#define CASEINT64(ch,var)                                     \
+  case ch:						    \
+    status = sscanf(optarg, "%" PRIu64, &tmp64);		    \
+    if (status!=1)					    \
+      fprintf(stderr, "Bad %s option %s\n", #var, optarg);  \
+    else                                                    \
+      var = tmp64;                                            \
+    break
+    
 #define CASEBOOL(ch,var)                                    \
   case ch:						    \
     var = 1;						    \
@@ -239,6 +253,8 @@ int main (int argc, char * const argv[]) {
       CASEBOOL('G', doublesideband);
 #if USE_CODIFIO
       CASEBOOL('Z', usecodif);
+      CASEINT('p', period);
+      CASEINT64('Q', totalsamples);
 #endif
       CASEFLOAT('B', memsize);
       CASEFLOAT('l', duration);
@@ -316,15 +332,20 @@ int main (int argc, char * const argv[]) {
   if (seed==0) seed=time(NULL);
   
   // Frame size and number of sampler/frame
-  int completesample = nbits*cfact*nchan;
+  int completesample = nbits*cfact*nchan; // bits
 
-  uint64_t samplerate = bandwidth*1e6*2/cfact;
+  if  (totalsamples==0) {
+    totalsamples = bandwidth*1e6*2/cfact;
+    period=1;
+  }  else {
+
+  }
   
   framesize = (framesize/8)*8; // Round framesize multiple of 8
   // need integral number of frames/sec
-  uint64_t bytespersec = completesample*samplerate/8;
+  uint64_t bytesperperiod = completesample*totalsamples/8;
   // Need integral # frames/sec AND integral # completesamples/frame
-  while (bytespersec % framesize != 0 && (framesize*8 % completesample !=0)) {
+  while (((bytesperperiod % framesize) != 0) || ((framesize*8 % completesample) !=0)) {
     framesize -=8;
     if (framesize <= 0) {
       printf("Could not select valid framesize. Aborting\n");
@@ -335,14 +356,15 @@ int main (int argc, char * const argv[]) {
   }
   printf("Using framesize=%d\n", framesize);
   int samplesperframe = framesize*8/completesample; // Treat Re/Im of complex as seperate samples
-  int framespersec = bytespersec/framesize;
+  int framesperperiod = bytesperperiod/framesize;
 
-  frameperbuf = memsize/(samplesperframe*sizeof(float)*cfact*(nchan+1));
+  frameperbuf = memsize/(samplesperframe*cfact*sizeof(Ipp32f));
 
   if (duration==0) { // Just create BUFSIZE bytes
     nframe = frameperbuf;
+    printf("DEBUG:   Using %llu frames\n", nframe);
   } else {
-    nframe = duration*framespersec;
+    nframe = duration*framesperperiod/period;
   }
 
   if (tone==0) tone = bandwidth/4;
@@ -505,22 +527,41 @@ int main (int argc, char * const argv[]) {
     headerBytes = CODIF_HEADER_BYTES;
 
     // Need to calculate a couple of these values
-    status = createCODIFHeader(&cheader, framesize, 0, 0, nbits, nchan, sampleblock, 1, samplerate,
+#ifdef CODIFV2
+    status = createCODIFHeader(&cheader, framesize, 0, 0, nbits, nchan, sampleblock, period, totalsamples,
+			       complexOutput, "Tt", 0);
+#else
+    status = createCODIFHeader(&cheader, framesize, 0, 0, nbits, nchan, sampleblock, period, totalsamples,
 			       complexOutput, "Tt");
+#endif
     if (status!=CODIF_NOERROR) {
       printf("Error creating CODIF header. Aborting\n");
       exit(1);
     }
+ #ifdef CODIFV2
 #ifdef TEXTURE
     // Whack some texture to the extended bytes
-    cheader.extended2 = 0xAAAAAAAA;
-    cheader.extended3 = 0xBBBBBBBB;  
-    cheader.extended4 = 0xCCCCCCCC;
+    cheader.meta1 = 0xAAAAAAAA;
+    cheader.meta2 = 0xBBBBBBBB;  
+    cheader.meta3 = 0xCCCCCCCC;
 #else
     // Whack some texture to the extended bytes
-    cheader.extended2 = 0x0;
-    cheader.extended3 = 0x0;  
-    cheader.extended4 = 0x0;
+    cheader.meta1 = 0x0;
+    cheader.meta2 = 0x0;  
+    cheader.meta3 = 0x0;
+#endif
+#else
+#ifdef TEXTURE
+    // Whack some texture to the extended bytes
+    vheader.extended2 = 0xAAAAAAAA;
+    vheader.extended3 = 0xBBBBBBBB;  
+    vheader.extended4 = 0xCCCCCCCC;
+#else
+    // Whack some texture to the extended bytes
+    vheader.extended2 = 0x0;
+    vheader.extended3 = 0x0;  
+    vheader.extended4 = 0x0;
+#endif
 #endif
     setCODIFEpochMJD(&cheader, mjd);
     setCODIFFrameMJDSec(&cheader, (uint64_t)floor(mjd*60*60*24));
@@ -545,7 +586,6 @@ int main (int argc, char * const argv[]) {
     vheader.extended3 = 0x0;  
     vheader.extended4 = 0x0;
 #endif
-
     setVDIFEpochMJD(&vheader, mjd);
     setVDIFFrameMJDSec(&vheader, (uint64_t)floor(mjd*60*60*24));
     setVDIFFrameNumber(&vheader,0);
@@ -592,7 +632,9 @@ int main (int argc, char * const argv[]) {
 	  if (status) exit(1);
 	}
       } else if (nbits==8) {
-	status = pack8bitNchan(data, nchan, i*samplesperframe*cfact, framedata,  mean[0], stdDev[0], samplesperframe*cfact);
+	status = pack8bitNchan(data, nchan, i*samplesperframe*cfact, framedata,  mean[0], stdDev[0], samplesperframe*cfact, usecodif, iscomplex);
+      } else if (nbits==16) {
+	status = pack16bitNchan(data, nchan, i*samplesperframe*cfact, (Ipp16u*)framedata,  mean[0], stdDev[0], samplesperframe*cfact, usecodif, iscomplex);
       } else {
 	printf("Unsupported number of bits\n");
 	exit(1);
@@ -620,10 +662,10 @@ int main (int argc, char * const argv[]) {
       }
       if (usecodif) {
 #if USE_CODIFIO
-	nextCODIFHeader(&cheader, framespersec);
+	nextCODIFHeader(&cheader, framesperperiod);
 #endif
       } else {
-	nextVDIFHeader(&vheader, framespersec);
+	nextVDIFHeader(&vheader, framesperperiod);
       }
       nframe--;
     }
@@ -823,7 +865,7 @@ int pack2bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float
   return 0;
 }
 
-Ipp8s scaleclip(Ipp32f x, Ipp32f scale) {
+inline Ipp8s scaleclip(Ipp32f x, Ipp32f scale) {
   x *= scale;
   if (x>127) // Clip
     x = 127;
@@ -832,8 +874,16 @@ Ipp8s scaleclip(Ipp32f x, Ipp32f scale) {
   return lrintf(x);
 }
 
+inline Ipp16s scaleclip16(Ipp32f x, Ipp32f scale) {
+  x *= scale;
+  if (x>IPP_MAX_16S) // Clip  
+    x = IPP_MAX_16S;
+  else if (x<IPP_MIN_16S)
+    x = IPP_MIN_16S;
+  return lrintf(x);
+}
 
-int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len) {
+int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float stddev, int len, int iscodif, int iscomplex) {
   // Should check 31bit "off" offset is enough bits
   int i, j, n, k;
 
@@ -841,11 +891,55 @@ int pack8bitNchan(Ipp32f **in, int nchan, int off, Ipp8u *out, float mean, float
 
   j = 0;
   k = 0;
-  for (i=off;i<len+off;i++) {
-    for (n=0; n<nchan; n++) {
-      out[j] = scaleclip(in[n][i], scale);
-      out[j] ^= 0x80;
-      j++;
+  if (iscomplex) {
+    for (i=off;i<len+off;i+=2) {
+      for (n=0; n<nchan; n++) {
+	out[j] = (Ipp8u)scaleclip(in[n][i], scale);
+	if (!iscodif) out[j] ^= 0x80;
+	j++;
+	out[j] = (Ipp8u)scaleclip(in[n][i+1], scale);
+	if (!iscodif) out[j] ^= 0x80;
+	j++;
+      }
+    }
+  } else {
+    for (i=off;i<len+off;i++) {
+      for (n=0; n<nchan; n++) {
+	out[j] = (Ipp8u)scaleclip(in[n][i], scale);
+	if (!iscodif) out[j] ^= 0x80;
+	j++;
+      }
+    }
+  }
+  return 0;
+}
+
+int pack16bitNchan(Ipp32f **in, int nchan, int off, Ipp16u *out, float mean, float stddev, int len, int iscodif, int iscomplex) {
+  // Should check 31bit "off" offset is enough bits
+  int i, j, n, k;
+
+  float scale = 40/stddev;
+
+  j = 0;
+  k = 0;
+  if (iscomplex) {
+    for (i=off;i<len+off;i+=2) {
+      for (n=0; n<nchan; n++) {
+	out[j] = (Ipp16u)scaleclip(in[n][i], scale);
+	if (!iscodif) out[j] ^= 0x80;
+	j++;
+	out[j] = (Ipp16u)scaleclip16(in[n][i+1], scale);
+	if (!iscodif) out[j] ^= 0x8000;
+	j++;
+      }
+    }
+  } else {
+    for (i=off;i<len+off;i++) {
+      for (n=0; n<nchan; n++) {
+	out[j] = (Ipp16u)scaleclip16(in[n][i], scale);
+	if (!iscodif) out[j] ^= 0x8000;
+	j++;
+      }
     }
   }
   return 0;

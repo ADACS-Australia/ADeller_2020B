@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6.h 7764 2017-05-16 18:23:07Z WalterBrisken $
+// $Id: Mark6.h 10540 2022-07-18 11:11:08Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 7764 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:23:07 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 10540 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2022-07-18 21:11:08 +1000 (Mon, 18 Jul 2022) $
 //
 //============================================================================
 #ifndef MARK6_H
@@ -28,9 +28,11 @@
 
 #include <string>
 #include <vector>
+#include <poll.h>
 
 #include "Mark6DiskDevice.h"
 #include "Mark6Module.h"
+#include "Mark6Controller.h"
 
 /**
  * Custom exception class for reporting Mark6 related errors
@@ -64,24 +66,29 @@ public:
 class Mark6
 {
 private:
-	static const int NUMSLOTS = 4;                                      // number of slots per mark6 unit
-       
-        
-	int fd;		// file descriptor for the udev monitor
+//	int fd;		// file descriptor for the udev monitor
+        pollfd pollItems_m[1];
         struct udev *udev_m;
         struct udev_monitor *mon;
+        bool verifyDevices_m;
 	std::vector<Mark6DiskDevice> mountedDevices_m;
 	std::vector<Mark6DiskDevice> removedDevices_m;
         std::vector<Mark6DiskDevice> newDevices_m;
-        Mark6Module modules_m[NUMSLOTS];
+        std::vector<std::string> newPartitions_m;
+        std::vector<Mark6Controller> controllers_m;
+        std::vector<Mark6Module> modules_m;
+        std::vector<std::string>  slotIds_m;
         std::string linkRootData_m;                 // default path for creating symbolic links to the mount points of the data partitions
         std::string linkRootMeta_m;                 // default path for creating symbolic links to the mount points of the meta partitions
         std::string mountRootData_m;        //                
         std::string mountRootMeta_m;    
-        std::string slotIds_m[NUMSLOTS];
         std::string diskIds_m[Mark6Module::MAXDISKS];
+        int numSlots_m;                 // the number of slots present in the mark6 system (2 per controller)
+        int readControllerConfig();
+        void writeControllerConfig();
         
         void manageDeviceChange();
+        int verifyDevices();
 	void validateMountDevices();
         int parseControllerId(std::string devpath);
         long parseDiskId(std::string sasAddress);
@@ -95,10 +102,12 @@ public:
         bool isMounted(std::string deviceName);
         Mark6DiskDevice *getMountedDevice(std::string deviceName);
         void removeMountedDevice(Mark6DiskDevice device);
+        int enumerateControllers();
         int enumerateDevices();
         void cleanUp();
         int getSlot(std::string eMSN);
         void sendStatusMessage();
+        void sendSlotStatusMessage();
         std::vector<Mark6DiskDevice> getMountedDevices() const {
             return mountedDevices_m;
         }

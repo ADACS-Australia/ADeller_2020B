@@ -25,7 +25,7 @@
 int
 check_name(char *name, fstruct *f_info)
     {
-    char buf[256], *field1, *field2, *field3, *field4, *field5, *strtok();
+    char buf[256], *field1, *field2, *field3, *field4, *field5;
     char *baseline, *filenum, *rootcode, *freq;
     int i, len, nfield, errcode, l;
                                         /* Init */
@@ -76,6 +76,7 @@ check_name(char *name, fstruct *f_info)
         }
 
     if (nfield == 1) return (BADSTRING);
+    (void) field5; //disable unused var compiler warning
 
     switch (nfield)
         {
@@ -153,8 +154,8 @@ check_name(char *name, fstruct *f_info)
                                         /* Filenumbers only for type 2's in mk4 */
     if ((filenum != NULL) && (f_info->type == 2))
         {
-        l = strlen(filenum);                            /* File #, e.g. (1-999) */
-        if ((l == 0) || (l > 3)) errcode |= BADFNUM;
+        l = strlen(filenum);                            /* File #, e.g. (1-9999) */
+        if ((l == 0) || (l > 4)) errcode |= BADFNUM;
         l--;
         for ( ; l >= 0; l--)
             if (! isdigit (filenum[l])) errcode |= BADFNUM;

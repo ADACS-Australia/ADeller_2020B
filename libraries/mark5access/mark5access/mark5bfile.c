@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bfile.c 7330 2016-06-09 16:08:37Z WalterBrisken $
+// $Id: mark5bfile.c 9925 2021-02-23 15:43:09Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 7330 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2016-06-10 02:08:37 +1000 (Fri, 10 Jun 2016) $
+// $LastChangedRevision: 9925 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
 //
 //============================================================================
 

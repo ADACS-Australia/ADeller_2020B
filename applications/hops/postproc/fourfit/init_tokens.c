@@ -6,9 +6,19 @@
 ******************************************************************************/
 #include "parser.h"
 #include "control.h"
+#include "ffcontrol.h"
 #include <stdio.h>
 
 #define tokenize(aa,bb,cc) {token_string[aa] = bb; token_cat[aa] = cc;}
+
+//could use the below lines to actually allocate memory for the strings instead (would need to be freed)
+//since the currenct implementation compiled under c++ renders:
+//warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 
+//#include <string.h>
+//#include <stdlib.h>
+//#define tokenize(aa,bb,cc) { token_string[aa] = (char*) malloc(sizeof(char)* strlen(bb) ); strcpy(token_string[aa], bb); token_cat[aa] = cc;}
+
 
 int
 init_tokens ()
@@ -89,6 +99,8 @@ init_tokens ()
     tokenize (PC_FREQ_,     "pc_freqs"  , CHAN_PARAM)
     tokenize (USE_SAMPLES_, "use_samples",INT_PARAM)
     tokenize (PASSBAND_,    "passband",   TWO_FLOAT_PARAM)
+    tokenize (AVXPZOOM_,    "avxpzoom",   TWO_FLOAT_PARAM)
+    tokenize (AVXPLOPT_,    "avxplopt",   TWO_FLOAT_PARAM)
     tokenize (GEN_CF_RECORD_,"gen_cf_record", INT_PARAM)
     tokenize (NOTCHES_,     "notches",    VECTOR_FLOAT_PARAM)
     tokenize (T_COHERE_,    "t_cohere",   FLOAT_PARAM)
@@ -141,4 +153,13 @@ init_tokens ()
     tokenize (VBP_FIT_,     "vbp_fit",    INT_PARAM)
     tokenize (VBP_COEFFS_,  "vbp_coeffs", VECTOR_FLOAT_PARAM)
     tokenize (VBP_FILE_,    "vbp_file",   STRING_PARAM)
+    tokenize (MOUNT_TYPE_,    "mount_type",   INT_PARAM)
+    tokenize (NO_MOUNT_TYPE_, "no_mount",     INT_CONST + NO_MOUNT_TYPE)
+    tokenize (CASSEGRAIN_,    "cassegrain",   INT_CONST + CASSEGRAIN)
+    tokenize (NASMYTHLEFT_,   "nasmythleft",  INT_CONST + NASMYTHLEFT)
+    tokenize (NASMYTHRIGHT_,  "nasmythright", INT_CONST + NASMYTHRIGHT)
+
+    //return value needed to correct function signature (value is not used, this function should be void)
+    //if this return value is not present, fourfit segfaults when compiled as C++...how interesting
+    return 0; 
     }

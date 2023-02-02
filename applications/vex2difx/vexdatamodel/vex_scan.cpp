@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_scan.cpp 7208 2016-01-26 15:37:10Z WalterBrisken $
+ * $Id: vex_scan.cpp 10660 2022-10-04 10:31:37Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 7208 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2016-01-27 02:37:10 +1100 (Wed, 27 Jan 2016) $
+ * $LastChangedRevision: 10660 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2022-10-04 21:31:37 +1100 (Tue, 04 Oct 2022) $
  *
  *==========================================================================*/
 
@@ -42,6 +42,12 @@ const Interval *VexScan::getAntennaInterval(const std::string &antName) const
 	}
 }
 
+bool VexScan::hasAntenna(const std::string &antName) const
+{
+	return stations.find(antName) != stations.end();
+
+}
+
 bool VexScan::getRecordEnable(const std::string &antName) const
 {
 	std::map<std::string,bool>::const_iterator it = recordEnable.find(antName);
@@ -55,13 +61,34 @@ bool VexScan::getRecordEnable(const std::string &antName) const
 	}
 }
 
+void VexScan::addToSourceSet(std::set<std::string> &sourceSet, bool incPointingCenter) const
+{
+	if(incPointingCenter)
+	{
+		sourceSet.insert(sourceDefName);
+	}
+
+	for(std::vector<std::string>::const_iterator it = phaseCenters.begin(); it != phaseCenters.end(); ++it)
+	{
+		sourceSet.insert(*it);
+	}
+}
+
 std::ostream& operator << (std::ostream &os, const VexScan &x)
 {
 	os << "Scan " << x.defName << 
 		"\n  timeRange=" << (const Interval&)x <<
 		"\n  mode=" << x.modeDefName <<
-		"\n  source=" << x.sourceDefName << 
-		"\n  size=" << x.size << " bytes \n";
+		"\n  pointing source=" << x.sourceDefName;
+	if(!x.phaseCenters.empty())
+	{
+		os <<   "\n  corr source(s)";
+		for(std::vector<std::string>::const_iterator iter = x.phaseCenters.begin(); iter != x.phaseCenters.end(); ++iter)
+		{
+			os << (iter == x.phaseCenters.begin() ? '=' : ',') << *iter;
+		}
+	}
+	os <<   "\n  size=" << x.size << " bytes \n";
 
 	for(std::map<std::string,Interval>::const_iterator iter = x.stations.begin(); iter != x.stations.end(); ++iter)
 	{
@@ -71,6 +98,11 @@ std::ostream& operator << (std::ostream &os, const VexScan &x)
 	for(std::map<std::string,bool>::const_iterator iter = x.recordEnable.begin(); iter != x.recordEnable.end(); ++iter)
 	{
 		os << "  " << iter->first << " enable=" << iter->second << std::endl;
+	}
+
+	for(std::vector<VexIntent>::const_iterator iter = x.scanIntent.begin(); iter != x.scanIntent.end(); ++iter)
+	{
+		os << "  intent=" << *iter << std::endl;
 	}
 
 	return os;

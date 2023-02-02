@@ -1,3 +1,42 @@
+v2.0.3
+- Synchronized ALMA/non-ALMA buildables; python codes still not unified
+- This version appears to reproduce the ALMA behaviors of v1.8.5
+
+v2.0b
+- Improved the GCPFF algorithm. Implemented the interface for CASA 6.
+
+v1.9.0
+- Added new standalone interface (i.e., free of CASA!!!).
+
+v1.8.5
+- interim successor to be tagged in DiFX 2.7(.1)
+- includes the getAmpRatio fix in _PolConvert
+- updates CalTable.* git version to DiFX.
+- a number of refactoring changes not yet included
+
+v1.8.4
+- finishing Py3 conversion with updates to make/configure within DiFX
+- includes a start on tools to slice and dice sample datasets
+
+v1.8.3
+- interim successor to v1.8.1 for the DiFX branch of PolConvert
+- (1.8.2 was developed on launchpad present with the git repo creation)
+
+v1.8.2
+- Improved GFF for rate estimates (now, it is done on all corr. products).
+- Parallactic angle can now be corrected in converted antennas.
+- Adapted the pulse-cal code for multi-file correlations.
+- Cleaned up the code.
+- Fixed problem in ChiSq code when the scans weren't in time order.
+- Added sample EU-VGOS scripts.
+
+v1.8.1
+- improved support for FITS-IDI
+- fixed some buggy parallactic angle code relevant to single dish
+
+v1.8.0
+- first cut at portage to Python 3
+
 v1.7.9
 - added checkpolconvert.py
 - prepolconvert.py and drivepolconvert.py execute in py3 environment

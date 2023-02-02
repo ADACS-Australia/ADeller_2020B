@@ -1,11 +1,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5bstate.c 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: m5bstate.c 10873 2023-01-06 22:35:34Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/examples/m5bstate.c $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10873 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-01-07 09:35:34 +1100 (Sat, 07 Jan 2023) $
 //
 //============================================================================
 
@@ -19,9 +19,9 @@
 #include "../mark5access/mark5_stream.h"
 
 const char program[] = "m5bstate";
-const char author[]  = "Alessandra Bertarini";
-const char version[] = "1.3";
-const char verdate[] = "2015 May 21";
+const char author[]  = "Alessandra Bertarini"; /* with input from Chris Phillips, Walter Brisken, and likely others */
+const char version[] = "1.5";
+const char verdate[] = "2023 Jan 06";
 
 volatile int die = 0;
 
@@ -40,31 +40,35 @@ int usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("A Mark5 state counter.  Can use VLBA, Mark3/4, and Mark5B "
-		"formats using the\nmark5access library.\n\n");
-	printf("Usage : %s <infile> <dataformat> <nframes> [<offset>]\n\n", program);
+	printf("A baseband data state counter.  Can use VLBA, Mark3/4, Mark5B and\n");
+	printf("single-thread VDIF or CODIF formats using the mark5access library.\n");
+	printf("Multi-thread VDIF can be handed using the vdifbstate wrapper.\n\n");
+	printf("Usage : %s <infile> <dataformat> <nframes> [<offset> [ {E|O} ] ]\n\n", program);
 	printf("  <infile> is the name of the input file\n\n");
-	printf("  <dataformat> should be of the form: "
-		"<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
+	printf("  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
 	printf("    VLBA1_2-256-8-2\n");
 	printf("    MKIV1_4-128-2-1\n");
 	printf("    Mark5B-512-16-2\n");
 	printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n\n");
 	printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
-	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
+	printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27 ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <nframes> is the number of frames to bstate-erize\n\n");
-	printf("  <offset> is number of bytes into file to start decoding\n\n");
+	printf("  <offset> is number of bytes into file to start decoding [default value is zero]\n\n");
+	printf("  E: Putting an E after the offset parameter causes the program to consider even samples (starting with 0)\n");
+	printf("  O: Putting an O after the offset parameter causes the program to consider odd samples (starting with 0)\n\n");
 
 	return 0;
 }
 
-void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
+void process_realdata(struct mark5_stream *ms, int nframes, int nstates, int evenodd)
+{
   int i, j, k, status, sum;
   long long total, unpacked;
   double x;
-  
+  int start, delta;
+
   int chunk = ms->framesamples;
   int nif = ms->nchan;
 
@@ -72,10 +76,27 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
   long **bstate = (long **)malloc(nif*sizeof(long *));
   /*Haystack gain's calculation*/
   double *gfact = (double *)malloc(nif*sizeof(double));
- 
+  int nBlank = 0;
+
 
 /* a is required for Haystack gain calculation*/
   double a = 8 * (M_PI - 3) / (3 * M_PI * (4 - M_PI));
+
+  switch(evenodd)
+  {
+  case 0x01:
+    start = 0;
+    delta = 2;
+    break;
+  case 0x02:
+    start = 1;
+    delta = 2;
+    break;
+  default:
+    start = 0;
+    delta = 1;
+    break;
+  }
 
   total = unpacked = 0;
 
@@ -93,17 +114,17 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
       bstate[i][j] = 0;
     }
   }
-	  
-	  
+
+
   for(j = 0; j < nframes; j++)
   {
   if(die)
   {
     break;
   }
-	      
+
   status = mark5_stream_decode_double(ms, chunk, data);
-	      
+
   if(status < 0)
   {
     break;
@@ -113,22 +134,21 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
     total += chunk;
     unpacked += status;
   }
-	      
-  if(ms->consecutivefails > 5)
-  {
-    break;
-  }
-	      
-	      
+
+
   for(i = 0; i < nif; i++) 
   {
-		  
-    for(k = 0; k < chunk; k++)
+
+    for(k = start; k < chunk; k+=delta)
     {
       /*       printf("%lf\n", data[i][k]); */
       /* now start to count the states from data[i][k]*/
-		      
-      if (ms->nbit == 1)
+
+      if(data[i][k] == 0)
+      {
+        ++nBlank;
+      }
+      else if (ms->nbit == 1)
       {
 	if (data[i][k] > 0) bstate[i][1]++;
 	if (data[i][k] < 0) bstate[i][0]++;
@@ -143,10 +163,18 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
       
     }
   } 
-	      
+
   }
 
   fprintf(stderr, "%lld / %lld samples unpacked\n", unpacked, total);
+  if(evenodd != 0x03)
+  {
+    fprintf(stderr, "Only the %s samples were examined\n", evenodd == 0x01 ? "EVEN" : "ODD");
+  }
+  if(nBlank > 0)
+  {
+    fprintf(stderr, "%d samples were flagged as invalid and not counted\n", nBlank);
+  }
 
   /* header of the output bstate table based on Haystack bstate output*/
   if (ms->nbit == 1)
@@ -185,8 +213,8 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
     printf("%5.2lf", gfact[i]);  
     printf("\n");
   }
-	  
-	  
+
+
   for(i = 0; i < nif; i++)
   {
     free(data[i]);
@@ -197,11 +225,12 @@ void process_realdata(struct mark5_stream *ms, int nframes, int nstates) {
   free(bstate);
 }
 
-void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
+void process_complexdata(struct mark5_stream *ms, int nframes, int nstates, int evenodd) {
   int i, j, k, status, sum;
   long long total, unpacked;
   double x;
-  
+  int start, delta;
+
   int chunk = ms->framesamples;
   int nif = ms->nchan;
 
@@ -213,6 +242,22 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
 
 /* a is required for Haystack gain calculation*/
   double a = 8 * (M_PI - 3) / (3 * M_PI * (4 - M_PI));
+
+  switch(evenodd)
+  {
+  case 0x01:
+    start = 0;
+    delta = 2;
+    break;
+  case 0x02:
+    start = 1;
+    delta = 2;
+    break;
+  default:
+    start = 0;
+    delta = 1;
+    break;
+  }
 
   total = unpacked = 0;
 
@@ -230,17 +275,17 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
       bstate[i][j] = 0;
     }
   }
-	  
-	  
+
+
   for(j = 0; j < nframes; j++)
   {
     if(die)
       {
 	break;
       }
-	      
+
     status = mark5_stream_decode_double_complex(ms, chunk, cdata);
-	      
+
     if(status < 0)
       {
 	break;
@@ -250,21 +295,16 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
 	total += chunk;
 	unpacked += status;
       }
-    
-    if(ms->consecutivefails > 5)
-      {
-	break;
-      }
-    
-    
+
+
     for(i = 0; i < nif; i++) 
       {
 	
-	for(k = 0; k < chunk; k++)
+	for(k = start; k < chunk; k+=delta)
 	  {
 	    /*       printf("%lf\n", data[i][k]); */
 	    /* now start to count the states from data[i][k]*/
-	    
+
 	    if (ms->nbit == 1)
 	      {
 		if (creal(cdata[i][k]) > 0) bstate[i][1]++;
@@ -286,9 +326,13 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
 	  }
       }
   }    
-   
+
   fprintf(stderr, "%lld / %lld samples unpacked\n", unpacked, total);
-    
+  if(evenodd != 0x03)
+  {
+    fprintf(stderr, "Only the %s samples were examined\n", evenodd == 0x01 ? "EVEN" : "ODD");
+  }
+
   /* header of the output bstate table based on Haystack bstate output*/
   if (ms->nbit == 1)
     {
@@ -298,7 +342,7 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
     {
       printf("\nCh     --       -       +      ++      --       -       +      ++        --      -      +     ++     --      -      +     ++    gfact\n");
     }
-  
+
   /* normalize */
   for(i = 0; i < nif; i++)
     {
@@ -318,7 +362,7 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
 	  printf("%5.1f  ", (float)bstate[i][j]/sum * 100.);
 	}
       /* Haystack gain correction calculation */
-      
+
       x = (double) (bstate[i][1] + bstate[i][2]) / sum;
       gfact[i] = sqrt (-4 / (M_PI * a) - log (1 - x*x)
 		       + 2 * sqrt (pow (2 / (M_PI * a) + log (1 - x*x) / 2, 2)
@@ -326,8 +370,8 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
       printf("%5.2lf", gfact[i]);  
       printf("\n");
     }
-    
-  
+
+
   for(i = 0; i < nif; i++)
     {
       free(cdata[i]);
@@ -341,7 +385,7 @@ void process_complexdata(struct mark5_stream *ms, int nframes, int nstates) {
 void process_8bit_realdata(struct mark5_stream *ms, int nframes) {
   int i, j, k, status;
   long long total, unpacked;
-  
+
   int chunk = ms->framesamples;
   int nif = ms->nchan;
 
@@ -362,17 +406,17 @@ void process_8bit_realdata(struct mark5_stream *ms, int nframes) {
       sum[i] = 0;
       sumsqr[i] = 0;
   }
-	  
-	  
+
+
   for(j = 0; j < nframes; j++)
   {
     if(die)
     {
       break;
     }
-	      
+
     status = mark5_stream_decode_double(ms, chunk, data);
-	      
+
     if(status < 0)
     {
       break;
@@ -382,14 +426,9 @@ void process_8bit_realdata(struct mark5_stream *ms, int nframes) {
       total += chunk;
       unpacked += status;
     }
-	      
-    if (ms->consecutivefails > 5)
-    {
-      break;
-    }
-	      
-	      
-    for (i = 0; i < nif; i++) 
+
+
+    for(i = 0; i < nif; i++) 
     {
       double thissum=0, thissumsqr=0;
       for(k = 0; k < chunk; k++)
@@ -414,7 +453,7 @@ void process_8bit_realdata(struct mark5_stream *ms, int nframes) {
     double stddev = sqrt(sumsqr[i]/total - mean*mean);
     printf("%2d  %.3f  %.4f\n", i, stddev, mean);
   }
-	  
+
   for(i = 0; i < nif; i++)
   {
     free(data[i]);
@@ -425,7 +464,8 @@ void process_8bit_realdata(struct mark5_stream *ms, int nframes) {
 }
 
 
-double std_dev2(double a[], int n) {
+double std_dev2(double a[], int n)
+{
     int i;
     if(n == 0)
         return 0.0;
@@ -441,8 +481,7 @@ double std_dev2(double a[], int n) {
 }
 
 
-int bstate(const char *filename, const char *formatname, int nframes,
-	   long long offset)
+int bstate(const char *filename, const char *formatname, int nframes, long long offset, int evenodd)
 {
 	struct mark5_stream *ms;
 	int nstates;
@@ -483,7 +522,7 @@ int bstate(const char *filename, const char *formatname, int nframes,
 
 
         /* bstate 2nd dim. is either 2 for the 1bit: ++ -- or 4 for the 2 bits ++ + - -- */
-	if (ms->nbit == 8)
+	if(ms->nbit == 8)
 	{
 	  if (docomplex) {
 	    printf("Error: Do not support 8bit complex yet!\n");
@@ -508,10 +547,10 @@ int bstate(const char *filename, const char *formatname, int nframes,
 	    return 0;
 	  }
 
-	  if (docomplex) {
-	    process_complexdata(ms, nframes, nstates);
+	  if(docomplex) {
+	    process_complexdata(ms, nframes, nstates, evenodd);
 	  } else {
-	    process_realdata(ms, nframes, nstates);
+	    process_realdata(ms, nframes, nstates, evenodd);
 	  }
 	}
 
@@ -523,6 +562,7 @@ int bstate(const char *filename, const char *formatname, int nframes,
 int main(int argc, char **argv)
 {
 	long long offset = 0;
+	int evenodd = 0x03;	/* a bit field: 0x01 implies consider even samples, 0x02 for odd */
 	int nframes;
 	struct sigaction new_sigint_action;
 
@@ -554,10 +594,14 @@ int main(int argc, char **argv)
 
 		buffer = malloc(bufferlen);
 
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
-			fprintf(stderr, "Error, buffer read failed.\n");
+			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
+			fclose(in);
+			free(buffer);
+			return -1;
 		}
 		
 		else
@@ -592,8 +636,24 @@ int main(int argc, char **argv)
 	{
 		offset=atoll(argv[4]);
 	}
+	if(argc > 5)
+	{
+		if(strcasecmp(argv[5], "O") == 0)
+		{
+			evenodd = 0x02;
+		}
+		else if(strcasecmp(argv[5], "E") == 0)
+		{
+			evenodd = 0x01;
+		}
+		else
+		{
+			fprintf(stderr, "Error: the even/odd argument must be 'E' or 'O'.\n");
+			return -1;
+		}
+	}
 
-	bstate(argv[1], argv[2], nframes, offset);
+	bstate(argv[1], argv[2], nframes, offset, evenodd);
 
 	return 0;
 }

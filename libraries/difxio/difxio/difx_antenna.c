@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2015 by Walter Brisken                             *
+ *   Copyright (C) 2008-2022 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_antenna.c 9688 2020-08-28 10:18:09Z JanWagner $
+// $Id: difx_antenna.c 10412 2022-03-10 16:25:08Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_antenna.c $
-// $LastChangedRevision: 9688 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-08-28 20:18:09 +1000 (Fri, 28 Aug 2020) $
+// $LastChangedRevision: 10412 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-03-11 03:25:08 +1100 (Fri, 11 Mar 2022) $
 //
 //============================================================================
 
@@ -215,6 +215,7 @@ int isSameDifxAntenna(const DifxAntenna *da1, const DifxAntenna *da2)
 {
 	if((da1->spacecraftId == da2->spacecraftId) &&
 	   strcmp(da1->name, da2->name) == 0 &&
+	   da1->mount == da2->mount &&				/* the Nasmyth side could change during an obs... */
 	   fabs(da1->X - da2->X) < 1.0 &&
 	   fabs(da1->Y - da2->Y) < 1.0 &&
 	   fabs(da1->Z - da2->Z) < 1.0)

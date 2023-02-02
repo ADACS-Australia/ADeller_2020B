@@ -21,11 +21,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: genmachines.py 9674 2020-08-22 21:37:21Z WalterBrisken $
+# $Id: genmachines.py 10829 2022-11-16 15:42:55Z JanWagner $
 # $HeadURL: $
-# $LastChangedRevision: 9674 $
-# $Author: WalterBrisken $
-# $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
+# $LastChangedRevision: 10829 $
+# $Author: JanWagner $
+# $LastChangedDate: 2022-11-17 02:42:55 +1100 (Thu, 17 Nov 2022) $
 #
 #============================================================================
 
@@ -39,7 +39,8 @@ import struct
 import subprocess
 import signal
 import sys
-from optparse import OptionParser
+#from optparse import OptionParser
+import argparse
 from xml.parsers import expat
 from copy import deepcopy
 from ast import literal_eval
@@ -91,25 +92,10 @@ def convertDateString2Mjd(dateStr):
         print('invalid date string', dateStr)
         return datetime(1900, 1, 1, 0, 0)
 
-def getUsage():
-        """
-        Compile usage text for OptionParser
-        """
-        usage = "%prog [options] [<input1> [<input2>] ...]\n"
-        usage += '\n<input> is a DiFX .input file.'
-        usage += '\nA program to find required Mark5 modules and write the machines file'
-        usage += '\nappropriate for a particular DiFX job.'
-        usage += '\n\nNote: %prog respects the following environment variables:'
-        usage +=  '\nDIFX_MACHINES: required, unless -m option is given. -m overrides DIFX_MACHINES.'
-        usage +=  '\nDIFX_GROUP: if not defined a default of %s will be used.' % defaultDifxMessageGroup
-        usage +=  '\nDIFX_PORT: if not defined a default of %s will be used.' % defaultDifxMessagePort
-        usage +=  '\nSee http://cira.ivec.org/dokuwiki/doku.php/difx/clusterdef for documentation on the machines file format'
-        
-        return(usage)
-
 class MessageParser:
     """
-    Parses Mark5StatusMessage and Mark6StatusMessage
+    Parses Mark5StatusMessage and Mark6StatusMessage,
+    as well as multi expansion chassis Mark6SlotStatusMessage
     """
 
     def __init__(self):
@@ -126,6 +112,7 @@ class MessageParser:
         self.sender = 'unknown'
         self.tmp = ''
         self.ok = False
+        self.slot = 0  # mark6SlotStatus provides this
 
     def feed(self, sender, data):
         self._parser.Parse(data, 0)
@@ -136,15 +123,19 @@ class MessageParser:
         del self._parser # get rid of circular references
 
     def start(self, tag, attrs):
-        if tag == 'mark5Status' or tag=='mark6Status':
+        if tag in ['mark5Status', 'mark6Status', 'mark6SlotStatus']:
                 self.type = tag
                 self.ok = True
-    def parseMark6(self,tag):
 
+    def parseMark6(self,tag):
+        # print('parseMark6 tag ', tag, ' value ', self.tmp)
+        self.fields[tag] = self.tmp
+
+    def parseMark6Slot(self,tag):
+        #print('parseMark6Slot tag ', tag, ' value ', self.tmp)
         self.fields[tag] = self.tmp
 
     def parseMark5(self,tag):
-
         if tag == 'bankAVSN' and self.ok:
                 if len(self.tmp) != 8:
                         self.vsnA = 'none'
@@ -159,12 +150,17 @@ class MessageParser:
     def end(self, tag):
         if tag == 'from':
                 self.unit = self.tmp.lower()
-        if tag == 'state' and self.ok:
+        elif tag == 'slot':
+                self.slot = int(self.tmp)
+                self.fields['slot'] = self.slot
+        elif tag == 'state' and self.ok:
                 self.state = self.tmp
-        if self.type == 'mark5Status':
+        elif self.type == 'mark5Status':
                 self.parseMark5(tag)
-        if self.type == 'mark6Status':
+        elif self.type == 'mark6Status':
                 self.parseMark6(tag)
+        elif self.type == 'mark6SlotStatus':
+                self.parseMark6Slot(tag)
 
     def data(self, data):
         self.tmp = data
@@ -174,6 +170,8 @@ class MessageParser:
                 if self.type == 'mark5Status':
                         return [self.unit, self.type, self.vsnA, self.vsnB, self.state, self.sender]
                 elif self.type == 'mark6Status':
+                        return [self.unit, self.type, self.fields, self.state, self.sender]
+                elif self.type == 'mark6SlotStatus':
                         return [self.unit, self.type, self.fields, self.state, self.sender]
         else:
                 return ['unknown', 'none', 'none', 'Unknown', 'unknown']
@@ -270,14 +268,13 @@ def getVsnsByMulticast(maxtime, datastreams, verbose):
                         p.feed(sender, message)
                         info = p.getinfo()
                         p.close()
-                        if info[0] == 'unknown':
+                        srchost, msgtype = info[0], info[1]
+                        if srchost == 'unknown':
                                 continue
-                        if info[0] in machines:
+                        if srchost in machines and msgtype!='mark6SlotStatus':
                                 continue
-                        machines.append(info[0])
-                        results.append(info)
 
-                        if info[1] == "mark5Status":
+                        if msgtype == "mark5Status":
                                 if info[2] in missingVsns and info[3] in missingVsns:
                                         conflicts.append(info)
                                 if info[2] in missingVsns:
@@ -288,22 +285,40 @@ def getVsnsByMulticast(maxtime, datastreams, verbose):
                                         missingVsns.remove(info[3])
                                         if info[4] != 'Idle' and info[4] != 'Close':
                                                 notidle.append(info[3])
-                        elif info[1] == 'mark6Status':
+                        elif msgtype == 'mark6Status':
                                 for key in ['slot1MSN', 'slot2MSN', 'slot3MSN', 'slot4MSN']:
                                         if key in list(info[2].keys()):
                                                 if info[2][key] in missingVsns:
                                                         missingVsns.remove(info[2][key])
-                                                        print('found',info[2][key],'on',info[0])
+                                                        print('found',info[2][key],'on',srchost)
                                                         if not isModuleComplete(key[:5], info[2]):
                                                                 incomplete.append(info[2][key])
+                        elif msgtype == 'mark6SlotStatus':
+                                vsn = info[2]['msn']
+                                rslot = info[2]['slot']
+                                # print ('todo handle mark6SlotStatus for %s of %s ' % (str(info[2]['msn']), list(info[2].keys())) )
+                                if vsn in missingVsns:
+                                        missingVsns.remove(vsn)
+                                        print('found',vsn,'on',srchost)
+                                else:
+                                        continue
+                        else:
+                                print('Ignoring msg ', info)
+                                continue
                                         
+                        machines.append(srchost)
+                        results.append(info)
+
                 except socket.timeout:
                         t += dt
                 except socket.herror:
                         print('Weird: cannot gethostbyaddr for %s' % address[0])
 
-        results.sort()
-        conflicts.sort()
+        #print('final:')
+        #print(results)
+
+        #results.sort() # commented out, can't sort list containing lists of unequal length
+        #conflicts.sort() # -"-
         missingVsns.sort()
         notidle.sort()
         incomplete.sort()
@@ -390,7 +405,7 @@ def getvexantennamodlists(vexobsfile, startTime):
     if not ok:
         exit(1)
     # harmless lack of info
-    if len(antennaModuleList) is 0:
+    if len(antennaModuleList) == 0:
         print("no antennas with mark6 modules found, nothing more to do, exiting")
         exit(0)
     return (experName,antennaModuleList,modList)
@@ -440,7 +455,7 @@ def adjustMark6datastreams(datastreams, inputfile, verbose, startTime):
                         # if antenna found in antenna module list, replace filename with module
                         antmodfound = False
                         for antmod in antennaModuleList:
-                            if ant == antmod[0]:
+                            if ant == antmod[0] and i < msnlen:
                                 antmodfound = True
                                 if antmod[1] not in stream.msn:
                                     if verbose > 0:
@@ -448,6 +463,7 @@ def adjustMark6datastreams(datastreams, inputfile, verbose, startTime):
                                     stream.msn[i] = antmod[1]
                                     i += 1
                                 else:
+                                    ### TODO: tidy this up, altering list (msn.pop(i)) in loop not so good!
                                     stream.msn.pop(i)
                                     msnlen -= 1
                         if antmodfound is False:
@@ -457,6 +473,10 @@ class StartTime:
         def __init__(self):
                 self.days = 0
                 self.seconds = 0
+
+def flatten(lst):
+    """Turn nested lists like [[a,b,c],[d]] into flat [a,b,c,d]"""
+    return [item for sublist in lst for item in sublist]
 
 def getDatastreamsFromInputFile(inputfile, verbose):
         """
@@ -476,7 +496,7 @@ def getDatastreamsFromInputFile(inputfile, verbose):
         for inputLine in input:
                 s = inputLine.split(':')
                 if len(s) < 2:
-                        continue;
+                        continue
                 key = s[0].strip()
                 keyparts = key.split()
                 value = s[1].strip()
@@ -550,7 +570,7 @@ def writethreads(basename, threads):
                 o.write('%d\n' % t)
         o.close()
 
-def writemachines(basename, hostname, results, datastreams, overheadcores, verbose):
+def writemachines(basename, hostname, results, datastreams, overheadcores, verbose, dorankfile=False):
         """
         Write machines file to be used by mpirun
         """
@@ -570,9 +590,9 @@ def writemachines(basename, hostname, results, datastreams, overheadcores, verbo
                         # add trailing /
                         if not url.endswith("/"):
                                 url += "/"
-                        #print "Trying: ", stream.path, url
+                        #print ("Trying: ", stream.path, url)
                         if stream.path.startswith(url):
-                            #print "match: ", stream.path, url
+                            #print ("match: ", stream.path, url)
                             matchNodes.append(node.name)
 
                             if url not in dsBookings:
@@ -594,8 +614,13 @@ def writemachines(basename, hostname, results, datastreams, overheadcores, verbo
 
                 elif len(matchNodes) == 1:
                     dsnodes.append(matchNodes[0])
+                elif args.nocompute:
+                    # Datastream has no unique responsible node, or is blank ie no actual recording
+                    # Under --nocompute mode, arbitrarily assign the first storage node
+                    dsnodes.append((difxmachines.getStorageNodes()[0]).name)
                 else:
-                    # use compute node             
+                    # Datastream has no unique responsible node, or is blank ie no actual recording,
+                    # default to a compute node
                     nodecount = 0
                     for node in difxmachines.getComputeNodes():
                         # skip if already used as datastream node
@@ -627,7 +652,7 @@ def writemachines(basename, hostname, results, datastreams, overheadcores, verbo
             elif stream.type == "MARK6":
                 matchNode = ""  
                 for r in results:
-                    if type(r[2]) is dict:
+                    if r[1] == 'mark6Status' and type(r[2]) is dict:
                         r2msns = [r[2]['slot1MSN'], r[2]['slot2MSN'], r[2]['slot3MSN'], r[2]['slot4MSN']]
                         r2msns = set(r2msns)
                         missingStreamMsn = False
@@ -643,7 +668,14 @@ def writemachines(basename, hostname, results, datastreams, overheadcores, verbo
                             else:
                                 # use message sending host
                                 matchNode = r[4]
-
+                    elif r[1] == 'mark6SlotStatus':
+                            if r[2]['msn'] in flatten(stream.msn):
+                                # print('mark6SlotStatus msn=%s host=%s found in stream.msn=%s' % (r[2]['msn'], r[0], str(flatten(stream.msn))))
+                                if r[0] in difxmachines.getMk6NodeNames():
+                                    matchNode = r[0]
+                                else:
+                                    # use message sending host
+                                    matchNode = r[4]
                 if matchNode in difxmachines.getMk6NodeNames():
                     dsnodes.append(matchNode)
                 else:
@@ -671,8 +703,35 @@ def writemachines(basename, hostname, results, datastreams, overheadcores, verbo
             if node.name in hostname:
                 usedThreads = 1
                 
-            o.write('%s\n' % (node.name))
+            if (args.nocompute == False):
+                o.write('%s\n' % (node.name))
+
             threads.append(node.threads-usedThreads)
+
+        o.close()
+
+        # write optional OpenMPI rank file
+        if dorankfile:
+
+            allnodes = [hostname] + dsnodes + [node.name for node in difxmachines.getComputeNodes()]
+            corecounts = {}
+
+            o = open(basename+'rankfile', 'w')
+        
+            for rank in range(len(allnodes)):
+                node = allnodes[rank]
+                if node not in corecounts:
+                    corecounts[node] = 0
+
+                # Syntax of "physical" rankfiles; need MCA param rmaps_rank_file_physical=1 :
+                o.write('rank %d=%s slot=%d\n' % (rank, node, corecounts[node]))
+
+                # Syntax of "logical" rankfiles;
+                # o.write('rank %d=%s slot=%d:%d\n' % (rank, node, cpusocket, cpucore]))
+
+                corecounts[node] += 1
+
+            o.close()
         
         return threads
 
@@ -694,7 +753,7 @@ def uniqueVsns(datastreams):
         else:
                 return 1
 
-def run(infile, machinesfile, overheadcores, verbose, dothreads, useDifxDb):
+def run(infile, machinesfile, overheadcores, verbose, dothreads, useDifxDb, dorankfile):
         ok = True
 
         # check if host is an allowed headnode
@@ -719,15 +778,18 @@ def run(infile, machinesfile, overheadcores, verbose, dothreads, useDifxDb):
                 print('ERROR: at least one duplicate VSN exists in %s !' % infile)
                 exit(1)
                 
-        results, conflicts, missing, notidle, incomplete = getVsnsByMulticast(5, datastreams, verbose)
+        results, conflicts, missing, notidle, incomplete = getVsnsByMulticast(10, datastreams, verbose)
 
         if verbose > 0:
                 print('Found modules:')
                 for r in results:
-                        if 'mark6' in r[0]:
-                                print('  %-10s : %10s %10s %10s %10s' % (r[0], r[2]['slot1MSN'], r[2]['slot2MSN'], r[2]['slot3MSN'], r[2]['slot4MSN']))
+                        srchost, msgtype = r[0], r[1]
+                        if msgtype == 'mark6Status':
+                                print('  %-10s : %10s %10s %10s %10s' % (srchost, r[2]['slot1MSN'], r[2]['slot2MSN'], r[2]['slot3MSN'], r[2]['slot4MSN']))
+                        elif msgtype == 'mark6SlotStatus':
+                                print('  %-10s : %10s' % (srchost, r[2]['msn']))
                         else:
-                                print('  %-10s : %10s %10s   %s' % (r[0], r[2], r[3], r[4]))
+                                print('  %-10s : %10s %10s   %s' % (srchost, r[2], r[3], r[4]))
 
         if len(conflicts) > 0:
                 ok = False
@@ -755,7 +817,7 @@ def run(infile, machinesfile, overheadcores, verbose, dothreads, useDifxDb):
                         print('  %s' % n)
 
         if len(incomplete) > 0:
-                if options.ignoreIncompleteModules == False:
+                if args.ignoreIncompleteModules == False:
                         ok = False
                 print('Incomplete modules:')
                 for i in incomplete:
@@ -764,7 +826,7 @@ def run(infile, machinesfile, overheadcores, verbose, dothreads, useDifxDb):
         if not ok:
                 return 1
 
-        t = writemachines(basename, hostname, results, datastreams, overheadcores, verbose)
+        t = writemachines(basename, hostname, results, datastreams, overheadcores, verbose, dorankfile)
         
         if len(t) == 0:
                 return 1
@@ -802,37 +864,42 @@ if __name__ == "__main__":
         # catch ctrl+c
         signal.signal(signal.SIGINT, signalHandler)
 
-        usage = getUsage()
+        epilog = '\n\nNote: %(prog)s respects the following environment variables:'
+        epilog +=  '\nDIFX_MACHINES: required, unless -m option is given. -m overrides DIFX_MACHINES.'
+        epilog +=  '\nDIFX_GROUP: if not defined a default of %s will be used.' % defaultDifxMessageGroup
+        epilog +=  '\nDIFX_PORT: if not defined a default of %s will be used.' % defaultDifxMessagePort
+        epilog +=  '\nSee https://www.atnf.csiro.au/vlbi/dokuwiki/doku.php/difx/clusterdef for documentation on the machines file format'
 
-        parser = OptionParser(version=version, usage=usage)
-        parser.add_option("-v", "--verbose", action="count", dest="verbose", default=0, help="increase verbosity level");
-        #parser.add_option("-o", "--overheadcores", dest="overheadcores", type="int", default=1, help="set overheadcores, default = 1");
-        parser.add_option("-m", "--machines", dest="machinesfile", default="", help="use MACHINESFILE instead of $DIFX_MACHINES")
-        parser.add_option("-n", "--nothreads", dest="dothreads", action="store_false", default=True, help="don't write a .threads file")
-        parser.add_option("-d", "--difxdb", dest="usedifxdb", action="store_true", default=False, help="use difxdb to obtain data location")
-        parser.add_option("--ignore-incomplete-module", dest="ignoreIncompleteModules", action="store_true", default=True, help="Proceed even when Mark6 modules are found to be incomplete.")
+        description = 'A program to write the machines file appropriate for a particular DiFX job.'
 
-        (options, args) = parser.parse_args()
+        parser = argparse.ArgumentParser(epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter,description=description)
+  
+        parser.add_argument("-v", "--verbose", action="count", dest="verbose", default=0, help="increase verbosity level");
+        parser.add_argument("-m", "--machines", dest="machinesfile", default="", help="use MACHINESFILE instead of $DIFX_MACHINES")
+        parser.add_argument("-n", "--nothreads", dest="dothreads", action="store_false", default=True, help="don't write a .threads file")
+        parser.add_argument("-d", "--difxdb", dest="usedifxdb", action="store_true", default=False, help="use difxdb to obtain data location")
+        parser.add_argument("-r", "--rankfile", dest="dorankfile", action="store_true", default=False, help="additionally write an OpenMPI rank file")
+        parser.add_argument("--ignore-incomplete-module", dest="ignoreIncompleteModules", action="store_true", default=True, help="Proceed even when Mark6 modules are found to be incomplete.")
+        parser.add_argument("--nocompute", action="store_true", default=False, help="Do not include compute nodes in the .machines file.")
+        parser.add_argument("input",  nargs='+', help= "DiFX inputs file(s)")
+        
+        args = parser.parse_args()
 
-        if len(args) == 0:
-                parser.print_usage()
-                sys.exit(1)
-
-        #overheadcores = options.overheadcores
         overheadcores = 0
-        verbose = options.verbose
-        dothreads = options.dothreads
-        useDifxDb = options.usedifxdb
+        verbose = args.verbose
+        dothreads = args.dothreads
+        useDifxDb = args.usedifxdb
+        dorankfile = args.dorankfile
 
         # assign the cluster definition file
-        if len(options.machinesfile) == 0:
+        if len(args.machinesfile) == 0:
                 try:
                         machinesfile = environ['DIFX_MACHINES']
                 except:
                         print ('DIFX_MACHINES environment has to be set. Use -m option instead')
                         sys.exit(1)
         else:
-                machinesfile = options.machinesfile
+                machinesfile = args.machinesfile
 
 
         # check that cluster definition file exist
@@ -843,7 +910,7 @@ if __name__ == "__main__":
                 umask(2)
 
         # list of input files to process
-        files = args
+        files = args.input
 
         quit = False
         for f in files:
@@ -890,6 +957,6 @@ if __name__ == "__main__":
             exit(1)
         
         for file in files:
-                v = run(file, machinesfile, overheadcores, verbose, dothreads, useDifxDb)
+                v = run(file, machinesfile, overheadcores, verbose, dothreads, useDifxDb, dorankfile)
                 if v != 0:
                         exit(v)

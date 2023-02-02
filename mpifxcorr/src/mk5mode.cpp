@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mk5mode.cpp 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: mk5mode.cpp 10839 2022-11-30 10:46:48Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10839 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-11-30 21:46:48 +1100 (Wed, 30 Nov 2022) $
 //
 //============================================================================
 #include <mpi.h>
@@ -113,6 +113,13 @@ float Mk5Mode::unpack(int sampleoffset, int subloopindex)
   if(usecomplex) 
   {
     goodsamples = mark5_unpack_complex_with_offset(mark5stream, data, unpackstartsamples, (mark5_float_complex**)unpackedcomplexarrays, samplestounpack);
+    if(config->useVGOSComplexVDIFHack())
+    {
+      for(int i = 0; i < mark5stream->nchan; ++i)
+      {
+        vectorConj_cf32_I(unpackedcomplexarrays[i], samplestounpack);
+      }
+    }
   }
   else
   {

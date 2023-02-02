@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input_merge.c 9728 2020-09-19 02:40:01Z LeonidPetrov $
+// $Id: difx_input_merge.c 10579 2022-08-02 10:58:00Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input_merge.c $
-// $LastChangedRevision: 9728 $
-// $Author: LeonidPetrov $
-// $LastChangedDate: 2020-09-19 12:40:01 +1000 (Sat, 19 Sep 2020) $
+// $LastChangedRevision: 10579 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-08-02 20:58:00 +1000 (Tue, 02 Aug 2022) $
 //
 //============================================================================
 
@@ -293,7 +293,6 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, const DifxM
 	D->nOutChan = D1->nOutChan;
 	D->AntPol   = D1->AntPol;
 	D->AllPcalTones = D1->AllPcalTones;
-	D->polxy2hv = D1->polxy2hv;
 	if(D1->visBufferLength > D2->visBufferLength)
 	{
 		D->visBufferLength = D1->visBufferLength;
@@ -340,7 +339,7 @@ DifxInput *mergeDifxInputs(const DifxInput *D1, const DifxInput *D2, const DifxM
 	/* merge DifxBaseline table */
 	D->baseline = mergeDifxBaselineArrays(D1->baseline, D1->nBaseline,
 		D2->baseline, D2->nBaseline, baselineIdRemap,
-		datastreamIdRemap, &(D->nBaseline));
+		datastreamIdRemap, freqIdRemap, &(D->nBaseline));
 
 	/* merge DifxPulsar table */
 	D->pulsar = mergeDifxPulsarArrays(D1->pulsar, D1->nPulsar,

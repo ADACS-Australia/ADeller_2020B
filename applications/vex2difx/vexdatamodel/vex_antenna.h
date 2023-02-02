@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2022 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_antenna.h 8036 2017-10-18 15:09:20Z WalterBrisken $
+ * $Id: vex_antenna.h 10416 2022-03-20 21:38:38Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 8036 $
+ * $LastChangedRevision: 10416 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2017-10-19 02:09:20 +1100 (Thu, 19 Oct 2017) $
+ * $LastChangedDate: 2022-03-21 08:38:38 +1100 (Mon, 21 Mar 2022) $
  *
  *==========================================================================*/
 
@@ -33,28 +33,60 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 #include <difxio.h>
 #include "interval.h"
 #include "vex_clock.h"
 #include "vex_basebanddata.h"
 #include "vex_networkdata.h"
+#include "vex_equipment.h"
+#include "vex_extension.h"
 
 bool isVLBA(const std::string &antName);
 
 class VexAntenna
 {
 public:
-	VexAntenna() : x(0.0), y(0.0), z(0.0), dx(0.0), dy(0.0), dz(0.0), posEpoch(0.0), axisOffset(0.0), tcalFrequency(0) {}
+	// Note: keep the enum and nasmythName in vex_antenna.cpp in sync
+	enum NasmythType
+	{
+		NasmythNone = 0, 
+		NasmythRight, 
+		NasmythLeft,
 
-	double getVexClocks(double mjd, double * coeffs) const;
+		NasmythError		// list terminator / error
+	};
+	static const char nasmythName[][8];
+
+	VexAntenna() : x(0.0), y(0.0), z(0.0), dx(0.0), dy(0.0), dz(0.0), posEpoch(0.0), axisOffset(0.0), tcalFrequency(0), polConvert(false) {}
+
+	double getVexClocks(double mjd, double *coeffs) const;		// This version of the function is deprecated
+	double getVexClocks(double mjd, double *coeffs, int *clockorder, int maxorder) const;
+	bool hasClockModel() const { return (!clocks.empty()); }
 	bool hasData(const Interval &timerange) const;
 	void removeBasebandData(int streamId);
 	bool hasVSNs() const { return !vsns.empty(); }
 	bool isVLBA() const { return ::isVLBA(defName); }
 	void setAntennaPolConvert(bool doConvert) { polConvert = doConvert; }
+	NasmythType getNasmyth(const std::string &bandLink) const;
 
-	std::string name;
-	std::string defName;	// Sometimes names get changed
+	const VexEquipment *getEquipment(const std::string &link) const;
+	// the following will return false if no equipment with the given link exists
+	bool addEquipmentSettings(const std::string &link, const std::string &function, const std::vector<std::string> &values);
+	bool addEquipmentInfo(const std::string &link, const std::string &name, const std::vector<std::string> &values);
+	// the following return true if an RDBE or VNDA system (respectively) is present
+	bool hasEquipmentRDBE() const;
+	bool hasEquipmentVNDA() const;
+	// the following look for exact (but case independent) matches of device (and type for second case)
+	bool hasEquipment(const std::string &device) const;
+	bool hasEquipment(const std::string &type, const std::string &device) const;
+
+	std::string name;		// Deprecated
+	std::string defName;		// if name != defName, things may be very confused...
+	std::string difxName;		// Name to be used in difx
+	std::string twoCharSiteCode;	// Not likely used...
+	std::string oneCharSiteCode;	// Used by mark4 data processing path; set to NULL if not provided
+	std::string siteName;
 
 	double x, y, z;		// (m) antenna position in ITRF
 	double dx, dy, dz;	// (m/sec) antenna velocity
@@ -69,7 +101,18 @@ public:
 	std::vector<VexBasebandData> vsns;	// indexed by vsn number
 	std::vector<VexBasebandData> files;	// indexed by file number
 	std::vector<VexNetworkData> ports;	// indexed by stream number
+
+	std::vector<VexEquipment> equipment;	// relevant infom from $DAS block
+	
+	std::vector<VexExtension> extensions;	// extensions linked from $STATION block
+
+	std::map<std::string, NasmythType> nasmyth;	// maps band link to nasmyth type; default to NasmythNone if not found
+
+	// Some antenna/site things that are not based on vex parameters (but could be carried as an extension)
+
 };
+
+VexAntenna::NasmythType stringToNasmyth(const std::string &platform);
 
 bool usesCanonicalVDIF(const std::string &antName);
 

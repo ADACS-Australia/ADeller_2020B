@@ -13,6 +13,7 @@
 /* Refactored into subroutines                    2014.7.30  rjc        */
 /************************************************************************/
 #include "mk4_data.h"
+#include "mk4_dfio.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -20,6 +21,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <string.h>
+#include "msg.h"
 #include "pass_struct.h"
 #include "ovex.h"
 
@@ -35,24 +37,37 @@ int make_postplot (struct scan_struct *root,
     {
     extern char *sprint_char_arr();
     struct stat file_status;
-    struct tm *gmtime();
-    int nb, fd, size, filesize;
+    int fd;
+    size_t nb, size, filesize;
     int rc;
     FILE *fp;
     char *pplot, *showpage, *end, trailer[1024];
     static char ps_file[1024];
     double tickinc;
+
+    extern int generate_graphs (struct scan_struct*,
+                         struct type_pass*,
+                         char*,
+                         char*,
+                         double*);
+
+    extern void generate_text (struct scan_struct*,
+                        struct type_pass*,
+                        char*,
+                        char*,
+                        double);
+
                                         /* Create a temporary file to hold */
                                         /* the postscript output */
     strcpy(ps_file, P_tmpdir "/fourfit_XXXXXX");
     close(mkstemp(ps_file));
     msg ("Temporary postscript filename = '%s'", 0, ps_file);
-    
+
                                         // insert graphs into postscript file image
     rc = generate_graphs (root, pass, fringename, ps_file, &tickinc);
     if (rc)
         {
-        msg ("error generating fringe plot graphs");
+        msg ("error generating fringe plot graphs",0);
         return (-1);
         }
                                         /* Now need to read in the resulting */
@@ -76,7 +91,7 @@ int make_postplot (struct scan_struct *root,
         }
     filesize = file_status.st_size;
                                         /* Add 50,000 to allow for text */
-    size = filesize + 50000;
+    size = filesize + (size_t)50000;
                                         /* Allocate memory for type_221 record */
     if ((*t221 = (struct type_221 *)malloc (size)) == NULL)
         {
@@ -97,7 +112,7 @@ int make_postplot (struct scan_struct *root,
                                         /* Did it go OK? */
     if (nb != filesize)
         {
-        msg ("Error, expected %d bytes, read %d bytes", 2, filesize, nb);
+        msg ("Error, expected %zu bytes, read %zu bytes", 2, filesize, nb);
         return (-1);
         }
                                         /* Tidy up */

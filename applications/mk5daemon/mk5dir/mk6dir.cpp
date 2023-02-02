@@ -17,6 +17,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -27,11 +28,19 @@
 #include <mark6gather_vdif.h>
 #include <difxmessage.h>
 #include "config.h"
+#include <sys/time.h>
+
+#define READBUF_SIZE 100000
+#define MAX_SLOTS 6 // standard Mark6 *recorder* config is 4 module slots, playback can have multiple expansion chassis and thus more slots (6, 8, ...)
+#define MAX_DISKS_PER_SLOT 8
 
 const char program[] = "mk6dir";
 const char author[]  = "Mark Wainright <mwainrig@nrao.edu>";
 const char version[] = "0.2";
 const char verdate[] = "20190604";
+
+unsigned char readbuf[READBUF_SIZE];
+time_t t1, t2;
 
 // FIXME: module groups are not supported; use VSN of specified slot, but look up groups in '/mnt/disks/.meta/<slot>/*/group', pass those slots as integer 1/2/3/4/12/34/1234 to processMark6ScansSlot()
 
@@ -62,84 +71,204 @@ static void usage(const char *pgm)
 	printf("                        and output mark6 activity difxmessage\n\n");
 }
 
+
 void summarizeFile(const char *fileName, const char* filePattern, char *vsn, char activityMsg, char verbose, int fileidx, int numfiles, FILE *summaryFile)
 {
-	struct vdif_file_summary sum;
-	struct mark5b_file_summary sum5b;
-	int r;
-	const int MaxFilenameLength = 512;
-	double mjd1, mjd2;
-	char fullFileName[MaxFilenameLength];
+    uint64_t filesize;
+    uint64_t datasize = 0;
+    uint64_t blocksize;
+    uint64_t maxblocksize;
+    int packetformat;
+    int packetsize;
+    int m6headersize;
+    int m6blockheadersize;
+    uint64_t numblocks;
+    uint64_t datasizeinfile;
+    struct vdif_file_summary sum;
+    struct mark5b_file_summary sum5b;
+    int r, i, j, rv, N;
+    const int MaxFilenameLength = 512;
+    double mjd1, mjd2;
+    double mjdstart, mjdend;
+    char fullFileName[MaxFilenameLength];
+    char pattern[256];
+    char *diskIndex;
+    FILE *fp;
+    struct stat st;
+    unsigned char *p;
+    Mark6Header *m6header;
+    struct vdif_header *vdifhdr, *vh0;
 
-	r = summarizemark5bmark6(&sum5b, filePattern);
+    mjdstart = 0;
+    mjdend = 0;
+    r = 0;
 
-	if(r == 0)
-	{
-		mark5bfilesummaryfixmjdtoday(&sum5b);
-		mjd1 = mark5bfilesummarygetstartmjd(&sum5b) + (sum5b.startSecond % 86400)/86400.0;
-		if(sum5b.endSecond < sum5b.startSecond)
+    strcpy(pattern, filePattern);
+    diskIndex = strchr(pattern, '*');
+
+    m6headersize = sizeof(Mark6Header);
+
+    // open all the files
+    for(i = 0; i < MAX_DISKS_PER_SLOT; i++)
+    {
+        diskIndex[0] = '0' + i;
+        fp = fopen(pattern, "r");
+        if(fp)
+        {
+            fread(readbuf, 1, READBUF_SIZE, fp);
+            m6header = (Mark6Header*)readbuf;
+            maxblocksize = m6header->block_size;
+            packetformat = m6header->packet_format;
+	    packetsize = m6header->packet_size;
+	    m6blockheadersize = mark6BlockHeaderSize(m6header->version);
+            stat(pattern, &st);
+                
+            mjd1 = 0;
+            mjd2 = 0;
+            // mark5b format
+            if(packetformat == 1)
+            {
+                r = determinemark5bframeoffset(readbuf, READBUF_SIZE);
+		if(r >= 0)
 		{
-			sum5b.endSecond += 86400;
+                    // get start day and second
+                    p = readbuf + r;
+                    sum5b.startDay = (p[11] >> 4)*100 + (p[11] & 0x0F)*10 + (p[10] >> 4);
+                    sum5b.startSecond = (p[10] & 0x0F)*10000 + (p[9] >> 4)*1000 + (p[9] & 0x0F)*100 + (p[8] >> 4)*10 +  (p[8] & 0x0F);
+                    mark5bfilesummaryfixmjdtoday(&sum5b);
+                    mjd1 = sum5b.startDay + (sum5b.startSecond % 86400)/86400.0;
+
+                    // get end day and second
+                    rv = fseeko(fp, st.st_size - READBUF_SIZE, SEEK_SET);
+                    if(rv == 0)
+                    {
+                        rv = fread(readbuf, 1, READBUF_SIZE, fp);
+                        r = determinelastmark5bframeoffset(readbuf, READBUF_SIZE);
+                        p = readbuf + r;
+                        sum5b.endSecond = (p[10] & 0x0F)*10000 + (p[9] >> 4)*1000 + (p[9] & 0x0F)*100 + (p[8] >> 4)*10 +  (p[8] & 0x0F);
+                        if(sum5b.endSecond < sum5b.startSecond)
+                        {
+                            sum5b.endSecond += 86400;
+                        }
+                        mjd2 = mjd1 + (sum5b.endSecond - sum5b.startSecond + 1)/86400.0;
+                    }
 		}
-		mjd2 = mjd1 + (sum5b.endSecond - sum5b.startSecond + 1)/86400.0;
+            }
+            // vdif format
+            else if(packetformat == 0)
+            {
+                sum.frameSize = packetsize;
+                r = determinevdifframeoffset(readbuf, READBUF_SIZE, packetsize);
+                if(r >= 0)
+                {
+                    // get start day and second
+                    vdifhdr = (vdif_header*)(readbuf + r);
+                    sum.epoch = getVDIFEpoch(vdifhdr);
+                    sum.startSecond = getVDIFFrameEpochSecOffset(vdifhdr);
+                    sum.endSecond = sum.startSecond;
+                    sum.nBit = getVDIFBitsPerSample(vdifhdr);
+                    mjd1 = vdiffilesummarygetstartmjd(&sum) + (sum.startSecond % 86400)/86400.0;
 
-		snprintf(fullFileName, MaxFilenameLength, "%s", fileName);
-		if(verbose)
-		{
-			printf("File %s is mark5b\n", filePattern);
-			printf("%s %14.8f %14.8f - %4d of %d\n", fullFileName, mjd1, mjd2, fileidx + 1, numfiles);
+                    // get end day and second
+                    rv = fseeko(fp, st.st_size - READBUF_SIZE, SEEK_SET);
+                    if(rv == 0)
+                    {
+                        rv = fread(readbuf, 1, READBUF_SIZE, fp);
+                        r = determinevdifframeoffset(readbuf, READBUF_SIZE, packetsize);
+                        vh0 = (struct vdif_header *)(readbuf + r);
+                        N = READBUF_SIZE - packetsize - VDIF_HEADER_BYTES;
+
+                        for(j = 0; j < N; )
+                        {
+                            struct vdif_header *vh;
+                            int s;
+
+                            vh = (struct vdif_header *)(readbuf + j);
+                            s = getVDIFFrameEpochSecOffset(vh);
+
+                            if(getVDIFFrameBytes(vh) == packetsize &&
+                                getVDIFEpoch(vh) == sum.epoch &&
+                                getVDIFBitsPerSample(vh) == sum.nBit &&
+                                !getVDIFFrameInvalid(vh) &&
+                                abs(s - getVDIFFrameEpochSecOffset(vh0)) < 2)
+                            {
+			        if(s > sum.endSecond)
+			        {
+                                    sum.endSecond = s;
+                                }
+			            j += packetsize;
+                            }
+                            else
+                            {
+                                /* Not a good frame. */
+                                ++j;
+                            }
+                        }
+                        if(sum.endSecond < sum.startSecond)
+                        {
+                            sum.endSecond += 86400;
+                        }
+                        mjd2 = mjd1 + (sum.endSecond - sum.startSecond + 1)/86400.0;
+                    }
 		}
-		if(activityMsg)
-		{
-			DifxMessageMark6Activity m6activity;
-			memset(&m6activity, 0, sizeof(m6activity));
+            }
 
-			m6activity.state = MARK6_STATE_GETDIR;
-			strcpy(m6activity.activeVsn, vsn);
-			strcpy(m6activity.scanName, fullFileName);
-			// send percent complete in last 3 digits and file index in preceding digits
-			m6activity.position = (((fileidx + 1) * 100) / numfiles) + 1000 * (fileidx + 1);
-			m6activity.dataMJD = mjd1;
+            if(mjdstart == 0.0 && mjd1 > 0.0)
+	    {
+	        mjdstart = mjd1;
+	    }
+	    else if(mjd1 < mjdstart)
+	    {
+	        mjdstart = mjd1;
+	    }
+            if(mjdend == 0.0 && mjd2 > 0.0)
+	    {
+	        mjdend = mjd2;
+	    }
+	    else if(mjd2 > mjdend)
+	    {
+	        mjdend = mjd2;
+	    }
 
-			difxMessageSendMark6Activity(&m6activity);
-		}
-		fprintf(summaryFile, "%s %14.8f %14.8f %Ld\n", fullFileName, mjd1, mjd2, sum5b.fileSize);
-		return;
-	}
+            stat(pattern, &st);
+            filesize = st.st_size;
+	    blocksize = maxblocksize - ((maxblocksize - m6blockheadersize) % packetsize);
+	    numblocks = (filesize - m6headersize) / blocksize;
+	    if(((filesize - m6headersize) % blocksize) != 0)
+	    {
+	        numblocks += 1;
+	    }
+	    datasizeinfile = filesize - m6headersize - (m6blockheadersize * numblocks);
+            datasize += datasizeinfile;
+            fclose(fp);
+        }
+    }
 
-	r = summarizevdifmark6(&sum, filePattern, 0);
+    snprintf(fullFileName, MaxFilenameLength, "%s", fileName);
+    if(verbose)
+    {
+        printf("File %s\n", filePattern);
+        printf("%s %14.8f %14.8f - %4d of %d\n", fullFileName, mjdstart, mjdend, fileidx + 1, numfiles);
+    }
+    t2 = time(0);
+    // send activity every 2 seconds
+    if(activityMsg && ((t2 > t1 + 2) || (fileidx + 1 == numfiles)))
+    {
+        t1 = t2;
+        DifxMessageMark6Activity m6activity;
+        memset(&m6activity, 0, sizeof(m6activity));
 
-	if(r < 0)
-	{
-		fprintf(stderr, "File %s VDIF summary failed with return value %d\n\n", filePattern, r);
-	}
-	else
-	{
-		mjd1 = vdiffilesummarygetstartmjd(&sum) + (sum.startSecond % 86400)/86400.0;
-		mjd2 = mjd1 + (sum.endSecond - sum.startSecond + 1)/86400.0;
+        m6activity.state = MARK6_STATE_GETDIR;
+        strcpy(m6activity.activeVsn, vsn);
+        strcpy(m6activity.scanName, fullFileName);
+        // send percent complete in last 3 digits and file index in preceding digits
+        m6activity.position = (((fileidx + 1) * 100) / numfiles) + 1000 * (fileidx + 1);
+        m6activity.dataMJD = mjdstart;
 
-		snprintf(fullFileName, MaxFilenameLength, "%s", fileName);
-		if(verbose)
-		{
-			printf("File %s is vdif\n", filePattern);
-			printf("%s %14.8f %14.8f - %4d of %d\n", fullFileName, mjd1, mjd2, fileidx + 1, numfiles);
-		}
-		if(activityMsg)
-		{
-			DifxMessageMark6Activity m6activity;
-			memset(&m6activity, 0, sizeof(m6activity));
+        difxMessageSendMark6Activity(&m6activity);
+    }
+    fprintf(summaryFile, "%s %14.8f %14.8f %lu\n", fullFileName, mjdstart, mjdend, datasize);
 
-			m6activity.state = MARK6_STATE_GETDIR;
-			strcpy(m6activity.activeVsn, vsn);
-			strcpy(m6activity.scanName, fullFileName);
-			// send percent complete in last 3 digits and file index in preceding digits
-			m6activity.position = (((fileidx + 1) * 100) / numfiles) + 1000 * (fileidx + 1);
-			m6activity.dataMJD = mjd1;
-
-			difxMessageSendMark6Activity(&m6activity);
-		}
-		fprintf(summaryFile, "%s %14.8f %14.8f %Ld\n", fullFileName, mjd1, mjd2, sum.fileSize);
-	}
 }
 
 void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, const char *mk5dirpath)
@@ -147,14 +276,17 @@ void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, 
 	char **fileList;
 	int n;
 	char summaryFilePath[256];
+	char *tempSummaryFilePath;
 	char filePattern[256];
 	FILE *summaryFile;
-	
+
 	sprintf(summaryFilePath, "%s/%s.filelist", mk5dirpath, vsn);
-	summaryFile = fopen(summaryFilePath, "w");
+	tempSummaryFilePath = tempnam(mk5dirpath, "m6d_"); // note: tempnam() in final directory, otherwise rename() can fail with err 18 'Invalid cross-device link'
+	summaryFile = fopen(tempSummaryFilePath, "w");
 	if(!summaryFile)
 	{
-		fprintf(stderr, "mk6dir in processMark6ScansSlot() could not open summaryFile %s!\n", summaryFilePath);
+		fprintf(stderr, "mk6dir in processMark6ScansSlot() could not open temporary summaryFile %s!\n", tempSummaryFilePath);
+		free(tempSummaryFilePath);
 		return;
 	}
 	setbuf(summaryFile, NULL);
@@ -174,6 +306,7 @@ void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, 
 	{
 		int i;
 
+		t1 = 0;
 		for(i = 0; i < n; ++i)
 		{
 			memset(filePattern, 0x00, sizeof(filePattern));
@@ -189,6 +322,14 @@ void processMark6ScansSlot(int slot, char *vsn, char activityMsg, char verbose, 
 	}
 
 	fclose(summaryFile);
+
+	n = rename(tempSummaryFilePath, summaryFilePath);
+	if (n != 0)
+	{
+		fprintf(stderr, "mk6dir in processMark6ScansSlot() failed to move temp file %s to final %s: %s\n", tempSummaryFilePath, summaryFilePath, strerror(errno));
+	}
+
+	free(tempSummaryFilePath);
 }
 
 int getSlot(char *vsn)
@@ -197,9 +338,9 @@ int getSlot(char *vsn)
 	FILE *fp;
 	char line[9];
 
-	for(int j = 1; j <= 4; j++)
+	for(int j = 1; j <= MAX_SLOTS; j++)
 	{
-		for(int i = 0; i < 8; i++)
+		for(int i = 0; i < MAX_DISKS_PER_SLOT; i++)
 		{
 			sprintf(path, "/mnt/disks/.meta/%d/%d/eMSN", j, i);
 			fp = fopen(path, "r");
@@ -232,7 +373,7 @@ int getVSN(int slot, char *vsn)
 	FILE *fp;
 	char line[9];
 
-	for(int i = 0; i < 8; i++)
+	for(int i = 0; i < MAX_DISKS_PER_SLOT; i++)
 	{
 		sprintf(path, "/mnt/disks/.meta/%d/%d/eMSN", slot, i);
 		fp = fopen(path, "r");
@@ -310,7 +451,7 @@ int main(int argc, char **argv)
 			{
 				catalogState = 1;
 			}
-			else if(strlen(argv[a]) == 1 && atoi(argv[a]) >= 1 && atoi(argv[a]) <= 4)
+			else if(strlen(argv[a]) == 1 && atoi(argv[a]) >= 1 && atoi(argv[a]) <= MAX_SLOTS)
 			{
                                 slot = atoi(argv[a]);
 
@@ -378,7 +519,7 @@ int main(int argc, char **argv)
 			}
 		}
 	}
-
+	
 	return 0;
 }
 

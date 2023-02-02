@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: visibility.h 7249 2016-02-24 10:43:39Z AdamDeller $
+// $Id: visibility.h 10579 2022-08-02 10:58:00Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/visibility.h $
-// $LastChangedRevision: 7249 $
-// $Author: AdamDeller $
-// $LastChangedDate: 2016-02-24 21:43:39 +1100 (Wed, 24 Feb 2016) $
+// $LastChangedRevision: 10579 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-08-02 20:58:00 +1000 (Tue, 02 Aug 2022) $
 //
 //============================================================================
 #ifndef VISIBILITY_H
@@ -194,9 +194,10 @@ private:
   bool first, pulsarbinon, configuredok;
   int portnum;
   char * hostname;
-  cf32 ** autocorrcalibs;
-  f32 *** autocorrweights;
-  f32 **** baselineweights;
+  cf32 ** autocorrcalibs;	//[numdatastreams][numzoombands+numrecbands] - mean autocorr of a band
+  f32 *** autocorrweights;	//[numdatastreams][autocorrwidth 1|2][numzoombands+numrecbands]
+  int **** baselineweightcounts; //[numbaselines][freqtablelength][numbins][baseline::numpolproducts<[baseline::numfreqs]>]
+  f32 **** baselineweights;	//[numbaselines][freqtablelength][numbins][baseline::numpolproducts<[baseline::numfreqs]>]
   f32 ***  baselineshiftdecorrs;
   std::string * telescopenames;
   cf32 * results;

@@ -1,6 +1,10 @@
 #!/usr/bin/python2
+# NB: using Python2 because the extremely convenient JIVE 'vex.py' module utilized
+# here is based on MultiDict+lex+yacc and is not readily portable to python3 :-(
 '''
-Usage: plotVexChannels.py <vexfile.vex|.vex.obs> [<v2dfile.v2d>] [<freqName> <freqName> ...]
+Usage: plotVexChannels.py <vexfile.vex|.vex.obs> 
+                          [<v2dfile.v2d>] [<jobfile.input>]
+                          [<freqName> <freqName> ...]
 
 Plots a sky frequency view of all channels in the $FREQ blocks of
 the specified VEX file. The $FREQ blocks to be displayed can be
@@ -13,6 +17,10 @@ it does not currently utilize the chan_def channel tags such as &CH01.
 
 If a v2d file is specified and contains ZOOM band definitions, the
 respective zoom frequency ranges will be shown underlaid in the plot.
+
+If a DiFX .input file is specified, the frequencies of all visibility
+data records to be produced according to the BASELINE table are shown
+underlaid in the plot in light-green.
 '''
 
 import math, fractions, os, re, sys
@@ -27,11 +35,17 @@ except:
 	print('plotVexChannels could not find Python matplotlib, or X11 is not available. Exiting.')
 	sys.exit(1)
 
+try:
+	import parseDiFX
+	gotParseDiFX = True
+except:
+	gotParseDiFX = False
+
 
 __title__ = "plotVexChannels - A graphical overview of channels in a VEX file"
 __author__ = "Jan Wagner"
 __license__ = "GNU GPL v3"
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __copyright__ = "(C) 2020 by Jan Wagner, MPIfR"
 
 
@@ -152,7 +166,6 @@ class ZoomFreqs:
 		n = 0
 
 		currZoomBlock = ''
-		channelList = []
 
 		for line in lines:
 			if line.startswith("ZOOM"):
@@ -169,6 +182,61 @@ class ZoomFreqs:
 		self.zoomBlockNames = self.zoomBlocks.keys()
 
 
+class OutputbandFreqs:
+
+	def __init__(self, verbosity=0):
+		self.verbosity = verbosity
+		self.clear()
+
+	def clear(self):
+		self.outputFreqs = []
+		self.outputLowestFreq = 1e99
+
+	def loadInput(self, inputfilename):
+		"""Gather all baseline-outputted frequencies listed in the .input file"""
+
+		if not gotParseDiFX:
+			print ('No parseDiFX library found, cannot process %s' % (inputfilename))
+			return
+
+		difx = parseDiFX.DiFXFile(inputfile)
+		if not difx.isvalid():
+			print("Could not parse input file %s correctly, skipping it." % (inputfilename))
+			return
+
+		cfg = difx.metainfo
+		nfreqs, freqs = cfg.determine_outputfreqs()
+		freqs.sort()
+		for fq in freqs:
+			fqEntry = VexFreq(cfg.freqs[fq].low_edge(), cfg.freqs[fq].high_edge(), +1 if cfg.freqs[fq].lsb else -1)
+			self.outputFreqs.append(fqEntry)
+			self.outputLowestFreq = min(self.outputLowestFreq, fqEntry.flow)
+
+	def loadV2D(self, v2dfilename):
+		"""Add all outputbands from SETUP section of a v2d file"""
+
+		f = open(v2dfilename, 'r')
+		lines = f.readlines()
+		f.close()
+
+		lines = [line.split('#')[0].strip() for line in lines]
+		lines = [re.sub('\s+',' ',line).strip() for line in lines]
+		lines = [line for line in lines if len(line)>0]
+		print('OutputbandFreqs::loadV2D')
+		print(lines)
+
+		for line in lines:
+			#if line.startswith("SETUP"):
+			# ...
+			if 'addOutputBand' in line and 'freq@' in line:
+				r = line.find('freq@')
+				args = re.split(r'[@/]', line[r:])  # example: ['freq', '86268.000000', 'bw', '32.000000']
+				print('added v2d outputband with args %s' % (str(args)))
+				fqEntry = VexFreq(float(args[1]), float(args[1])+float(args[3]), +1)
+				self.outputFreqs.append(fqEntry)
+				self.outputLowestFreq = min(self.outputLowestFreq, fqEntry.flow)
+
+
 class Charting:
 
 	def __init__(self, verbosity=0):
@@ -176,6 +244,7 @@ class Charting:
 
 
 	def plotFreqchannelWedge(self, ax, yy, height, channelID, channel, color=[109.0/255,155.0/255,194.0/255]):
+		"""Plots a channel:VexFreq in graphical style of a frequency band, as a slanted (USB/LSB) wedge"""
 
 		bw = channel.fhigh-channel.flow
 		hh = height/2
@@ -198,12 +267,22 @@ class Charting:
 
 
 	def plotZoomChannelBar(self, ax, ymin, ymax, channel, color=[255.0/255,152.0/255,143.0/255]):
+		"""Plots a channel:VexFreq in graphical style of zoom band"""
+
 		x = [channel.flow, channel.fhigh, channel.fhigh, channel.flow]
 		y = [ymin, ymin, ymax, ymax]
 		ax.add_patch(patches.Polygon(xy=zip(x,y), fill=True, edgecolor='white', facecolor=color, alpha=0.3))
 
 
-	def visualize(self, vexChannels, zoomChannels=None, fqNameSubset=None):
+	def plotOutputbandBar(self, ax, ymin, ymax, channel, color=[0.0/255,152.0/255,143.0/255]):
+		"""Plots a channel:VexFreq in graphical style of an visibility data output band"""
+
+		x = [channel.flow, channel.fhigh, channel.fhigh, channel.flow]
+		y = [ymin, ymin, ymax, ymax]
+		ax.add_patch(patches.Polygon(xy=zip(x,y), fill=True, edgecolor='black', facecolor=color, alpha=0.1))
+
+
+	def visualize(self, vexChannels, zoomChannels=None, outputBands=None, fqNameSubset=None):
 
 		allFreqs = vexChannels.freqBlockNames
 		wedgeheight = 0.5	# height of USB/LSB direction wedge in plot
@@ -224,6 +303,7 @@ class Charting:
 		if numFreqs < 1:
 			print("No frequency blocks were plotted out of %s" % (str(allFreqs)))
 			return
+		print("Showing VEX $FREQ blocks %s" % (str(selectedFreqs)))
 
 		# Colors
 		fig, ax = plt.subplots()
@@ -237,7 +317,14 @@ class Charting:
 				zooms = zoomChannels.zoomBlocks[zoomblock]
 				for zoom_nr in range(0,len(zooms)): 
 					self.plotZoomChannelBar(ax, ymin, ymax, zooms[zoom_nr])
-				ax.text(zoomChannels.zoomBlockLowestFreq[zoomblock], ymin+0.5, 'v2d ZOOM "' + str(zoomblock) + '"', fontsize=10, alpha=0.8)
+				ax.text(zoomChannels.zoomBlockLowestFreq[zoomblock], ymin+0.25, 'v2d ZOOM "' + str(zoomblock) + '"', fontsize=10, alpha=0.8)
+
+		# Outputbands; generally identical to zooms
+		if outputBands:
+			ofreqs = outputBands.outputFreqs
+			for outputband_nr in range(len(ofreqs)):
+				self.plotOutputbandBar(ax, ymin, ymax, ofreqs[outputband_nr])
+
 
 		# VEX channels
 		ylevel = 1
@@ -284,11 +371,14 @@ if __name__ == "__main__":
 	subset = []
 	v2dfile = None
 	vexfile = None
+	inputfile = None
 	for n in range(1,len(sys.argv)):
 		if sys.argv[n].endswith('.vex.obs') or sys.argv[n].endswith('.vex'):
 			vexfile = sys.argv[n]
 		elif sys.argv[n].endswith('.v2d'):
 			v2dfile = sys.argv[n]
+		elif sys.argv[n].endswith('.input'):
+			inputfile = sys.argv[n]
 		else:
 			subset.append(sys.argv[n])
 
@@ -306,12 +396,16 @@ if __name__ == "__main__":
 	# Containers
 	vx = VexChannels(verbosity=0)
 	zf = ZoomFreqs(verbosity=0)
+	ob = OutputbandFreqs(verbosity=0)
 	chart = Charting(verbosity=4)
 
 	# Load vex file and v2d file if any
 	vx.loadVEX(vexfile)
 	if v2dfile:
 		zf.loadV2D(v2dfile)
+		ob.loadV2D(v2dfile)
+	if inputfile:
+		ob.loadInput(inputfile)
 
 	# Plot
-	chart.visualize(vx, zoomChannels=zf, fqNameSubset=subset)
+	chart.visualize(vx, zoomChannels=zf, outputBands=ob, fqNameSubset=subset)

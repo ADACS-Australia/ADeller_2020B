@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_clock.cpp 7208 2016-01-26 15:37:10Z WalterBrisken $
+ * $Id: vex_clock.cpp 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 7208 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2016-01-27 02:37:10 +1100 (Wed, 27 Jan 2016) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -31,7 +31,17 @@
 
 std::ostream& operator << (std::ostream &os, const VexClock &x)
 {
-	os << "Clock(" << x.mjdStart << ": " << x.offset << ", " << x.rate << ", " << x.offset_epoch << ")";
+	os << "Clock(" << x.mjdStart << ": " << x.offset << ", " << x.rate;
+	if(x.accel != 0.0 || x.jerk != 0.0)
+	{
+		os << ", " << x.accel;
+	}
+	if(x.jerk != 0.0)
+	{
+		os << ", " << x.jerk;
+	}
+	
+	os << ", " << x.offset_epoch << ")";
 
 	return os;
 }

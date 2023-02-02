@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: old_filelist.cpp 7763 2017-05-16 18:18:27Z WalterBrisken $
+// $Id: old_filelist.cpp 10629 2022-09-13 13:36:01Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 7763 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:18:27 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 10629 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-09-13 23:36:01 +1000 (Tue, 13 Sep 2022) $
 //
 //============================================================================
 
@@ -85,7 +85,7 @@ int loadOldFileList(DirList &D, const char *fileName, std::stringstream &error)
 		ok = DD->setFromOldFileListString(line);
 		if(!ok)
 		{
-			error << "Directory file: " << fileName << " is corrupt: at least one scan line is invalid.\n";
+			error << "Directory file: " << fileName << " is corrupt: at least one scan line is invalid (scan " << s+1 << ", '" << line << "').\n";
 			fclose(in);
 
 			return -1;

@@ -10,23 +10,24 @@
 /************************************************************************/
 #include <stdio.h>
 #include <math.h>
-#include <complex.h>
 #include <string.h>
+#include "msg.h"
+#include "hops_complex.h"
 #include "mk4_data.h"
 #include "pass_struct.h"
 #include "param_struct.h"
 #include "control.h"
 #include "statistics.h"
 #include "filter.h"
-
+//#include "ff_misc_if.h"
 
 int
 compute_qf (
 struct type_pass *pass,
 struct type_param *param,
 struct type_status *status,
-char *qcode, 
-char *errcode, 
+char *qcode,
+char *errcode,
 char *tape_qcode)
     {
     int i, qf, missing_track, low_chan, low_pcal[2], e_code;
@@ -47,24 +48,24 @@ char *tape_qcode)
     low_pcal[0] = low_pcal[1] = FALSE;
     for (i=0; i<pass->nfreq; i++)
         {
-                                        /* Both sidebands must be absent to 
+                                        /* Both sidebands must be absent to
                                            cause a D-code */
         if ((status->ap_num[0][i] == 0) && (status->ap_num[1][i] == 0))
             missing_track = TRUE;
-        if (cabs (status->fringe[i]) < (param->weak_channel * status->inc_avg_amp_freq))
+        if (abs_complex(status->fringe[i]) < (param->weak_channel * status->inc_avg_amp_freq))
             low_chan = TRUE;
                                         /* re-enable the following test;
-                                         * change threshold units  rjc 2001.10.25 
+                                         * change threshold units  rjc 2001.10.25
                                          * also mark high amp bad  rjc 2005.10.26 */
         if (status->pc_amp[i][0][stnpol[0][pass->pol]] < param->pc_amp_hcode
-         || status->pc_amp[i][0][stnpol[0][pass->pol]] > 0.500) 
+         || status->pc_amp[i][0][stnpol[0][pass->pol]] > 0.500)
             low_pcal[0] = TRUE;
         if (status->pc_amp[i][1][stnpol[1][pass->pol]] < param->pc_amp_hcode
-         || status->pc_amp[i][1][stnpol[1][pass->pol]] > 0.500) 
+         || status->pc_amp[i][1][stnpol[1][pass->pol]] > 0.500)
             low_pcal[1] = TRUE;
         }
                                         /* Zero-width windows nullify B/E-codes */
-    if (param->win_sb[0] == param->win_sb[1]) 
+    if (param->win_sb[0] == param->win_sb[1])
         status->interp_err &= ~(WIN_EDGE_SBD | INTP_ERR_SBD);
     if (param->win_mb[0] == param->win_mb[1])
         status->interp_err &= ~(WIN_EDGE_MBD | INTP_ERR_MBD);
@@ -76,7 +77,9 @@ char *tape_qcode)
                                         /* if/else clause override later codes */
                                         /* A-code means fourfit unable to handle */
                                         /* (probably will never implement) */
-    if (0==1) 
+    //if (0==1)
+    // co-opted for passband and notches used together
+    if (param->nnotches > 0 && (param->passband[0] != 0.0 || param->passband[1] != 1.0E6))
         *errcode = 'A';
                                         /* B-code caused by interpolation error, */
                                         /* usually due to fringes at edge of window */
@@ -86,7 +89,7 @@ char *tape_qcode)
         *errcode = 'B';
         }
                                         /* C epoch error condition test here */
-    else if (0==1) 
+    else if (0==1)
         *errcode = 'C';
                                         /* D-code, at least 1 channel missing */
     else if (missing_track)
@@ -95,8 +98,8 @@ char *tape_qcode)
                                         /* (not yet implemented) */
                                         /* for now, use F to catch SU "forks"
                                          * rjc 2001.2.26 */
-    else if (((filter.zero[0] - pass->nfreq) * 4 >= status->total_ap) 
-          || ((filter.zero[0] - pass->nfreq) * 4 >= status->total_ap)) 
+    else if (((filter.zero[0] - pass->nfreq) * 4 >= status->total_ap)
+          || ((filter.zero[0] - pass->nfreq) * 4 >= status->total_ap))
         *errcode = 'F';
                                         /* No fringes, just leave at 0. Placed */
                                         /* here to override E, 1 and 2 codes */
@@ -118,9 +121,9 @@ char *tape_qcode)
                                         /* is still possible for individual tones */
                                         /* to be below the threhold, and not have */
                                         /* and H code flagged */
-    else if ( (low_pcal[0] && 
-              (param->pc_mode[0] == NORMAL || param->pc_mode[0] == MULTITONE))||  
-              (low_pcal[1] && 
+    else if ( (low_pcal[0] &&
+              (param->pc_mode[0] == NORMAL || param->pc_mode[0] == MULTITONE))||
+              (low_pcal[1] &&
               (param->pc_mode[1] == NORMAL || param->pc_mode[1] == MULTITONE)) )
         *errcode = 'H';
                                         /* Numeric quality codes */
@@ -199,7 +202,7 @@ char *tape_qcode)
 /*     t1000_index = (baseline - 1) / 8; */
 /*     btable_index = (baseline - 1) % 8; */
 /*     dur = root->t1000[t1000_index].barray[btable_index].bduration; */
-/*     if (dur == 0) dur = root->t1000[0].duration;   /* duration same on all baselines */
+/*     if (dur == 0) dur = root->t1000[0].duration;   duration same on all baselines */
 /*     intg_time = status->total_ap * param->acc_period / pass->channels; */
 /*     fract = 10.0 * intg_time / dur; */
 /*     if (fract == 10.0) fract = 9.9; */

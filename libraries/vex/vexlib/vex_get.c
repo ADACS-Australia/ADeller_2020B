@@ -1,11 +1,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vex_get.c 9133 2019-09-04 01:30:19Z ChrisPhillips $
+// $Id: vex_get.c 10188 2021-09-17 05:39:03Z ChrisPhillips $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vex/trunk/vexlib/vex_get.c $
-// $LastChangedRevision: 9133 $
+// $LastChangedRevision: 10188 $
 // $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-04 11:30:19 +1000 (Wed, 04 Sep 2019) $
+// $LastChangedDate: 2021-09-17 15:39:03 +1000 (Fri, 17 Sep 2021) $
 //
 //============================================================================
 #include <stdio.h>
@@ -1120,7 +1120,7 @@ get_a_literal(struct llist *literals, char **text)
   return literals->next;
 }
 /*---------------------------------------------------------------------------*/
-void
+char *
 get_all_literals(struct llist *literals, char *array[])
 {
   int i=0;
@@ -1141,6 +1141,7 @@ get_all_literals(struct llist *literals, char *array[])
     i++;
     literals = get_literal_lowl_next();
   }
+  return(*array);
 }
 /*---------------------------------------------------------------------------*/
 void *

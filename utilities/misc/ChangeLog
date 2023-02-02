@@ -1,9 +1,14 @@
+Version 2.8
+~~~~~~~~~~~
+* Version for DiFX-2.8, Nov 4, 2022
+
 Version 2.7
 -----------
 * mjd2day and day2mjd to python3
 * python3
 * difxcopy and mvdifxhere now belong here
 * python programs: store locally as .py, rename on install
+* difxcopy: add threads and machines files to list of files to copy
 * Post DiFX 2.6
 
 Version 2.5

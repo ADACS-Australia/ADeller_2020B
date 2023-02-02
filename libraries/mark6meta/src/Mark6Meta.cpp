@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6Meta.cpp 7764 2017-05-16 18:23:07Z WalterBrisken $
+// $Id: Mark6Meta.cpp 10521 2022-06-28 12:46:07Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 7764 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:23:07 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 10521 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2022-06-28 22:46:07 +1000 (Tue, 28 Jun 2022) $
 //
 //============================================================================
 #include "Mark6Meta.h"
@@ -127,36 +127,34 @@ void Mark6Meta::parse(string rootPath)
     }
     infile.close();
     
-    // parse group
+    // parse group in case a group file exist on the meta data partition
     path = rootPath + "/group";
-    if (stat( path.c_str(), &info ) != 0 )
+    if (stat( path.c_str(), &info ) == 0 )
     {
-        throw  Mark6InvalidMetadata ("The meta file: group does not exist at:" + rootPath);
-    }
-    
-    ifstream groupfile(path.c_str());
+        ifstream groupfile(path.c_str());
 
-    int count = 0;
-    int groupCount = -1;
-    while(getline(groupfile, line, ':')) 
-    {
-        count++;
-        if (count == 1)
+        int count = 0;
+        int groupCount = -1;
+        while(getline(groupfile, line, ':')) 
         {
-            stringstream ss(line);
-            ss >> groupCount;
-            continue;
+            count++;
+            if (count == 1)
+            {
+                stringstream ss(line);
+                ss >> groupCount;
+                continue;
+            }
+            //cout << "token " << line << endl;
+            group_m.push_back(line);
         }
-        //cout << "token " << line << endl;
-        group_m.push_back(line);
-    }
-    groupfile.close();
-    
-    if (group_m.size() != count-1)
-    {
-        stringstream message;
-        message << "Meta data indicates a group size of " << groupCount << " but  " << count-1 << " members have been listed.";
-        throw Mark6InvalidMetadata (message.str());
+        groupfile.close();
+        
+        if (group_m.size() != count-1)
+        {
+            stringstream message;
+            message << "Meta data indicates a group size of " << groupCount << " but  " << count-1 << " members have been listed.";
+            throw Mark6InvalidMetadata (message.str());
+        }
     }
 
         

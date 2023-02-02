@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: cleanVDIF.c 7121 2015-11-29 16:41:34Z WalterBrisken $
+ * $Id: cleanVDIF.c 10345 2021-12-14 07:33:24Z JanWagner $
  * $HeadURL:  $
- * $LastChangedRevision: 7121 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2015-11-30 03:41:34 +1100 (Mon, 30 Nov 2015) $
+ * $LastChangedRevision: 10345 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2021-12-14 18:33:24 +1100 (Tue, 14 Dec 2021) $
  *
  *==========================================================================*/
 
@@ -134,6 +134,7 @@ int main(int argc, char **argv)
         readbytes = fread(buffer + VDIF_HEADER_BYTES + bufferoffset, 1, 8, input);
         extrareadbytes += 8;
       }
+      header = (vdif_header*)(buffer+bufferoffset);
     }
     if(bufferoffset > 0 || wholemissedpackets > 0) {
       invalidpackets++;

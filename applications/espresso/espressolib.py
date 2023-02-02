@@ -33,6 +33,7 @@ from email.mime.text import MIMEText
 import astropy.time
 import datetime
 import subprocess
+import fileinput
 
 
 def get_corrhosts(hostsfilename):
@@ -207,7 +208,7 @@ def openlock(filename):
 
 #class TimeVLBA(Time
 
-def convertdate(indate, outformat="mjd"):
+def convertdate(indate, outformat="mjd", strict=True):
     """converts between DiFX date formats (mjd, vex, iso, vlba)
 
     Example formats:
@@ -260,8 +261,8 @@ def convertdate(indate, outformat="mjd"):
     date = None
     for timeformat in timeformats1:
         try:
-        # MJD?
             if timeformat == "mjd":
+                # MJD should be treated as float
                 indate = float(indate)
             date = astropy.time.Time(indate, format=timeformat)
         except ValueError:
@@ -276,8 +277,11 @@ def convertdate(indate, outformat="mjd"):
                 pass
 
     if date is None:
-        raise Exception(
-                "Accepts dates only in MJD, Vex, VLBA or ISO8601 formats")
+        if strict:
+            raise Exception(
+                    "Accepts dates only in MJD, Vex, VLBA or ISO8601 formats")
+        else:
+            return indate
 
     if outformat in ["mjd", "isot"]:
         date.format = outformat
@@ -290,8 +294,8 @@ def convertdate(indate, outformat="mjd"):
         outdate = datetime.datetime.strftime(date.value, vexformat)
     else:
         raise Exception(
-                "Output format not recognised, choose from: mjd, vex, iso or"
-                " vlba")
+                "Output format not recognised, choose from: mjd, vex, iso "
+                " or vlba")
 
     return outdate
 
@@ -343,7 +347,7 @@ class Email:
         try:
             self.server.login(self.user, self.passwd)
         except Exception as connectionError:
-            print (connectionError)
+            print(connectionError)
             raise
 
     def sendmail(self, message):
@@ -397,7 +401,7 @@ def dhms2sec(time_in):
         dayhour = time_split[0].split("-")
         sec += int(dayhour.pop())*3600
         if dayhour:
-           sec += int(dayhour[0])*3600*24
+            sec += int(dayhour[0])*3600*24
 
     return sec
 
@@ -406,12 +410,12 @@ class batchenv:
     """Set the batch commands to use. SLURM and PBS are in principle both
     supported but PBS has not been tested in a long time. Everyone uses SLURM
     now, right?
-    
+
     If automatic detection does not work, can explicitly call self.set_style
     with either 'slurm' or 'pbs' as argument.
     """
 
-    def __init__(self, jobnames): 
+    def __init__(self, jobnames):
         self._jobnames = jobnames
         if which("sbatch"):
             self.set_style("slurm")
@@ -448,8 +452,9 @@ class batchenv:
             self.launch = "sbatch --parsable --export=ALL"
             #self.cancel = "scancel -n"
             self.cancel = "scancel"
-            self.stats = ("sacct -j {:s} -X --format "
-                "JobName%-15,JobId,elapsed,NNodes,Time,Reserved")
+            self.stats = (
+                    "sacct -j {:s} -X --format "
+                    "JobName%-15,JobId,elapsed,NNodes,NCPUS,Time,Reserved")
             self.q = self._batchq_slurm(self._jobnames)
             self.speedup = self._slurm_speedup
         elif self._style == "pbs":
@@ -469,7 +474,7 @@ class batchenv:
         """Run an sacct command and parse the output to calculate job
         speedup
         """
-    
+
         speedup = 0.
         speedup_wait = 0.
         try:
@@ -477,20 +482,20 @@ class batchenv:
                     jobid)
             elapsed = subprocess.Popen(
                     command, stdout=subprocess.PIPE,
-                    shell=True).communicate()[0]
+                    shell=True, encoding="utf-8").communicate()[0]
             elapsed = int(elapsed)
             command = "sacct -j {:s} -X --format Reserved -P -n".format(jobid)
             #print(command)
             reserved = subprocess.Popen(
                     command, stdout=subprocess.PIPE,
-                    shell=True).communicate()[0]
+                    shell=True, encoding="utf-8").communicate()[0]
             reserved = dhms2sec(reserved)
             speedup = joblen*60./elapsed
             speedup_wait = joblen*60./(elapsed+reserved)
         except:
             speedup = 0.0
             speedup_wait = 0.0
-    
+
         return speedup, speedup_wait
 
     def _pbs_speedup(self, jobid, joblen):
@@ -498,18 +503,122 @@ class batchenv:
         return 0.0, 0.0
 
     def _batchq_slurm(self, jobnames):
-        """Return a SLURM queue command for the current jobs. 
-        
+        """Return a SLURM queue command for the current jobs.
+
         Make sure the squeue format accommodates the full job name"""
-    
+
         longest = 0
         batch_q = None
         for jobname in jobnames:
             if len(jobname) > longest:
                 longest = len(jobname)
         squeue_format = (
-                "%8i %8u %.{:d}j %.3t %.19S %.19e %.10L %.5D %.10Q".format(
+                "%8i %8u %.{:d}j %.3t %.19S %.19e %.10L %.5D %.5C %.10Q".format(
                 longest+3))
         batch_q = 'squeue -o "{0:s}" -n {1:s}'.format(
                 squeue_format, ",".join(jobnames))
         return batch_q
+
+
+def parse_joblistfile(joblistfilename, set_speedup=None):
+    """Get the full list of jobs from the joblist file
+
+    Return a dictionary. Keys are the job names. For each jobname record a list
+    of stations under key 'stations' and the job length under key
+    'joblen'
+    """
+
+    def predict_speedup(tops, joblen):
+        """Placeholder for future idea - could be complicated"""
+        speedup = (joblen*0.8e5)/tops
+        speedup = 1.0
+        return speedup
+
+
+    joblistfile = open(joblistfilename).readlines()
+
+    joblistfile.pop(0)
+    joblist = dict()
+    for line in joblistfile:
+        jobvals = line.split()
+        jobname, jobstart, jobend = jobvals[0:3]
+        tops = float(jobvals[6])
+        joblen = (float(jobend) - float(jobstart))
+        if set_speedup is None:
+            speedup = predict_speedup(tops, joblen)
+        else:
+            speedup = set_speedup
+        joblist[jobname] = dict()
+        stations = re.search(r"#\s+(.*)", line).group(1)
+        joblist[jobname]["stations"] = stations
+
+        job_time = joblen/speedup
+        # add 10 minutes for startup
+        job_time += 10./(24.*60.)
+        days, hours, minutes, seconds = daysToDhms(job_time)
+        joblist[jobname]["jobtime"] = (
+                "{0:02d}:{1:02d}:{2:02d}".format(hours, minutes, seconds))
+        joblist[jobname]["joblen"] = (joblen*60*24)
+
+    return joblist
+
+
+def parse_binconfig(binconfigfilename):
+    """extract file names from the binconfig file"""
+
+    binconfigfile = open(binconfigfilename).readlines()
+    polycofilename = str()
+    for line in binconfigfile:
+        # remove comments
+        line = re.sub(r"@.*", "", line)
+        polycomatch = re.search(r"POLYCO FILE \d+\s*:\s*(\S*)", line)
+        if polycomatch:
+            polycofilename = polycomatch.group(1)
+
+    return polycofilename
+
+
+def parse_v2dfile(v2dfilename):
+    """extract file names from the v2d file"""
+
+    v2dfile = open(v2dfilename).readlines()
+    vexfilename = str()
+    binconfigfilename = None
+    for line in v2dfile:
+        # remove comments
+        line = re.sub(r"#.*", "", line)
+        vexmatch = re.search(r"vex\s*=\s*(\S*)", line)
+        if vexmatch:
+            vexfilename = vexmatch.group(1)
+        binconfigmatch = re.search(r"binConfig\s*=\s*(\S*)", line)
+        if binconfigmatch:
+            binconfigfilename = binconfigmatch.group(1)
+
+    return vexfilename, binconfigfilename
+
+
+
+
+def change_path(inputfilename, changeparm, oldpath, newpath):
+    """modify paths in the input file"""
+
+    for line in fileinput.FileInput(inputfilename, inplace=1, backup=".org"):
+        if re.match(changeparm, line):
+            line = line.replace(oldpath, newpath)
+        print (line, end="")
+
+    fileinput.close()
+
+
+def get_difxlogname(outdir, jobname):
+    """Return difx log file name"""
+
+    return outdir + "/" + jobname + ".difxlog"
+
+def wait_for_file(filename):
+    """Wait until specified file is available"""
+
+    while not os.path.exists(filename):
+        print ("Waiting for", filename)
+        time.sleep(1)
+    print (filename, "found!")

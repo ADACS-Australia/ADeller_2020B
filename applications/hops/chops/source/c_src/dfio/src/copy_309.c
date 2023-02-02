@@ -18,6 +18,7 @@
 /* version 1                                           rjc 2010.10.1    */
 /************************************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "bytflp.h"
 #include "type_309.h"
@@ -73,7 +74,7 @@ copy_309 (struct type_309 *t309,
 
             for (j=0; j<16; j++)    // loop over tones
                 for (k=0; k<2; k++) // loop over quadratures
-                    cp_int (t309_v0->chan[i].acc[j][k], t309->chan[i].acc[j][k]);
+                    cp_uint (t309_v0->chan[i].acc[j][k], t309->chan[i].acc[j][k]);
             }
 
         return (sizeof (struct type_309_v0));
@@ -97,7 +98,7 @@ copy_309 (struct type_309 *t309,
 
             for (j=0; j<64; j++)    // loop over tones
                 for (k=0; k<2; k++) // loop over quadratures
-                    cp_int (t309_v1->chan[i].acc[j][k], t309->chan[i].acc[j][k]);
+                    cp_uint (t309_v1->chan[i].acc[j][k], t309->chan[i].acc[j][k]);
             }
 
         return (sizeof (struct type_309_v1));

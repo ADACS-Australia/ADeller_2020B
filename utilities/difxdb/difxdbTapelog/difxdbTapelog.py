@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 # coding: latin-1
 
 #===========================================================================
@@ -18,16 +18,17 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: difxdbTapelog.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: difxdbTapelog.py 10271 2021-10-21 09:43:12Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/difxdbTapelog/difxdbTapelog.py $
-# $LastChangedRevision: 9293 $
+# $LastChangedRevision: 10271 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedDate: 2021-10-21 20:43:12 +1100 (Thu, 21 Oct 2021) $
 #
 #============================================================================
 
 import os
 import sys
+import collections
 from difxdb.difxdbconfig import DifxDbConfig
 from difxdb.business.moduleaction import *
 from difxdb.model.dbConnection import Schema, Connection
@@ -36,21 +37,20 @@ from difxdb.model import model
 from difxfile.difxdir import DifxDir
 from difxfile.difxfilelist import DifxFilelist
 from operator import  attrgetter
-from string import upper,lower
 
-__author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
+__author__ = "Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
-__lastAuthor__="$Author: HelgeRottmann $"
+__build__ = "$Revision: 10271 $"
+__date__ = "$Date: 2021-10-21 20:43:12 +1100 (Thu, 21 Oct 2021) $"
+__lastAuthor__ = "$Author: HelgeRottmann $"
 
 def printUsage():
-    print "%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__)
-    print "A program to construct the TAPELOG_OBS section from all modules in the database belonging to an experiment.\n"
-    print "Usage: %s <experiment_code>\n\n"  % __prog__
-    print "NOTE: %s requires the DIFXROOT and MARK5_DIR_PATH environment variables to be defined." % __prog__
-    print "The program reads the database configuration from difxdb.ini located under $DIFXROOT/conf."
-    print "If the configuration is not found a sample one will be created for you."
+    print("%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__))
+    print("A program to construct the TAPELOG_OBS section from all modules in the database belonging to an experiment.\n")
+    print("Usage: %s <experiment_code>\n\n"  % __prog__)
+    print("NOTE: %s requires the DIFXROOT and MARK5_DIR_PATH environment variables to be defined." % __prog__)
+    print("The program reads the database configuration from difxdb.ini located under $DIFXROOT/conf.")
+    print("If the configuration is not found a sample one will be created for you.")
 
     
     sys.exit(1)
@@ -87,81 +87,78 @@ if __name__ == "__main__":
         dbConn = Schema(connection)
         session = dbConn.session()
         
-	try:
-		experiment = getExperimentByCode(session, expCode)
-	except:
-		raise Exception("Unknown experiment")
-		sys.exit
+        try:
+                experiment = getExperimentByCode(session, expCode)
+        except:
+                raise Exception("Unknown experiment")
+                sys.exit
 
-	sum = 0
-	count = 0
-	station = 0
+        if (experiment is None):
+          sys.exit()
+
+        sum = 0
+        count = 0
+        station = 0
         lastStationCode = ""
-	if (experiment is not None):
-                sortedModules = sorted(experiment.modules, key= attrgetter('stationCode'))
-		print "$TAPELOG_OBS;"
-		
-		
-		for module in sortedModules:
-			error = 0
-			if module.stationCode != lastStationCode:
-				if station != 0:
-					print "enddef;"
-					
-				print "def " + upper(module.stationCode[0]) + lower(module.stationCode[1]) + ";"
+        entries = collections.defaultdict(list)
 
-				lastStationCode = module.stationCode
-				count = 0
-				station += 1
+        # sort modules by station code
+        sortedModules = sorted(experiment.modules, key= attrgetter('stationCode'))
 
-			try:
-				dirFile = None
-				if isMark6(module.vsn):
-					dirFile = DifxFilelist(os.getenv("MARK5_DIR_PATH"), module.vsn)
-				else:
-					dirFile = DifxDir(os.getenv("MARK5_DIR_PATH"), module.vsn)
-			except Exception as e:
-				error +=1
-				sys.stderr.write("%s\n" % e)
+        # look up start and stop times
+        for i in range(len(sortedModules)):
+            error = 0
+            module = sortedModules[i]
 
-			#print dirFile.getExperimentStopDatetime(upper(expCode)), dirFile.getExperimentStartDatetime(upper(expCode))
+            message = ""
+            start = "UNKNOWN"
+            stop =  "UNKNOWN"
 
-			start = "UNKNOWN"
-			stop =  "UNKNOWN"
+            # read directories/filelists to find start and stop times
+            dirFile = None
+            try:
+                if isMark6(module.vsn):
+                    dirFile = DifxFilelist(os.getenv("MARK5_DIR_PATH"), module.vsn)
+                else:
+                    dirFile = DifxDir(os.getenv("MARK5_DIR_PATH"), module.vsn)
+            except Exception as e:
+                error +=1
+                message = "# WARNING: %s" % e
+                sys.stderr.write(message + "\n")
 
-			if not dirFile is None:
-			    if not dirFile.getExperimentStartDatetime(upper(expCode)):
-				    start = "UNKNOWN"
-			    else:
-				    try:
-					    start = dirFile.getExperimentStartDatetime(upper(expCode)).strftime("%Yy%jd%Hh%Mm%Ss")
-				    except:
-					    print "WARNING: Error parsing {}".format(dirFile.getFilename())
-					    error += 1
-					    start = "UNKNOWN"
-					    #sys.exit("Error parsing {}".format(dirFile.getFilename()))
-			    if not dirFile.getExperimentStopDatetime(upper(expCode)) is not None:
-				    stop = "UNKNOWN"
-			    else:
-				    try:
-					    stop = dirFile.getExperimentStopDatetime(upper(expCode)).strftime("%Yy%jd%Hh%Mm%Ss")
-				    except:
-					    #sys.exit("Error parsing {}".format(dirFile.getFilename()))
-					    print "WARNING: Error parsing {}".format(dirFile.getFilename())
-					    error += 1
-					    stop =  "UNKNOWN"
-			
-			if error == 0:
-			    print "VSN=%d :  %s :   %s : %s ;" % (count, module.vsn, start,stop)
-			else:
-			    print "#CHECK .dir file : VSN=%d :  %s :   %s : %s ;" % (count, module.vsn, start,stop)
-			count += 1
+            if dirFile:
+                    if dirFile.getExperimentStartDatetime(expCode.upper()):
+                          try:
+                                  start = dirFile.getExperimentStartDatetime(expCode.upper()).strftime("%Yy%jd%Hh%Mm%Ss")
+                          except Exception as e:
+                                  message = "WARNING: Error parsing {}".format(dirFile.getFilename())
+                                  error += 1
+                                  start = "UNKNOWN"
+                    if dirFile.getExperimentStopDatetime(expCode.upper()):
+                          try:
+                                  stop = dirFile.getExperimentStopDatetime(expCode.upper()).strftime("%Yy%jd%Hh%Mm%Ss")
+                          except Exception as e:
+                                  message = "WARNING: Error parsing {}".format(dirFile.getFilename())
+                                  error += 1
+                                  stop =  "UNKNOWN"
 
+            entries[module.stationCode].append ({'vsn': module.vsn, 'start': start, 'stop': stop, 'message': message})
 
-		if station > 0:
-			print "enddef;"
+        # now output the TAPELOG_OBS section
+        print("$TAPELOG_OBS;")
         
-    
+        for key,value in entries.items():
+            print("def " + key[0].upper() + key[1].lower() + ";")
+            count = 0
+            for module in sorted(value, key=lambda d: d['start']):
+
+                print("VSN=%d :  %s :   %s : %s ;" % (count, module['vsn'], module["start"], module["stop"]))
+                if len(module["message"])  > 0:
+                    print (module["message"])
+                count += 1
+
+            print ("enddef;")
+
     except Exception as e:
         sys.exit(e)
     

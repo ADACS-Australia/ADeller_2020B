@@ -16,17 +16,17 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: VisibilityHeader.py 9360 2019-12-03 13:42:07Z JanWagner $
+# $Id: VisibilityHeader.py 10140 2021-09-09 11:47:57Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9360 $
-# $Author: JanWagner $
-# $LastChangedDate: 2019-12-04 00:42:07 +1100 (Wed, 04 Dec 2019) $
+# $LastChangedRevision: 10140 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2021-09-09 21:47:57 +1000 (Thu, 09 Sep 2021) $
 #
 #============================================================================
 
-from __future__ import division
 
-from .Common import parse_output_header, M_SYNC_WORD
+
+from .Common import parse_output_header, make_output_header_v1, M_SYNC_WORD
 
 class VisibilityHeader:
 
@@ -56,6 +56,7 @@ class VisibilityHeader:
         if len(h) < 12:
             self.clear()
             return False
+        self.all = h
         self.raw = h[-1]
         self.syncword = M_SYNC_WORD
         self.baseline, self.mjd, self.seconds = h[0:3]
@@ -68,6 +69,22 @@ class VisibilityHeader:
         self.antenna2 = self.baseline % 256
         self.antenna1 = (self.baseline - self.antenna2) // 256
         return True
+
+    def tobinary(self):
+        h = self.all
+        h[0:3] = self.baseline, self.mjd, self.seconds
+        h[3:6] = self.configindex, self.srcindex, self.freqindex
+        h[6] = self.polpair
+        h[7] = self.pulsarbin
+        h[8] = self.weight
+        h[9:12] = self.u, self.v, self.w
+        binaryheader = make_output_header_v1(h)
+
+        self.raw = binaryheader
+        self.all = h
+        self.all.append(binaryheader)
+
+        return binaryheader
 
     def isvalid(self):
         return self.syncword == M_SYNC_WORD

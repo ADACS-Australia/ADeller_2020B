@@ -15,6 +15,7 @@ int createRoot (DifxInput *D,           // difx input structure pointer
                 struct fblock_tag *pfb, // ptr to filled-in fblock table
                 int jobId,
                 int scanId,
+                char *node_name,        // actual node name, not 2-part path
                 char *node,             // directory for output fileset
                 char *rcode,            // 6 letter root suffix
                 struct stations *stns,  // station-relevant information
@@ -35,6 +36,7 @@ int createRoot (DifxInput *D,           // difx input structure pointer
         latest_start,
         earliest_stop,
         tarco = FALSE,              // true iff target_correlator = has been done
+        exper_num = FALSE,
         sourceId,
         configId,
         delete_mode = FALSE,
@@ -274,10 +276,27 @@ int createRoot (DifxInput *D,           // difx input structure pointer
                     strcpy (line, "    target_correlator = difx;\n");
                     tarco = TRUE;
                     }
-                else if (strncmp (pst[0], "enddef", 6) == 0 && tarco == FALSE)
+                if (strcmp (pst[0], "exper_num") == 0)
                     {
-                    strcpy (line, "    target_correlator = difx;\n  enddef;\n");
-                    tarco = TRUE;
+                    sprintf (line, "    exper_num = %s;\n", node_name);
+                    exper_num = TRUE;
+                    }
+                else if (strncmp (pst[0], "enddef", 6) == 0)
+                    {
+                    strcpy (line, "");
+                    if (tarco == FALSE)
+                        {
+                        strcpy (buff, "    target_correlator = difx;\n");
+                        strcat (line, buff);
+                        tarco = TRUE;
+                        }
+                    if (exper_num == FALSE)
+                        {
+                        sprintf (buff, "    exper_num = %s;\n", node_name);
+                        strcat (line, buff);
+                        exper_num = TRUE;
+                        }
+                    strcat (line, "  enddef;\n");
                     }
                 break;
 
@@ -625,6 +644,9 @@ int createRoot (DifxInput *D,           // difx input structure pointer
             fprintf (fout, "  def ant%02d;\n", n);
             i = -1;
             j = 0;
+            ik = -1;
+            k = -1;
+
                                     // search through fblock for all ref to this antenna
             while (pfb[++i].stn[0].ant >= 0)
                 if (pfb[i].stn[0].ant == n || pfb[i].stn[1].ant == n)
@@ -662,7 +684,14 @@ int createRoot (DifxInput *D,           // difx input structure pointer
                     j++;
                     }
                 
-            fprintf (fout, "    sample_rate = %5.1f Ms/sec;\n", 2.0 * pfb[ik].stn[k].bw);
+            if (ik != -1 && k != -1)
+                {
+                fprintf (fout, "    sample_rate = %5.1f Ms/sec;\n", 2.0 * pfb[ik].stn[k].bw);
+                }
+                else
+                {
+                fprintf (fout, "    * antenna data not found in this scan\n");
+                }
             fprintf (fout, "  enddef;\n");
             }
         fprintf (fout, "$BBC;\n");
@@ -803,6 +832,16 @@ int createRoot (DifxInput *D,           // difx input structure pointer
             else if (strncmp (extra_lines[i], " bocf_period", 12) == 0)
                 {
                 fake_bocf_period(buff, D->config + configId);
+                fputs (buff, fout);
+                }
+            else if (strncmp (extra_lines[i], " def 1234_std;", 14) == 0)
+                {
+                sprintf (buff, " def %s_std;\n", node_name);
+                fputs (buff, fout);
+                }
+            else if (strncmp (extra_lines[i], " corr_exp#   = 1234;", 20) == 0)
+                {
+                sprintf (buff, " corr_exp#   = %s;\n", node_name);
                 fputs (buff, fout);
                 }
             else

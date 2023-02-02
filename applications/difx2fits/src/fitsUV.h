@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2022 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsUV.h 7652 2017-02-19 21:27:27Z WalterBrisken $
+// $Id: fitsUV.h 10537 2022-07-15 20:18:57Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsUV.h $
-// $LastChangedRevision: 7652 $
+// $LastChangedRevision: 10537 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-02-20 08:27:27 +1100 (Mon, 20 Feb 2017) $
+// $LastChangedDate: 2022-07-16 06:18:57 +1000 (Sat, 16 Jul 2022) $
 //
 //============================================================================
 #ifndef __FITS_UV_H__
@@ -79,7 +79,7 @@ typedef struct
 	float *data;
 	int changed;
 	int first;
-	double *scale;			/* scale factor, indexed by 0-based antennaId */
+	double ***scale;		/* baseline-based scale factor, 1st index: polId, 2nd, 3rd indexes by 0-based antennaId */
 	int flagTransition;
 	int keepAC;			/* 0 prevents auto-correlations from being preserved */
 	int keepXC;			/* 0 prevents cross-correlations from being preserved */
@@ -90,10 +90,10 @@ typedef struct
 	char sideband;			/* sideband, as correlated */
 } DifxVis;
 
-DifxVis *newDifxVis(const DifxInput *D, int jobId, int pulsarBin, int phaseCentre, double scaleFactor);
+DifxVis *newDifxVis(const DifxInput *D, int jobId, const struct CommandLineOptions *opts, int pulsarBin, int phaseCentre);
 void deleteDifxVis(DifxVis *dv);
 int DifxVisNextFile(DifxVis *dv);
-int DifxVisNewUVData(DifxVis *dv, int verbose, int skipextraautocorrs);
+int DifxVisNewUVData(DifxVis *dv, const struct CommandLineOptions *opts);
 int DifxVisCollectRandomParams(const DifxVis *dv);
 
 

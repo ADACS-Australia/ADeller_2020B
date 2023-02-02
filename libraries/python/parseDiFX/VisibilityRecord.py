@@ -16,15 +16,15 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: VisibilityRecord.py 9223 2019-10-17 12:46:37Z JanWagner $
+# $Id: VisibilityRecord.py 10140 2021-09-09 11:47:57Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9223 $
-# $Author: JanWagner $
-# $LastChangedDate: 2019-10-17 23:46:37 +1100 (Thu, 17 Oct 2019) $
+# $LastChangedRevision: 10140 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2021-09-09 21:47:57 +1000 (Thu, 09 Sep 2021) $
 #
 #============================================================================
 
-from __future__ import division
+
 
 try:
     import numpy

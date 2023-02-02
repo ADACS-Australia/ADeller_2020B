@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken                             *
+ *   Copyright (C) 2008-2022 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsAN.c 9636 2020-07-31 02:13:03Z LeonidPetrov $
+// $Id: fitsAN.c 10863 2022-12-29 19:23:42Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsAN.c $
-// $LastChangedRevision: 9636 $
-// $Author: LeonidPetrov $
-// $LastChangedDate: 2020-07-31 12:13:03 +1000 (Fri, 31 Jul 2020) $
+// $LastChangedRevision: 10863 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
 //
 //============================================================================
 #include <stdlib.h>
@@ -32,7 +32,7 @@
 #include "config.h"
 #include "difx2fits.h"
 
-const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out)
+const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, const struct CommandLineOptions *opts)
 {
 	/*  define the antenna characteristic FITS table columns */
 	char bandFormFloat1[8];
@@ -73,11 +73,16 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fi
 	/* 1-based indices for FITS file */
 	int32_t arrayId1;
 	int noPCal;
+	int maxDatastreams;
+	int *dsIds;
 
 	if(D == 0)
 	{
 		return 0;
 	}
+
+	maxDatastreams = DifxInputGetMaxDatastreamsPerAntenna(D);
+	dsIds = (int *)malloc(maxDatastreams*sizeof(int));
 
 	nColumn = NELEMENTS(columns);
 	nBand = D->nIF;
@@ -105,23 +110,24 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fi
 	start = D->mjdStart - (int)D->mjdStart;
 	stop  = D->mjdStop  - (int)D->mjdStart; 
 
-        if ( D->AntPol == 0 ){
-	     arrayId1 = 1;
-	     switch(D->polPair[0])
-	     {
-	     case 'R':
-	     case 'L':
-	     	polTypeA = 'R';
-	     	polTypeB = 'L';
-	     	break;
-	     case 'X':
-	     case 'Y':
-	     	polTypeA = 'X';
-	     	polTypeB = 'Y';
-	     	break;
-	     default:
-	     	printf("Warning: fitsAN: Cannot process polarization '%c'. Please use optiom --antpol.\n", D->polPair[0]);
-	     }
+        if(opts->antpol == 0)
+	{
+		arrayId1 = 1;
+		switch(D->polPair[0])
+		{
+		case 'R':
+		case 'L':
+			polTypeA = 'R';
+			polTypeB = 'L';
+			break;
+		case 'X':
+		case 'Y':
+			polTypeA = 'X';
+			polTypeB = 'Y';
+			break;
+		default:
+			printf("Warning: fitsAN: Cannot process polarization '%c'. Please use optiom --antpol.\n", D->polPair[0]);
+		}
         }
 	time = 0.5 * (stop + start);
 	timeInt = stop - start;
@@ -141,10 +147,8 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fi
 		freqId1 = freqSetId + 1; /* FITS fqId starts at 1 */
 		for(antennaId = 0; antennaId < D->nAntenna; ++antennaId)
 		{
-			const int maxDatastreams = 8;
 			char antName[DIFXIO_NAME_LENGTH];
 			int n;
-			int dsIds[maxDatastreams];
 			int32_t nLevel;
 			int32_t antId1;
 
@@ -165,34 +169,41 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fi
 			antId1 = antennaId + 1;	  /* FITS antId1 starts at 1 */
 			strcpypad(antName, D->antenna[antennaId].name, 8);
 
-	                if (  D->AntPol == 1 && D->nPolar > 1 ){
-		              if ( D->antenna[antennaId].pol[0] == 'R' || 
-                                   D->antenna[antennaId].pol[0] == 'L' || 
-                                   D->antenna[antennaId].pol[1] == 'R' || 
-                                   D->antenna[antennaId].pol[1] == 'L'  ){
-                                   polTypeA = 'R';
-                                   polTypeB = 'L';
-                              }
-		              if ( D->antenna[antennaId].pol[0] == 'X' || 
-                                   D->antenna[antennaId].pol[0] == 'Y' || 
-                                   D->antenna[antennaId].pol[1] == 'X' || 
-                                   D->antenna[antennaId].pol[1] == 'Y'  ){
-			           if ( D->polxy2hv == 0 ){
-                                        polTypeA = 'X';
-                                        polTypeB = 'Y';
-			           } else {
-                                        polTypeA = 'H';
-                                        polTypeB = 'V';
-                                   }
-                              }
-		              if ( D->antenna[antennaId].pol[0] == 'H' || 
-                                   D->antenna[antennaId].pol[0] == 'V' || 
-                                   D->antenna[antennaId].pol[1] == 'H' || 
-                                   D->antenna[antennaId].pol[1] == 'V'  ){
-                                   polTypeA = 'H';
-                                   polTypeB = 'V';
-                              }
-                        }
+			if(opts->antpol && D->nPolar > 1)
+			{
+				if(D->antenna[antennaId].pol[0] == 'R' ||
+				   D->antenna[antennaId].pol[0] == 'L' ||
+				   D->antenna[antennaId].pol[1] == 'R' ||
+				   D->antenna[antennaId].pol[1] == 'L')
+				{
+					polTypeA = 'R';
+					polTypeB = 'L';
+				}
+				if(D->antenna[antennaId].pol[0] == 'X' ||
+				   D->antenna[antennaId].pol[0] == 'Y' ||
+				   D->antenna[antennaId].pol[1] == 'X' ||
+				   D->antenna[antennaId].pol[1] == 'Y')
+				{
+					if(opts->polxy2hv)
+					{
+						polTypeA = 'H';
+						polTypeB = 'V';
+					}
+					else
+					{
+						polTypeA = 'X';
+						polTypeB = 'Y';
+					}
+				}
+				if(D->antenna[antennaId].pol[0] == 'H' ||
+				   D->antenna[antennaId].pol[0] == 'V' ||
+				   D->antenna[antennaId].pol[1] == 'H' ||
+				   D->antenna[antennaId].pol[1] == 'V')
+				{
+					polTypeA = 'H';
+					polTypeB = 'V';
+				}
+			}
 			FITS_WRITE_ITEM (time, p_fitsbuf);
 			FITS_WRITE_ITEM (timeInt, p_fitsbuf);
 			FITS_WRITE_ARRAY(antName, p_fitsbuf, 8);
@@ -218,5 +229,7 @@ const DifxInput *DifxInput2FitsAN(const DifxInput *D, struct fits_keywords *p_fi
 
 	/* clean up and return */
 	free(fitsbuf);
+	free(dsIds);
+
 	return D;
 }

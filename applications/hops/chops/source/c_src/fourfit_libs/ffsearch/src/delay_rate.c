@@ -8,18 +8,18 @@
 /************************************************/
 #include <stdio.h>
 #include <math.h>
-#include <complex.h>
+#include "hops_complex.h"
 #include <fftw3.h>
 #include "mk4_data.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 
-delay_rate (struct type_pass *pass,
+void delay_rate (struct type_pass *pass,
             int fr,
-            complex rate_spectrum[MAXAP])
+            hops_complex rate_spectrum[MAXAP])
     {
-    complex apval, a;
-    complex fringe_spect[MAXAP*2], X[MAXAP*2];
+    hops_complex apval, a;
+    hops_complex fringe_spect[MAXAP*2], X[MAXAP*2];
     int fl, L, ap, np, i, j, l_int, l_int2, size;
     static int fft_size = 0;
     int stnpol[2][4] = {0, 1, 0, 1, 0, 1, 1, 0}; // [stn][pol] = 0:L, 1:R
@@ -31,9 +31,9 @@ delay_rate (struct type_pass *pass,
     static fftw_plan fftplan;
 
     pd = pass->pass_data + fr;
-    
+
     np = status.drsp_size;              /* np = # of ap's in FFT < MAXAP */
-    
+
     size = np * 4;                      /* This is size of FFT */
                                         /* Smaller delay rate spectrum option */
     if (size > MAXAP*2) size = MAXAP*2;
@@ -43,11 +43,11 @@ delay_rate (struct type_pass *pass,
     if (size != fft_size)               // recompute fft quantities when size changes
         {
         fft_size = size;
-        fftplan = fftw_plan_dft_1d (fft_size, X, X, FFTW_FORWARD, FFTW_MEASURE);
+        fftplan = fftw_plan_dft_1d (fft_size, (fftw_complex*) X, (fftw_complex*) X, FFTW_FORWARD, FFTW_MEASURE);
         }
 
                                         /* Fill data array */
-    for (i = 0; i < size; i++) 
+    for (i = 0; i < size; i++)
         X[i] = 0.0;
     for (ap = 0; ap < pass->num_ap; ap++)
         {
@@ -62,7 +62,7 @@ delay_rate (struct type_pass *pass,
         if ((datum->usbfrac >= 0.0) && (datum->lsbfrac >= 0.0)) frac /= 2.0;
         X[ap] = apval * frac;
         }
-     
+
     fftw_execute (fftplan);
 
     for (i = 0; i < size; i++)
@@ -71,7 +71,7 @@ delay_rate (struct type_pass *pass,
         if (j < 0) j += size;
         fringe_spect[i] = X[j];
         }
-        
+
     b = (pass->pass_data[fr].frequency / param.ref_freq) * size / np;
 /*              / pass->pass_data[0].frequency) * size / np;  */
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2007-2017 by Walter Brisken, Adam Deller & Helge Rottmann *
+ *   Copyright (C) 2007-2022 by Walter Brisken, Adam Deller & Helge Rottmann *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input.c 9729 2020-09-19 17:57:50Z WalterBrisken $
+// $Id: difx_input.c 10862 2022-12-29 19:23:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input.c $
-// $LastChangedRevision: 9729 $
+// $LastChangedRevision: 10862 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-09-20 03:57:50 +1000 (Sun, 20 Sep 2020) $
+// $LastChangedDate: 2022-12-30 06:23:21 +1100 (Fri, 30 Dec 2022) $
 //
 //============================================================================
 
@@ -80,6 +80,7 @@ void deleteDifxInput(DifxInput *D)
 {
 	if(D)
 	{
+		deleteDifxSpacecraftArray(D->spacecraft, D->nSpacecraft);
 		deleteDifxConfigArray(D->config, D->nConfig);
 		deleteDifxDatastreamArray(D->datastream, D->nDatastream);
 		deleteDifxBaselineArray(D->baseline, D->nBaseline);
@@ -92,6 +93,7 @@ void deleteDifxInput(DifxInput *D)
 		deleteDifxJobArray(D->job, D->nJob);
 		deleteDifxRuleArray(D->rule);
 		DifxInputAllocThreads(D, 0);
+		free(D->freqIdRemap);
 		free(D);
 	}
 }
@@ -157,6 +159,14 @@ void fprintDifxInput(FILE *fp, const DifxInput *D)
 	{
 		fprintDifxConfig(fp, D->config + i);
 	}
+
+	fprintf(fp, "  nFreqUnsimplified = %d\n", D->nFreqUnsimplified);
+	fprintf(fp, "  freqIdRemap origId:simplifiedId = ");
+	for(i = 0; i < D->nFreqUnsimplified; ++i)
+	{
+		fprintf(fp, " %d:%d", i, D->freqIdRemap[i]);
+	}
+	fprintf(fp, "\n");
 
 	fprintf(fp, "  nFreq = %d\n", D->nFreq);
 	for(i = 0; i < D->nFreq; ++i)
@@ -245,6 +255,7 @@ void fprintDifxInputSummary(FILE *fp, const DifxInput *D)
 	//fprintf(fp, "  Input Channels = %d\n", D->nInChan);
 	fprintf(fp, "  Start Channel = %d\n", D->startChan);
 	fprintf(fp, "  Spectral Avg = %d\n", D->specAvg);
+	fprintf(fp, "  Corr Spectral Avg = %d\n", D->corrSpecAvg);
 	//fprintf(fp, "  Output Channels = %d\n", D->nOutChan);
 
 	fprintf(fp, "  nJob = %d\n", D->nJob);
@@ -494,6 +505,9 @@ static int generateFreqSets(DifxInput *D)
 				{
 					continue;
 				}
+
+				++freqIsUsed[db->destFq[f]];
+
 				for(p = 0; p < db->nPolProd[f]; ++p)
 				{
 					DifxDatastream *ds;
@@ -527,7 +541,6 @@ static int generateFreqSets(DifxInput *D)
 						polName = ds->zoomBandPolName[zb];
 						fqId = ds->zoomFreqId[localFqId];
 					}
-					++freqIsUsed[fqId];
 					polValue = polMaskValue(polName);
 					if(polValue == DIFXIO_POL_ERROR)
 					{
@@ -559,7 +572,6 @@ static int generateFreqSets(DifxInput *D)
 						polName = ds->zoomBandPolName[zb];
 						fqId = ds->zoomFreqId[localFqId];
 					}
-					++freqIsUsed[fqId];
 					polValue = polMaskValue(polName);
 					if(polValue == DIFXIO_POL_ERROR)
 					{
@@ -576,7 +588,7 @@ static int generateFreqSets(DifxInput *D)
 
 			return -1;
 		}
-		else if(isMixedPolMask(dc->polMask & DIFXIO_POL_RL) && D->AntPol == 0)
+		else if(isMixedPolMask(dc->polMask) && D->AntPol == 0)
 		{
 			fprintf(stderr, "Warning: generateFreqSets: polMask = 0x%03x is unsupported by FITS-IDI!\n", dc->polMask);
 		}
@@ -707,10 +719,11 @@ static int generateFreqSets(DifxInput *D)
  * @param extension Optional; default extension with dot (for example .difx or .calc)
  * @return Convenience pointer identical to 'filename' parameter
  */
-static const char* locateAltFilename(char* filename, const char* inputFileName, const char* extension)
+static const char *locateAltFilename(char *filename, const char *inputFileName, const char *extension)
 {
 	char altName[DIFXIO_FILENAME_LENGTH];
 	char *altPath, *basefile;
+	char *ifnCopy, *fnCopy;
 	int v;
 
 	/* Check arguments; auto-determine file extension for printout purposes if unspecified */
@@ -730,9 +743,11 @@ static const char* locateAltFilename(char* filename, const char* inputFileName, 
 	}
 
 	/* When 'filename' does NOT exist, try looking it up under <path> of <path/basename.input> */
-	altPath = dirname(strdup(inputFileName)); // TODO: strdup() -> free() later?
-	basefile = basename(strdup(filename));
+	altPath = dirname(ifnCopy = strdup(inputFileName));
+	basefile = basename(fnCopy = strdup(filename));
 	v = snprintf(altName, DIFXIO_FILENAME_LENGTH, "%s/%s", altPath, basefile);
+	free(ifnCopy);
+	free(fnCopy);
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
 		return filename;
@@ -1269,6 +1284,8 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 	}
 	D->nFreq    = atoi(DifxParametersvalue(ip, r));
 	D->freq     = newDifxFreqArray(D->nFreq);
+	D->nFreqUnsimplified = D->nFreq;
+	D->freqIdRemap = (int *)calloc(D->nFreqUnsimplified+1, sizeof(int));
 	rows[N_FREQ_ROWS-1] = 0;	/* initialize start */
 	for(b = 0; b < D->nFreq; ++b)
 	{
@@ -1288,6 +1305,7 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 		D->freq[b].specAvg  = atoi(DifxParametersvalue(ip, rows[4]));
 		D->freq[b].overSamp = atoi(DifxParametersvalue(ip, rows[5]));
 		D->freq[b].decimation = atoi(DifxParametersvalue(ip, rows[6]));
+		D->freqIdRemap[b] = b;
 
 		r = DifxParametersfind1(ip, rows[2]+1, "RX NAME %d", b);
 		if(r > 0 && r < rows[2]+5)
@@ -1322,8 +1340,12 @@ static DifxInput *parseDifxInputFreqTable(DifxInput *D, const DifxParameters *ip
 			}
 		}
 
-		D->nInChan = D->freq[b].nChan;
-		D->nOutChan = D->freq[b].nChan/D->freq[b].specAvg;
+		//DiFX 2.6:
+		//D->nInChan = D->freq[b].nChan;
+		//D->nOutChan = D->freq[b].nChan/D->freq[b].specAvg;
+		//DiFX outputbands: nInChan, nOutChan update is postponed till parseDifxInputBaselineTable() because
+		// only the baseline table tells which visibility data/frequencies are outputted vs which are internal-temporary
+		D->corrSpecAvg = D->freq[b].specAvg;
 	}
 	
 	return D;
@@ -1502,6 +1524,14 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 			return 0;
 		}
 		D->datastream[e].phaseCalIntervalMHz = atof(DifxParametersvalue(ip, r));
+
+		/* note use of r1 again: the PHASE CAL BASE parameter is optional */
+		r1 = DifxParametersfind_limited(ip, r+1, 5, "PHASE CAL BASE(MHZ)");
+		if(r1 > 0)
+		{
+			D->datastream[e].phaseCalBaseMHz = atoi(DifxParametersvalue(ip, r1));
+		}
+
 		r = DifxParametersfind(ip, r+1, "NUM RECORDED FREQS");
 		if(r < 0)
 		{
@@ -1684,7 +1714,7 @@ static DifxInput *parseDifxInputDatastreamTable(DifxInput *D, const DifxParamete
 
 static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters *ip)
 {
-	int b, r;
+	int b, r, r2;
 	
 	if(!D || !ip)
 	{
@@ -1732,7 +1762,14 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 		
 		for(f = 0; f < D->baseline[b].nFreq; ++f)
 		{
-			int p;
+			int p, fq = -1;
+
+			r2 = DifxParametersfind2(ip, r+1, "TARGET FREQ %d/%d", b, f);
+			if(r2 >= 0)
+			{
+				fq = atoi(DifxParametersvalue(ip, r2));
+				r = r2;
+			}
 
 			r = DifxParametersfind2(ip, r+1, "POL PRODUCTS %d/%d", b, f);
 			if(r < 0)
@@ -1760,7 +1797,19 @@ static DifxInput *parseDifxInputBaselineTable(DifxInput *D, const DifxParameters
 					return 0;
 				}
 				D->baseline[b].bandB[f][p] = atoi(DifxParametersvalue(ip, r));
+
+				if(fq < 0)
+				{
+					// DiFX 2.5/2.6 has no explicit TARGET FREQ: for backwards compatibility,
+					// default to freq of band A as the TARGET freq, i.e., mapping of 1-to-1 (input band==output band)
+					fq = getDifxDatastreamBandFreqId(&D->datastream[D->baseline[b].dsA], D->baseline[b].bandA[f][p]);
+				}
 			}
+
+			D->baseline[b].destFq[f] = fq;
+			D->nInChan = D->freq[fq].nChan;
+			D->nOutChan = D->freq[fq].nChan/D->freq[fq].specAvg;
+
 		}
 	}
 
@@ -2418,6 +2467,16 @@ static DifxInput *populateCalc(DifxInput *D, DifxParameters *cp)
 				return 0;
 			}
 			snprintf(D->spacecraft[s].name, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, rows[0]));
+			row = DifxParametersfind1(cp, rows[0], "SPACECRAFT %d EPHEM", s);
+			if(row > 0)
+			{
+				snprintf(D->spacecraft[s].ephemFile, DIFXIO_FILENAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+			}
+			row = DifxParametersfind1(cp, rows[0], "SPACECRAFT %d ID", s);
+			if(row > 0)
+			{
+				snprintf(D->spacecraft[s].ephemObject, DIFXIO_NAME_LENGTH, "%s", DifxParametersvalue(cp, row));
+			}
 			D->spacecraft[s].nPoint = atoi(DifxParametersvalue(cp, rows[1]));
 			D->spacecraft[s].pos = (sixVector *)calloc(D->spacecraft[s].nPoint, sizeof(sixVector));
 
@@ -3087,7 +3146,13 @@ static DifxInput *deriveFitsSourceIds(DifxInput *D)
 		int freqSetId;
 
 		D->source[i].numFitsSourceIds = D->nFreqSet;
+
+		if(D->source[i].fitsSourceIds != 0)
+		{
+			free(D->source[i].fitsSourceIds);
+		}
 		D->source[i].fitsSourceIds = (int*)calloc(D->nFreqSet, sizeof(int));
+
 		for(freqSetId = 0; freqSetId < D->nFreqSet; ++freqSetId)
 		{
 			int a, j;
@@ -3413,7 +3478,6 @@ static int mergeDifxInputFreqSetsStrict(DifxInput *D)
 		}
 		if(newFreqSetId == n)	/* no match */
 		{
-			allocateDifxFreqSetFreqMap(newdfs + n, D->nFreq);
 			copyDifxFreqSet(newdfs + n, D->freqSet + freqSetId);
 			++n;
 		}
@@ -4423,6 +4487,10 @@ int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int bas
 	{
 		return -4;
 	}
+	if(D->baseline[baselineId].dsB < 0 || D->baseline[baselineId].dsB > D->nDatastream)
+	{
+		return -4;
+	}
 
 	ds = D->datastream + D->baseline[baselineId].dsA;
 
@@ -4449,6 +4517,100 @@ int DifxInputGetFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int bas
 	}
 
 	return freqId;
+}
+
+int DifxInputGetOutputFreqIdByBaselineFreq(const DifxInput *D, int baselineId, int baselineFreq)
+{
+	int band;
+	DifxDatastream *ds;
+	int freqId;
+
+	if(!D)
+	{
+		return -1;
+	}
+	if(baselineId > D->nBaseline || baselineId < 0)
+	{
+		return -2;
+	}
+	if(baselineFreq > D->baseline[baselineId].nFreq || baselineFreq < 0)
+	{
+		return -3;
+	}
+	if(D->baseline[baselineId].dsA < 0 || D->baseline[baselineId].dsA > D->nDatastream)
+	{
+		return -4;
+	}
+	if(D->baseline[baselineId].dsB < 0 || D->baseline[baselineId].dsB > D->nDatastream)
+	{
+		return -4;
+	}
+
+	ds = D->datastream + D->baseline[baselineId].dsA;
+
+	band = D->baseline[baselineId].bandA[baselineFreq][0];
+	if(band < 0 || band > ds->nRecBand + ds->nZoomBand)
+	{
+		return -5;
+	}
+
+	freqId = D->baseline[baselineId].destFq[baselineFreq];
+
+	return freqId;
+}
+
+/** Returns list of output frequencies from all baselines. The last entry is '-1'. User must free() the returned array when done. */
+int* DifxInputGetOutputFreqs(const DifxInput *D)
+{
+	int* outputfreqs = NULL;
+	int noutputfreqs = 0;
+	int configId;
+	int b, k, n, fqId;
+
+	if(!D || D->nFreq < 1)
+	{
+		return NULL;
+	}
+
+	outputfreqs = (int *)calloc(D->nFreq + 1, sizeof(int));
+	for(n = 0; n < D->nFreq + 1; ++n)
+	{
+		outputfreqs[n] = -1;
+	}
+	
+	for(configId = 0; configId < D->nConfig; ++configId)
+	{
+		const DifxConfig *dc = D->config + configId;
+		for(b = 0; b < dc->nBaseline; ++b)
+		{
+			const DifxBaseline *db = D->baseline + dc->baselineId[b];
+			if(dc->baselineId[b] < 0)
+			{
+				continue;
+			}
+
+			for(k = 0; k < db->nFreq; ++k)
+			{
+				if(db->nPolProd[k] < 0)
+				{
+					continue;
+				}
+	
+				fqId = db->destFq[k];
+				for(n = 0; n < noutputfreqs; ++n)
+				{
+					if (outputfreqs[n] == fqId) break;
+				}
+				if (n >= noutputfreqs)
+				{
+					outputfreqs[noutputfreqs] = fqId;
+					++noutputfreqs;
+				}
+			}
+		}
+	}
+
+	return outputfreqs;
 }
 
 int DifxInputGetDatastreamIdsByAntennaId(int *dsIds, const DifxInput *D, int antennaId, int maxCount)
@@ -4482,6 +4644,37 @@ int DifxInputGetDatastreamIdsByAntennaId(int *dsIds, const DifxInput *D, int ant
 	}
 
 	return n;
+}
+
+int DifxInputGetMaxDatastreamsPerAntenna(const DifxInput *D)
+{
+	int a;
+	int m = 0;
+
+	if(!D)
+	{
+		return 0;
+	}
+
+	for(a = 0; a < D->nAntenna; ++a)
+	{
+		int am, d;
+
+		am = 0;
+		for(d = 0; d < D->nDatastream; ++d)
+		{
+			if(D->datastream[d].antennaId == a)
+			{
+				++am;
+			}
+		}
+		if(am > m)
+		{
+			m = am;
+		}
+	}
+
+	return m;
 }
 
 /* Here "Original" means indexes within the job rather than remapped indices */
@@ -4612,6 +4805,29 @@ const DifxSource *DifxInputGetSource(const DifxInput *D, const char *sourceName)
 	else
 	{
 		return 0;
+	}
+}
+
+/* returns -1 if source not found */
+int DifxInputGetSourceId(const DifxInput *D, const char *sourceName)
+{
+	if(D)
+	{
+		int s;
+
+		for(s = 0; s < D->nSource; ++s)
+		{
+			if(strcmp(D->source[s].name, sourceName) == 0)
+			{
+				return s;
+			}
+		}
+
+		return -1;
+	}
+	else
+	{
+		return -1;
 	}
 }
 
