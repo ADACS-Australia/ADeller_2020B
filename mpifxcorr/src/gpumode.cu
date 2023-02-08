@@ -44,44 +44,37 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     this->estimatedbytes_gpu += sizeof(float) * this->unpacksamples * numrecordedbands * cfg_numBufferedFFTs;
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
         for (size_t i = 0; i < numrecordedbands; ++i) {
-            this->unpackedarrays_gpu[j * numrecordedbands + i] = big_array + ((j * numrecordedbands + i) * unpacksamples);
+            this->unpackedarrays_gpu[j * numrecordedbands + i] =
+                    big_array + ((j * numrecordedbands + i) * unpacksamples);
         }
     }
     // TODO: PWC: allocations for complex
 
-    int n[1] = {this->fftchannels};
+    int n[] = {this->fftchannels};
     int idist = this->fftchannels;
     int odist = this->fftchannels;
 
-    int inembed[] = {this->fftchannels};
-    int onembed[] = {this->fftchannels};
+    int inembed[] = {this->fftchannels * numrecordedbands};
+    int onembed[] = {this->fftchannels * numrecordedbands};
 
     int istride = 1;
     int ostride = 1;
 
-    checkCufft(cufftPlan1d(&this->fft_plan, this->fftchannels, CUFFT_C2C,cfg_numBufferedFFTs));
-//    checkCufft(
-//            cufftPlanMany(&this->fft_plan, 1, (int *) &n, (int *) &inembed, istride, idist, (int *) &onembed, ostride,
-//                          odist, CUFFT_C2C, cfg_numBufferedFFTs));
-//
-//    cufftCallbackLoadC hostCopyOfCallbackPtr;
-//
-//    cudaMemcpyFromSymbol(&hostCopyOfCallbackPtr,
-//                         myOwnCallbackPtr,
-//                         sizeof(hostCopyOfCallbackPtr));
-//
-//    // Now associate the callbacks with the plan.
-//    cufftResult status = cufftXtSetCallback(this->fft_plan,
-//                                            (void **) &hostCopyOfCallbackPtr,
-//                                            CUFFT_CB_LD_COMPLEX,
-//                                            this);
-//    if (status == CUFFT_LICENSE_ERROR) {
-//        printf("This sample requires a valid license file.\n");
-//        printf("The file was either not found, out of date, or otherwise invalid.\n");
-//        exit(EXIT_FAILURE);
-//    } else {
-//        checkCufft(status);
-//    }
+    checkCufft(
+            cufftPlanMany(
+                    &this->fft_plan,
+                    1,
+                    (int *) &n,
+                    (int *) &inembed,
+                    istride,
+                    idist,
+                    (int *) &onembed,
+                    ostride,
+                    odist,
+                    CUFFT_C2C,
+                    numrecordedbands
+            )
+    );
 }
 
 GPUMode::~GPUMode() {
@@ -446,12 +439,18 @@ void GPUMode::preprocess(int index, int subloopindex) {
                                   - recordedfreqlooffsets[0] * fracwalltime
                                   - fraclooffset * intwalltime;
 
-            gpu_RtoC(&complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
-                     &(unpackedarrays_gpu[subloopindex * numrecordedbands + j][nearestsample - unpackstartsamples]),
-                     fftchannels);
-//             In place
-            gpu_complexrotatorMultiply(this->fftchannels, &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
-                                       bigA_d, bigB_d);
+            gpu_RtoC(
+                    &complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
+                    &(unpackedarrays_gpu[subloopindex * numrecordedbands + j][nearestsample - unpackstartsamples]),
+                    fftchannels
+            );
+            // In place
+            gpu_complexrotatorMultiply(
+                    this->fftchannels,
+                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
+                    bigA_d,
+                    bigB_d
+            );
         }
     }
 }
@@ -467,11 +466,9 @@ void GPUMode::postprocess(int index, int subloopindex) {
 
             // For upper sideband bands, normally just need to copy the fftd channels.
             // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-            status = vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + j], fftoutputs[j][subloopindex],
+            status = vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + j],
+                                     fftoutputs[j][subloopindex],
                                      recordedbandchannels);
-
-            for (int i = 0; i < numrecordedbands; i++)
-            cout << i << ": " << fftoutputs[j][subloopindex][i].re << " " << fftoutputs[j][subloopindex][i].im << endl;
 
             if (status != vecNoErr)
                 csevere << startl << "Error copying FFT results!!!" << endl;

@@ -218,7 +218,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                         threadscratchspace *scratchspace) {
     static int nth_call = 0;
     ++nth_call;
-    std::cout << "called GPUCore::processdata for the " << nth_call << time << ", index: " << index << ", startblock: " << startblock << ", numblocks: " << numblocks<< std::endl;
+    std::cout << "called GPUCore::processgpudata for the " << nth_call << " time, index: " << index << ", startblock: " << startblock << ", numblocks: " << numblocks<< std::endl;
 
 #ifndef NEUTERED_DIFX
     int status, i, numfftloops, numfftsprocessed;
