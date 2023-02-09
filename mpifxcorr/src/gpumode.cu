@@ -48,17 +48,22 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
                     big_array + ((j * numrecordedbands + i) * unpacksamples);
         }
     }
+
+    fracsamprotatorA_array = new cf32 *[cfg_numBufferedFFTs];
+    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
+        fracsamprotatorA_array[j] = vectorAlloc_cf32(recordedbandchannels);
+    }
+
     // TODO: PWC: allocations for complex
 
     int n[] = {this->fftchannels};
+    int istride = 1;
+    int ostride = 1;
     int idist = this->fftchannels;
     int odist = this->fftchannels;
 
-    int inembed[] = {this->fftchannels * numrecordedbands};
-    int onembed[] = {this->fftchannels * numrecordedbands};
-
-    int istride = 1;
-    int ostride = 1;
+    int inembed[] = {0};
+    int onembed[] = {0};
 
     checkCufft(
             cufftPlanMany(
@@ -72,7 +77,7 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
                     ostride,
                     odist,
                     CUFFT_C2C,
-                    numrecordedbands
+                    numrecordedbands * cfg_numBufferedFFTs
             )
     );
 }
@@ -408,14 +413,14 @@ void GPUMode::preprocess(int index, int subloopindex) {
     status = vectorSinCos_f32(stepfracsamparg, stepfracsampsin, stepfracsampcos, numfracstrides / 2);
     if (status != vecNoErr)
         csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-    status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsamprotatorA, arraystridelength);
+    status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsamprotatorA_array[subloopindex], arraystridelength);
     if (status != vecNoErr)
         csevere << startl << "Error in frac sample correction, real to complex (sub)!!!" << status << endl;
     status = vectorRealToComplex_f32(stepfracsampcos, stepfracsampsin, stepfracsampcplx, numfracstrides / 2);
     if (status != vecNoErr)
         csevere << startl << "Error in frac sample correction, real to complex (step)!!!" << status << endl;
     for (int j = 1; j < numfracstrides / 2; j++) {
-        status = vectorMulC_cf32(fracsamprotatorA, stepfracsampcplx[j], &(fracsamprotatorA[j * arraystridelength]),
+        status = vectorMulC_cf32(fracsamprotatorA_array[subloopindex], stepfracsampcplx[j], &(fracsamprotatorA_array[subloopindex][j * arraystridelength]),
                                  arraystridelength);
         if (status != vecNoErr)
             csevere << startl << "Error doing the time-saving complex multiplication in frac sample correction!!!"
@@ -423,7 +428,7 @@ void GPUMode::preprocess(int index, int subloopindex) {
     }
 
     // now do the first arraystridelength elements (which are different from fracsampptr1 for LSB case)
-    status = vectorMulC_cf32_I(stepfracsampcplx[0], fracsamprotatorA, arraystridelength);
+    status = vectorMulC_cf32_I(stepfracsampcplx[0], fracsamprotatorA_array[subloopindex], arraystridelength);
     if (status != vecNoErr)
         csevere << startl
                 << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!"
@@ -440,14 +445,14 @@ void GPUMode::preprocess(int index, int subloopindex) {
                                   - fraclooffset * intwalltime;
 
             gpu_RtoC(
-                    &complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
+                    &complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
                     &(unpackedarrays_gpu[subloopindex * numrecordedbands + j][nearestsample - unpackstartsamples]),
                     fftchannels
             );
             // In place
             gpu_complexrotatorMultiply(
                     this->fftchannels,
-                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + j],
+                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
                     bigA_d,
                     bigB_d
             );
@@ -466,7 +471,7 @@ void GPUMode::postprocess(int index, int subloopindex) {
 
             // For upper sideband bands, normally just need to copy the fftd channels.
             // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-            status = vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + j],
+            status = vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
                                      fftoutputs[j][subloopindex],
                                      recordedbandchannels);
 
@@ -491,9 +496,9 @@ void GPUMode::postprocess(int index, int subloopindex) {
 
             //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
             if (deltapoloffsets == false || config->getDRecordedBandPol(configindex, datastreamindex, j) == 'R') {
-                status = vectorMul_cf32_I(fracsamprotatorA, fftoutputs[j][subloopindex], recordedbandchannels);
+                status = vectorMul_cf32_I(fracsamprotatorA_array[subloopindex], fftoutputs[j][subloopindex], recordedbandchannels);
             } else {
-                status = vectorMul_cf32_I(fracsamprotatorB, fftoutputs[j][subloopindex], recordedbandchannels);
+                NOT_SUPPORTED("fracsamplerotatorB");
             }
 
             if (status != vecNoErr)
@@ -553,9 +558,9 @@ void GPUMode::postprocess(int index, int subloopindex) {
 }
 
 void GPUMode::runFFT() {
-    checkCufft(cufftExecC2C(this->fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
-    checkCuda(cudaMemcpy(this->fftd_gpu_out, this->fftd_gpu,
-                         sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands,
+    checkCufft(cufftExecC2C(this->fft_plan, this->complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
+    checkCuda(cudaMemcpy(fftd_gpu_out, this->fftd_gpu,
+                         sizeof(cuFloatComplex) * this->fftchannels * numrecordedbands * cfg_numBufferedFFTs,
                          cudaMemcpyDeviceToHost));
 }
 

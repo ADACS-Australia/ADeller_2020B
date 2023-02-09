@@ -44,6 +44,8 @@ protected:
     // Remember how long the 'unpackedarrays' are -- norally this would be
     // 'unpacksamples' but e.g. the Mk5Mode implementation overwrites that
     size_t unpackedarrays_elem_count;
+
+    cf32** fracsamprotatorA_array;
 private:
 
     cufftHandle fft_plan;
