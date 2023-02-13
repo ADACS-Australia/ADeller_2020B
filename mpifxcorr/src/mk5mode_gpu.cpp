@@ -93,7 +93,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   }
   else
   {
-    goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, unpackedarrays, samplestounpack);
+    goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, this->unpackedarrays, samplestounpack);
   }
   if(mark5stream->samplegranularity > 1)
     { // CHRIS not sure what this is mean to do
@@ -102,17 +102,17 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
 
     mungedoffset = sampleoffset % mark5stream->samplegranularity;
     for(int i = 0; i < mungedoffset; i++) {
-      for(int b = 0; b < mark5stream->nchan; ++b) {
-        if(unpackedarrays[b][i] != 0.0) {
-          unpackedarrays[b][i] = 0.0;
+      for(int b = subloopindex * numrecordedbands; b < subloopindex * numrecordedbands + mark5stream->nchan; ++b) {
+        if(unpackedarrays_cpu[b][i] != 0.0) {
+          unpackedarrays_cpu[b][i] = 0.0;
           erasedsamples++;
         }
       }
     }
     for(int i = unpacksamples + mungedoffset; i < samplestounpack; i++) {
-      for(int b = 0; b < mark5stream->nchan; ++b) {
-        if(unpackedarrays[b][i] != 0.0) {
-          unpackedarrays[b][i] = 0.0;
+      for(int b = subloopindex * numrecordedbands; b < subloopindex * numrecordedbands + mark5stream->nchan; ++b) {
+        if(unpackedarrays_cpu[b][i] != 0.0) {
+          unpackedarrays_cpu[b][i] = 0.0;
           erasedsamples++;
         }
       }
@@ -132,8 +132,8 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
       invalid[b] = 0;
   }
 
-  checkCuda(cudaMemcpy(this->unpackedarrays_gpu[subloopindex * numrecordedbands], this->unpackedarrays[0], sizeof(float)*this->unpackedarrays_elem_count*numrecordedbands, cudaMemcpyHostToDevice));
-//  checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays[0], sizeof(float)*this->unpackedarrays_elem_count*numrecordedbands, cudaMemcpyHostToDevice));
+//  checkCuda(cudaMemcpy(this->unpackedarrays_gpu[subloopindex * numrecordedbands], unpackedarrays_cpu[subloopindex * numrecordedbands], sizeof(float)*this->unpackedarrays_elem_count*numrecordedbands, cudaMemcpyHostToDevice));
+  checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays[0], sizeof(float)*this->unpackedarrays_elem_count*numrecordedbands, cudaMemcpyHostToDevice));
   // PWC - bulk copy into GPU - but we'll have to do something smarter in the
   // future
   /*

@@ -5,6 +5,7 @@ enable_language(CUDA)
 
 include(CheckLanguage)
 check_language(CUDA)
+find_package(CUDA  REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
@@ -17,11 +18,18 @@ include_directories(
         build
         build/src
         /opt/intel/oneapi/ipp/latest/include
-        /home/lewis/Projects/ADeller_2020B/install/include
+        ../install/include
+        .
+        ../libraries/mark5access
+        ../libraries/mark6sg
+        ../libraries/vdifio/src
+
+        "${CUDA_INCLUDE_DIRS}"
 )
 
 link_directories(
         /opt/intel/oneapi/ipp/latest/lib/intel64
+        ../install/lib
 )
 
 # Define the source files
@@ -51,8 +59,6 @@ set(
         src/mark5bfile.cpp
         src/mark5bfile.h
         src/mark5bmark5_stubs.cpp
-        src/mark5bmark6_datastream.cpp
-        src/mark5bmark6_datastream.h
         src/mathutil.cpp
         src/mathutil.h
         src/mk5.cpp
@@ -83,8 +89,6 @@ set(
         src/vdiffake.h
         src/vdiffile.cpp
         src/vdiffile.h
-        src/vdifmark6_datastream.cpp
-        src/vdifmark6_datastream.h
         src/vdifnetwork.cpp
         src/vdifnetwork.h
         src/visibility.cpp
@@ -102,7 +106,6 @@ set(
         LINK_LIBRARIES
         difxmessage
         vdifio
-        mark6gather
         mark5access
 
         cuda

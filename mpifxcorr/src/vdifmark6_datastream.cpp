@@ -36,7 +36,7 @@
 #include <sys/socket.h>
 #include "config.h"
 #include "alert.h"
-#include <mark6sg/mark6gather.h>
+#include <mark6gather/mark6gather.h>
 #include <mark6gather_vdif.h>
 #include "mode.h"
 #include "vdifmark6_datastream.h"

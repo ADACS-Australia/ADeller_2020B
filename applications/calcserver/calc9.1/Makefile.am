@@ -2,7 +2,11 @@
 # -fallow-argument-mismatch
 
 #AM_FFLAGS= -fno-second-underscore -fno-globals -C -w -i2 -O2 
+<<<<<<< Updated upstream
 AM_FFLAGS= -fno-second-underscore -std=legacy -C -w  -O2
+=======
+AM_FFLAGS= -fallow-argument-mismatch -fno-second-underscore -C -w  -O2
+>>>>>>> Stashed changes
 
 i_sources = \
 	CALCIO.INC \

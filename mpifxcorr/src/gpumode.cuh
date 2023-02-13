@@ -26,12 +26,11 @@ public:
     void preprocess(int index, int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
+    void complexRotate(int subloopindex);
 
 protected:
-    double *subxoff_gpu;
-    double *subxval_gpu;
-
     float **unpackedarrays_gpu;
+    float **unpackedarrays_cpu;
 
     cuFloatComplex *complexunpacked_gpu;
     cuFloatComplex *fftd_gpu;
@@ -46,6 +45,9 @@ protected:
     size_t unpackedarrays_elem_count;
 
     cf32** fracsamprotatorA_array;
+
+    double* bigA_d;
+    double* bigB_d;
 private:
 
     cufftHandle fft_plan;

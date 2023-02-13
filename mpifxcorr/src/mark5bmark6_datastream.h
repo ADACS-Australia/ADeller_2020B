@@ -27,7 +27,7 @@
 #ifndef MARK5BMARK6FILE_H
 #define MARK5BMARK6FILE_H
 
-#include <mark6sg/mark6gather.h>
+#include <mark6gather//mark6gather.h>
 #include <difxmessage.h>
 #include "mark5bfile.h"
 

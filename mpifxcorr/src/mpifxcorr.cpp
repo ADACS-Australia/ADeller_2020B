@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
   char difxMessageID[DIFX_MESSAGE_PARAM_LENGTH];
   char myhostname[200];
 
-  // Argument parsing
+    // Argument parsing
   int use_gpu = 0;
   char *input_file;
 
@@ -369,49 +369,6 @@ int main(int argc, char *argv[])
   MPI_Comm_dup(world, &return_comm);
   MPI_Get_processor_name(processor_name, &namelen);
 
-  for(int i=2;i<argc;i++)
-  {
-    if(argv[i][0]=='-' && argv[i][1]=='M')
-    {
-      monitor = true;
-      monitoropt = string(argv[i]);
-      size_t colindex1 = monitoropt.find_first_of(':');
-      size_t colindex2 = monitoropt.find_last_of(':');
-
-      if(colindex2 == colindex1)
-      {
-        port = atoi(monitoropt.substr(colindex1 + 1).c_str());
-        monitor_skip = 1;
-      }
-      else
-      {
-        port = atoi(monitoropt.substr(colindex1 + 1, colindex2-colindex1-1).c_str());
-        monitor_skip = atoi(monitoropt.substr(colindex2 + 1).c_str());
-      }
-      strncpy(monhostname, monitoropt.substr(2,colindex1-2).c_str(), sizeof(monhostname)-1);
-    }
-    else if(argv[i][0]=='-' && argv[i][1]=='r')
-    {
-      restartseconds = atof(argv[i] + 2);
-    }
-    else if(strcmp(argv[i], "--nocommandthread") == 0)
-    {
-      nocommandthread = true;
-    }
-    else if(strcmp(argv[i], "--vgoscomplex") == 0)
-    {
-      cwarn << startl << "Enabling VGOS hack; raw samples of *all* VDIFC stations will have the sign of the imaginary part reversed i.e. the sideband inverted during unpacking!" << endl;
-      vgoscomplexvdifhack = true;
-    }
-    else
-    {
-      cfatal << startl << "Invoke with mpifxcorr <inputfilename> [-M<monhostname>:port[:monitor_skip]] [-rNewStartSec] [--nocommandthread] [--vgoscomplex]" << endl;
-      MPI_Barrier(world);
-      MPI_Finalize();
-      return EXIT_FAILURE;
-    }
-  }
-
   //setup difxmessage
   generateIdentifier(input_file, difxMessageID);
   difxMessageInit(myID, difxMessageID);
@@ -423,6 +380,8 @@ int main(int argc, char *argv[])
       cout << "NOTE: difxmessage is in use.  If you are not running errormon/errormon2, you are missing all the (potentially important) info messages!" << endl;
     }
   }
+
+  cinfo << startl << "MPI Process " << myID << " is running on host " << processor_name << endl;
 
   cinfo << startl << "MPI Process " << myID << " is about to process input file" << endl;
 

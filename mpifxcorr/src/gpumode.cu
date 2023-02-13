@@ -21,13 +21,10 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
              cacorrs, bclock), estimatedbytes_gpu(0) {
 
     cfg_numBufferedFFTs = config->getNumBufferedFFTs(confindex);
+    this->unpackedarrays_elem_count = unpacksamples;
 
-    checkCuda(cudaMalloc(&this->subxoff_gpu,
-                         sizeof(double) * this->arraystridelength));
-    checkCuda(cudaMemcpy(this->subxoff_gpu, this->subxoff,
-                         sizeof(double) * this->arraystridelength, cudaMemcpyHostToDevice));
-    checkCuda(cudaMalloc(&this->subxval_gpu,
-                         sizeof(double) * this->arraystridelength));
+    // idk why, but an early allocation is required to get correct output results ????????????
+    gpu_malloc<float>(1);
 
     this->complexunpacked_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels * cfg_numBufferedFFTs * numrecordedbands);
     this->estimatedbytes_gpu += sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands;
@@ -36,10 +33,19 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     this->fftd_gpu_out = new cf32[this->fftchannels * cfg_numBufferedFFTs * numrecordedbands];
     this->estimatedbytes_gpu += sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands;
 
+    this->unpackedarrays_cpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
+    float *big_array = new float[unpacksamples * numrecordedbands * cfg_numBufferedFFTs];
+    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
+        for (size_t i = 0; i < numrecordedbands; ++i) {
+            this->unpackedarrays_cpu[j * numrecordedbands + i] =
+                    big_array + ((j * numrecordedbands + i) * unpacksamples);
+        }
+    }
+
+
     this->unpackedarrays_gpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
     this->estimatedbytes += sizeof(float *) * numrecordedbands;
-    this->unpackedarrays_elem_count = unpacksamples;
-    float *big_array;
+
     checkCuda(cudaMalloc(&big_array, sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs));
     this->estimatedbytes_gpu += sizeof(float) * this->unpacksamples * numrecordedbands * cfg_numBufferedFFTs;
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
@@ -53,6 +59,9 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
         fracsamprotatorA_array[j] = vectorAlloc_cf32(recordedbandchannels);
     }
+
+    bigA_d = new double[cfg_numBufferedFFTs * numrecordedbands];
+    bigB_d = new double[cfg_numBufferedFFTs * numrecordedbands];
 
     // TODO: PWC: allocations for complex
 
@@ -160,6 +169,18 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
             break; // may not have to fully complete last fftloop
 
         preprocess(i, subloopindex);
+    }
+
+    // Copy the data to the gpu
+//    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+
+    // Run the rotator
+    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
+        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+        if (i >= startblock + numblocks)
+            break; // may not have to fully complete last fftloop
+
+        complexRotate(subloopindex);
     }
 
     // Actually run the FFT
@@ -438,23 +459,30 @@ void GPUMode::preprocess(int index, int subloopindex) {
     // Loop over all recorded bands looking for the matching frequency we should be dealing with
     for (int j = 0; j < numrecordedbands; j++) {
         if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
-            const double bigA_d = a * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
-            const double bigB_d = b * lofreq   // NOTE - no division by /fftchannels here
+            bigA_d[subloopindex * numrecordedbands + j] = a * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
+            bigB_d[subloopindex * numrecordedbands + j] = b * lofreq   // NOTE - no division by /fftchannels here
                                   + (lofreq - int(lofreq)) * integerdelay
                                   - recordedfreqlooffsets[0] * fracwalltime
                                   - fraclooffset * intwalltime;
 
             gpu_RtoC(
                     &complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                    &(unpackedarrays_gpu[subloopindex * numrecordedbands + j][nearestsample - unpackstartsamples]),
+                    &(unpackedarrays_gpu[j][nearestsample - unpackstartsamples]),
                     fftchannels
             );
+        }
+    }
+}
+
+void GPUMode::complexRotate(int subloopindex) {
+    for (int j = 0; j < numrecordedbands; j++) {
+        if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
             // In place
             gpu_complexrotatorMultiply(
                     this->fftchannels,
                     &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                    bigA_d,
-                    bigB_d
+                    bigA_d[subloopindex * numrecordedbands + j],
+                    bigB_d[subloopindex * numrecordedbands + j]
             );
         }
     }
