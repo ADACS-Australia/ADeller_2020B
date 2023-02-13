@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: freq.h 6894 2015-07-28 16:19:06Z WalterBrisken $
+ * $Id: freq.h 10579 2022-08-02 10:58:00Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/util.h $
- * $LastChangedRevision: 6894 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2015-07-29 02:19:06 +1000 (Wed, 29 Jul 2015) $
+ * $LastChangedRevision: 10579 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2022-08-02 20:58:00 +1000 (Tue, 02 Aug 2022) $
  *
  *==========================================================================*/
 
@@ -34,13 +34,23 @@ This is a helper class used within vex2difx.cpp
 #ifndef __FREQ_H__
 #define __FREQ_H__
 
+#include <cassert>
 #include <vector>
+#include <ostream>
 
 class freq
 {
 public:
-	freq(double f=0.0, double b=0.0, char s=' ', double isr=0.0, double osr=0.0, int d=0, int iz=0, unsigned int t=0) 
-		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s) {};
+	freq(double f=0.0, double b=0.0, char s=' ', double isr=0.0, double osr=0.0, int d=0, int iz=0, unsigned int t=0, const std::string &rx="")
+		: fq(f), bw(b), inputSpecRes(isr), outputSpecRes(osr), decimation(d), isZoomFreq(iz), toneSetId(t), sideBand(s), rxName(rx)
+	{
+		assert(fq >= 0);
+		assert(bw >= 0);
+		assert(sideBand == 'L' || sideBand == 'U');
+		assert(inputSpecRes > 0);
+	}
+
+	//variables
 	double fq;		// Hz
 	double bw;		// Hz
 	double inputSpecRes;	// Hz
@@ -48,11 +58,33 @@ public:
 	int decimation;
 	int isZoomFreq;
 	unsigned int toneSetId;
-	char sideBand;
+	char sideBand;		// 'U' or 'L'
+	std::string rxName;	// name of the receiver; keep unset if disagrees across the participating antennas
 
+	//methods
 	int specAvg() const { return static_cast<int>(outputSpecRes/inputSpecRes + 0.5); }
+	void flip();
+	friend bool operator== (const freq& lhs, const freq& rhs);
+	friend std::ostream& operator << (std::ostream& os, const freq& f);
 };
 
-int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t);
+inline bool operator== (const freq& lhs, const freq& rhs)
+{
+	return (lhs.fq  == rhs.fq &&
+		lhs.bw  == rhs.bw &&
+		lhs.sideBand      == rhs.sideBand &&
+		lhs.inputSpecRes  == rhs.inputSpecRes &&
+		lhs.outputSpecRes == rhs.outputSpecRes &&
+		lhs.decimation    == rhs.decimation &&
+		lhs.isZoomFreq    == rhs.isZoomFreq &&
+		lhs.toneSetId     == rhs.toneSetId);
+}
+
+//freq.cpp
+int getFreqId(std::vector<freq>& freqs, const freq& newfq); // note: func may blank out freqs[<match>].rxName
+int getFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t, const std::string &rx); // note: func may blank out freqs[<match>].rxName
+int addFreqId(std::vector<freq>& freqs, const freq& newfq);
+int addFreqId(std::vector<freq>& freqs, double fq, double bw, char sb, double isr, double osr, int d, int iz, unsigned int t, const std::string &rx);
+std::ostream& operator << (std::ostream& os, const freq& f);
 
 #endif

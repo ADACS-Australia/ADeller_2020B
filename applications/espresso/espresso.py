@@ -121,6 +121,7 @@ def fix_paths(inputfilename, calcfilename, indir, outdir):
     change_path(copy_inputfilename, "PULSAR CONFIG FILE:", indir, "./")
     change_path(copy_calcfilename, "IM FILENAME:", indir, "./")
     change_path(copy_calcfilename, "FLAG FILENAME:", indir, "./")
+    change_path(copy_calcfilename, "VEX FILENAME:", indir, "./")
 
 
 def make_new_runfiles(
@@ -447,7 +448,7 @@ def run_batch(corrjoblist, outdir):
             good_jobs.append(jobname)
         else:
             bad_jobs.append(jobname)
-        errors += job_errors
+        errors += job_errors[0:10]
 
         if batch.stats is not None:
             # print the user stats

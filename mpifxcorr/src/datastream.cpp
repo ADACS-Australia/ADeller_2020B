@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: datastream.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
+// $Id: datastream.cpp 10026 2021-05-28 18:05:03Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/datastream.cpp $
-// $LastChangedRevision: 9674 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
+// $LastChangedRevision: 10026 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-05-29 04:05:03 +1000 (Sat, 29 May 2021) $
 //
 //============================================================================
 #include "datastream.h"
@@ -74,6 +74,7 @@ DataStream::DataStream(const Configuration * conf, int snum, int id, int ncores,
   tcp = false;
   udp = false;
   raw = false;
+  lastvalidsegment = 0;
 
   // Early defaults that may change during ::initialise()
   portnumber = config->getDPortNumber(0, streamnum);

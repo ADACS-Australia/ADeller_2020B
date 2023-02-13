@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsHeader.c 8269 2018-05-03 20:23:16Z WalterBrisken $
+// $Id: fitsHeader.c 10537 2022-07-15 20:18:57Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsHeader.c $
-// $LastChangedRevision: 8269 $
+// $LastChangedRevision: 10537 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2018-05-04 06:23:16 +1000 (Fri, 04 May 2018) $
+// $LastChangedDate: 2022-07-16 06:18:57 +1000 (Sat, 16 Jul 2022) $
 //
 //============================================================================
 #include <sys/time.h>
@@ -186,6 +186,10 @@ const DifxInput *DifxInput2FitsHeader(const DifxInput *D, struct fitsPrivate *ou
 	if(opts->primaryBand)
 	{
 		fitsWriteString(out, "PRIBAND", opts->primaryBand, "");
+	}
+	if(opts->doVanVleck)
+	{
+		fitsWriteInteger(out, "VANVLECK", 1, "");
 	}
 	fitsWriteString(out, "DATE-OBS", ref_date, "");
 	mjd2fits((int)timeMjd(), strng);

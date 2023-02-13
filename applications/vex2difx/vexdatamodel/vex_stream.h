@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_stream.h 9874 2021-01-13 18:22:55Z WalterBrisken $
+ * $Id: vex_stream.h 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 9874 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2021-01-14 05:22:55 +1100 (Thu, 14 Jan 2021) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -36,6 +36,9 @@
 #include <set>
 #include <difxio.h>
 #include <regex.h>
+#include "vex_thread.h"
+
+// FIXME: change singleThread to be a bool() which looks at (nThread == 1) ???
 
 class VexStream
 {
@@ -61,7 +64,7 @@ public:
 
 	static char DataFormatNames[NumDataFormats+1][16];
 
-	VexStream() : sampRate(0.0), nBit(0), nRecordChan(0), VDIFFrameSize(0), singleThread(false), dataSampling(SamplingReal), dataSource(DataSourceUnspecified), alignmentPeriod(1), difxTsys(0.0) {}
+	VexStream() : sampRate(0.0), nBit(0), nRecordChan(0), VDIFFrameSize(0), singleThread(false), format(FormatNone), dataSampling(SamplingReal), dataSource(DataSourceUnspecified), alignmentPeriod(1), difxTsys(0.0) {}
 
 	double dataRateMbps() const { return sampRate*nBit*nRecordChan/1000000.0; }
 	static enum DataFormat stringToDataFormat(const std::string &str);
@@ -79,15 +82,18 @@ public:
 	size_t nPresentChan() const;	// Looks through listed channels and excludes those that are in the threadsAbsent set
 	bool recordChanAbsent(int recChan) const;	// return true if this record channel is not in the data stream
 	bool recordChanIgnore(int recChan) const;	// return true if this record channel should not be correlated
+	unsigned int nThread() const { return threads.size(); }		// number of threads
+
+	VexThread *getVexThreadByLink(const std::string threadLink);
+	VexThread *getVexThreadByThreadId(int threadId);
 
 	double sampRate;		// [Hz]
 	unsigned int nBit;		// bits per sample
 	unsigned int nRecordChan;	// number of recorded channels (per thread, for VDIF)
-	unsigned int nThread;		// number of threads
 	unsigned int fanout;		// 1, 2 or 4 (VLBA, Mark4 and related formats only)
 	unsigned int VDIFFrameSize;	// size of one logical block of data
 	bool singleThread;		// true for single thread VDIF
-	std::vector<int> threads;	// ordered list of threads for VDIF
+	std::vector<VexThread> threads;	// ordered list of threads for VDIF
 	std::set<int> threadsAbsent;	// threads that are expected to be absent in the data
 	std::set<int> threadsIgnore;	// threads that are expected to be present but should not be correlated
 	enum DataFormat format;
@@ -95,6 +101,8 @@ public:
 	enum DataSource dataSource;
 	unsigned int alignmentPeriod;   // in seconds; always 1 for VDIF, can be >1 for CODIF
 	double difxTsys;		// The DiFX .input file TSYS value for this datastream
+	std::string streamLink;		// First parameter of a vex2 DATASTREAMS:datasteam line
+	std::string streamName;		// Third parameter of a vex2 DATASTREAMS:datasteam line
 
 private:
 	static bool Init();		// called to initialize the regexes below

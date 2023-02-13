@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5tsys.c 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: m5tsys.c 10490 2022-06-03 14:18:03Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10490 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-06-04 00:18:03 +1000 (Sat, 04 Jun 2022) $
 //
 //============================================================================
 
@@ -43,18 +43,17 @@ int usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("A Mark5 switched power generator for VLBA, Mark3/4, and Mark5B "
-		"formats using the\nmark5access library.\n\n");
+	printf("A Mark5 switched power generator for VLBA, Mark3/4, Mark5B, and single-thread\n");
+	printf("VDIF formats using the\nmark5access library.\n\n");
 	printf("Usage : %s <file> <dataformat> [<n>] [<offset>]\n\n", pgm);
 	printf("  <file> is the name of the input file\n\n");
-	printf("  <dataformat> should be of the form: "
-		"<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
+	printf("  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
 	printf("    VLBA1_2-256-8-2\n");
 	printf("    MKIV1_4-128-2-1\n");
 	printf("    Mark5B-512-16-2\n");
 	printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n");
 	printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
 	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <n> is the number of samples per channel to count\n\n");
@@ -230,10 +229,14 @@ int main(int argc, char **argv)
 
 		buffer = malloc(bufferlen);
 
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
 			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
+			fclose(in);
+			free(buffer);
+			return -1;
 		}
 		else
 		{

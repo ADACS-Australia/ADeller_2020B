@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2008-2022 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsML.c 7652 2017-02-19 21:27:27Z WalterBrisken $
+// $Id: fitsML.c 10864 2022-12-30 16:24:23Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsML.c $
-// $LastChangedRevision: 7652 $
+// $LastChangedRevision: 10864 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-02-20 08:27:27 +1100 (Mon, 20 Feb 2017) $
+// $LastChangedDate: 2022-12-31 03:24:23 +1100 (Sat, 31 Dec 2022) $
 //
 //============================================================================
 #include <stdlib.h>
@@ -45,7 +45,7 @@ static double current_mjd()
 	return MJD_UNIX0 + (t.tv_sec + t.tv_usec*1.0e-6)/86400.0;
 }
 		
-const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, int phaseCentre)
+const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fits_keys, struct fitsPrivate *out, const struct CommandLineOptions *opts)
 {
 	char bandFormDouble[8];
 	char bandFormFloat[8];
@@ -80,7 +80,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 	int nRowBytes;
 	char str[80];
 	int32_t arrayId1;
-	int a, i, k, p, s;
+	int i, k, p, s;
 	double shiftedClock[array_N_POLY];
 	float freqVar[array_MAX_BANDS];
 	float faraday;
@@ -178,7 +178,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 		{
 			continue;
 		}
-		if(phaseCentre >= scan->nPhaseCentres)
+		if(opts->phaseCentre >= scan->nPhaseCentres)
 		{
 			continue;
 		}
@@ -186,7 +186,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 		config = D->config + configId;
 		dfs = D->freqSet + config->freqSetId;
 		freqId1 = config->freqSetId + 1;
-		sourceId1 = D->source[scan->phsCentreSrcs[phaseCentre]].fitsSourceIds[config->freqSetId] + 1;
+		sourceId1 = D->source[scan->phsCentreSrcs[opts->phaseCentre]].fitsSourceIds[config->freqSetId] + 1;
 
 		if(scan->im)
 		{
@@ -201,29 +201,17 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 
 		for(p = 0; p < np; ++p)
 		{
-			for(a = 0; a < config->nAntenna; ++a)
+			int antId;
+
+			for(antId = 0; antId < scan->nAntenna; ++antId)
 			{
 				const DifxAntenna *da;
 				const DifxPolyModel *P;
-				int dsId, antId;
 				int32_t antId1;
 				double ppoly[array_MAX_BANDS][array_N_POLY];
 				double gpoly[array_N_POLY];
 				double prate[array_MAX_BANDS][array_N_POLY];
 				double grate[array_N_POLY];
-
-				dsId = config->ant2dsId[a];
-				if(dsId < 0 || dsId >= D->nDatastream)
-				{
-					continue;
-				}
-				/* convert to D->antenna[] index ... */
-				antId = D->datastream[dsId].antennaId;
-
-				if(antId < 0 || antId >= scan->nAntenna)
-				{
-					continue;
-				}
 
 				da = D->antenna + antId;
 
@@ -242,7 +230,7 @@ const DifxInput *DifxInput2FitsML(const DifxInput *D, struct fits_keywords *p_fi
 					continue;
 				}
 
-				P = scan->im[antId][phaseCentre] + p;
+				P = scan->im[antId][opts->phaseCentre] + p;
 
 				time = P->mjd - (int)(D->mjdStart) + P->sec/86400.0;
 				deltat = (P->mjd - da->clockrefmjd)*86400.0 + P->sec;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2010-2017 by Walter Brisken                             *
+ *   Copyright (C) 2010-2022 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5pcal.c 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: m5pcal.c 10490 2022-06-03 14:18:03Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/examples/m5pcal.c $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10490 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-06-04 00:18:03 +1000 (Sat, 04 Jun 2022) $
 //
 //============================================================================
 
@@ -41,8 +41,8 @@
 
 const char program[] = "m5pcal";
 const char author[]  = "Walter Brisken";
-const char version[] = "0.9";
-const char verdate[] = "20170426";
+const char version[] = "0.10";
+const char verdate[] = "20220429";
 
 int ChunkSize = 0;
 const int MaxTones = 4096;
@@ -70,7 +70,8 @@ static void usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("An offline pulse cal extractor.  Can use VLBA, Mark3/4, and Mark5B formats using the\nmark5access library.\n\n");
+	printf("An offline pulse cal extractor.  Can use VLBA, Mark3/4, Mark5B, and single-thread\n");
+	printf("VDIF formats using the\nmark5access library.\n\n");
 	printf("Usage: %s [options] <infile> <dataformat> <freq1> [<freq2> ... ] <outfile>\n\n", program);
 	printf("  <infile> is the name of the input file\n\n");
 	printf("  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
@@ -79,7 +80,7 @@ static void usage(const char *pgm)
 	printf("    Mark5B-512-16-2\n");
 	printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n\n");
 	printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
 	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <freq1> ... is/are the frequencies (in MHz) relative to baseband of the first\n");
@@ -404,12 +405,6 @@ static int pcal(const char *inFile, const char *format, int nInt, int nFreq, con
 				unpacked += status;
 			}
 
-			if(ms->consecutivefails > 5)
-			{
-				printf("Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
-				break;
-			}
-			
 			for(i = 0; i < nFreq; ++i)
 			{
 				for(j = 0; j < DFTlen; ++j)

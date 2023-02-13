@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: jobmatrix.c 8605 2018-12-05 14:28:45Z HelgeRottmann $
+ * $Id: jobmatrix.c 10605 2022-08-22 22:53:15Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/jobmatrix.c $
- * $LastChangedRevision: 8605 $
- * $Author: HelgeRottmann $
- * $LastChangedDate: 2018-12-06 01:28:45 +1100 (Thu, 06 Dec 2018) $
+ * $LastChangedRevision: 10605 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2022-08-23 08:53:15 +1000 (Tue, 23 Aug 2022) $
  *
  *==========================================================================*/
 
@@ -81,12 +81,11 @@ static int cmpfunc (const void * a, const void * b)
 void writeJobMatrix(const JobMatrix *jm, int passNum)
 {
 	int *jobList;
-	int *activeJobs;
 	FILE *out;
 	int nJob;
 	char label[DIFXIO_FILENAME_LENGTH];
 	char outname[DIFXIO_FILENAME_LENGTH];
-	int a, t, j, v, i;
+	int a, t, v, i;
 	char name[4];
 	char timeStr[40];
 	char lastday[10] = "";
@@ -96,10 +95,14 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 		return;
 	}
 
-	if (passNum == 0)
+	if(passNum == 0)
+	{
 		v = snprintf(outname, DIFXIO_FILENAME_LENGTH, "%s.jobmatrix", jm->filebase);
+	}
 	else
+	{
 		v = snprintf(outname, DIFXIO_FILENAME_LENGTH, "%s_setup%d.jobmatrix", jm->filebase, passNum);
+	}
 
 	if(v >= DIFXIO_FILENAME_LENGTH)
 	{
@@ -110,11 +113,12 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 
 	nJob = jm->D->nJob;
 	jobList = (int *)calloc(nJob, sizeof(int));
-	activeJobs = (int *)calloc(jm->nAntenna, sizeof(int));
 
-	//set jobList array to 0
-	for (i=0; i< nJob; i++)
+	// set jobList array to 0
+	for(i = 0; i < nJob; ++i)
+	{
 		jobList[i] = 0;
+	}
 
 	out = fopen(outname, "w");
 	if(!out)
@@ -135,11 +139,11 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 	}
 	fprintf(out, "\n\n");
 
-	j = 0;
 	for(t = 0; t < jm->nTime; ++t)
 	{
-		
 		int numActiveJobs = 0;
+		int *activeJobs;
+
 		activeJobs = (int *)calloc(jm->nAntenna, sizeof(int));	// jobIds in the active time slice
 		for(a = 0; a < jm->nAntenna; ++a)
 		{
@@ -149,11 +153,12 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 			}
 			else if(jm->matrix[t][a] < jm->D->nJob)
 			{
-				if (jobList[jm->matrix[t][a]] == 0)
+				if(jobList[jm->matrix[t][a]] == 0)
+				{
 					jobList[jm->matrix[t][a]] = 1;
-				fprintf(out, "%c  ", 'A' + (jm->matrix[t][a]%26));
-				j = jm->matrix[t][a];
-				activeJobs[numActiveJobs++] = j;
+				}
+				fprintf(out, "%c  ", 'A' + (jm->matrix[t][a] % 26));
+				activeJobs[numActiveJobs++] = jm->matrix[t][a];
 			}
 			else
 			{
@@ -179,11 +184,13 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 		if(numActiveJobs > 0)
 		{
 			int lastJob = -1;
+
 			qsort(activeJobs, numActiveJobs, sizeof(int), cmpfunc); 
-			for (i = 0; i < numActiveJobs; i++)
+			for(i = 0; i < numActiveJobs; ++i)
 			{
 				int job = activeJobs[i];
-				if ((job != lastJob) && (jobList[job] == 1))
+
+				if((job != lastJob) && (jobList[job] == 1))
 				{
 					generateDifxJobFileBase(jm->D->job + job, label);
 					fprintf(out, "   %c = %s", 'A'+(job%26), label);
@@ -192,10 +199,11 @@ void writeJobMatrix(const JobMatrix *jm, int passNum)
 				lastJob = job;
 				
 			}
-			//++j;
 		}
 
 		fprintf(out, "\n");
+		
+		free(activeJobs);
 	}
 
 	fclose(out);

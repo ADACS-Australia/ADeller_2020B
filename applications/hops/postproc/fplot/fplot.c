@@ -15,17 +15,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "mk4_data.h"
+#include "mk4_dfio.h"
 #include "fstruct.h"
 #include "fplot.h"
+#include "msg.h"
 
 #ifdef P_tmpdir
 # define P_tmpdir "/tmp"
 #endif /* P_tmpdir */
 
-char progname[6] = "fplot";
-int msglev = 2;
+#ifndef PS2PDF
+# define PS2PDF "false"
+#endif /* PS2PDF */
 
+// char progname[6] = "fplot";
+// int msglev = 2;
+
+int
 main (int argc, char* argv[])
     {
     int i, display, ret, mk4, size, quit, prompt;
@@ -42,16 +50,18 @@ main (int argc, char* argv[])
                                         /* in the files structure array, */
                                         /* checking the file type implied */
                                         /* by the name in each case */
+    set_progname("fplot");
+    set_msglev(2);
     if (parse_cmdline (argc, argv, &files, &display, &file_name) != 0)
         {
         msg ("Fatal error interpreting command line", 2);
-        syntax("$HeadURL: https://vault.haystack.mit.edu/svn/hops/trunk/postproc/fplot/fplot.c $");
+        /* syntax("$HeadURL: https://vault.haystack.mit.edu/svn/hops/trunk/postproc/fplot/fplot.c $"); */
         exit(1);
         }
     if (files[0].order == -1)
         {
         msg ("No valid type-2 files found/specified", 2);
-        syntax("$HeadURL: https://vault.haystack.mit.edu/svn/hops/trunk/postproc/fplot/fplot.c $");
+        /* syntax("$HeadURL: https://vault.haystack.mit.edu/svn/hops/trunk/postproc/fplot/fplot.c $"); */
         exit (1);
         }
                                         /* Loop over all filenames */
@@ -108,7 +118,7 @@ main (int argc, char* argv[])
             msg ("Printing hardcopy of fringe plot (%s)", 2, ps_file);
             unlink (ps_file);       /* Tidy up */
             }
-        else if (display == DISKFILE)
+        else if (display == DISKFILE || display == PSTOPDF)
             {
             snprintf(ps_file, sizeof(ps_file), file_name, i-1);
             if ((fp = fopen (ps_file, "w")) == NULL)
@@ -120,6 +130,16 @@ main (int argc, char* argv[])
             fwrite (fringe4.t221->pplot, 1, size, fp);
             fclose (fp);
             msg ("Created PS plot %s", 1, ps_file);
+            if (display == PSTOPDF) /* continue */
+                {
+                snprintf(cmd, sizeof(cmd), "%s %s", PS2PDF, ps_file);
+                if (system(cmd))
+                    msg ("ps2pdf na/failed, leaving %s", 2, ps_file);
+                else if (unlink(ps_file))
+                    msg ("Unable to remove %s", 2, ps_file);
+                else
+                    msg ("Created PDF from %s", 1, ps_file);
+                }
             }
                                     /* Bad value for display */
         else

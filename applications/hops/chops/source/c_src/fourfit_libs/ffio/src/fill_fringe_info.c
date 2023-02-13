@@ -12,10 +12,15 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <math.h>
+#include "msg.h"
 #include "vex.h"
 #include "mk4_data.h"
+#include "mk4_dfio.h"
 #include "param_struct.h"
 #include "pass_struct.h"
+#include "ffio.h"
+
 
 
 int
@@ -35,7 +40,7 @@ char *filename)
     static struct type_208 t208;
     static struct type_210 t210;
     static struct type_000 t2_id;
-    double sband_err, ref_freq, sqrt(), fabs();
+    double sband_err, ref_freq;
     int error, nap, xpow_len, fr, ap, size_of_t212, size_of_t230, recno;
     char buf[256];
     char *t212_array, *t230_array, *address;
@@ -43,6 +48,7 @@ char *filename)
     extern struct mk4_fringe fringe;
     extern struct type_param param;
     extern struct type_status status;
+
                                         /* Init */
     clear_mk4fringe (&fringe);
 
@@ -104,7 +110,7 @@ char *filename)
         {
                                         /* Allocate memory as a block */
         xpow_len = 16 * 2 * param.nlags;
-        size_of_t230 = sizeof (struct type_230) - sizeof (complex) + xpow_len;
+        size_of_t230 = sizeof (struct type_230) - sizeof (hops_complex) + xpow_len;
         t230_array = (char *)malloc (pass->nfreq * nap * size_of_t230);
         if (t230_array == NULL)
             {
@@ -129,7 +135,7 @@ char *filename)
 
     if (error != 0)
         msg ("Warning - some or all of the output records were not filled", 2);
-    
+
     status.amp_err = status.delres_max / status.snr;
     status.resid_phase = status.coh_avg_phase * ( 180.0 / M_PI);
     status.mod_resid_phase *= 180.0 / M_PI;
@@ -150,4 +156,4 @@ char *filename)
 /*       / (rbase->t2600.v_1ghz * 1.0E-3)); */
 
     return (0);
-    }   
+    }

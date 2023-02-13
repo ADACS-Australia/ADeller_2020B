@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6.cpp 9376 2019-12-18 17:54:06Z MarkWainright $
+// $Id: Mark6.cpp 10833 2022-11-19 11:38:40Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 9376 $
-// $Author: MarkWainright $
-// $LastChangedDate: 2019-12-19 04:54:06 +1100 (Thu, 19 Dec 2019) $
+// $LastChangedRevision: 10833 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-11-19 22:38:40 +1100 (Sat, 19 Nov 2022) $
 //
 //============================================================================
 #include <poll.h>
@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <cstring>
 #include <string>
@@ -37,10 +38,13 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <difxmessage.h>
+#include <set>
+#include <unistd.h>
 
 #include "Mark6.h"
 #include "Mark6DiskDevice.h"
 #include "Mark6Meta.h"
+#include "Mark6Controller.h"
 #include <sys/mount.h>
 
 using namespace std;
@@ -50,26 +54,10 @@ using namespace std;
  */
 Mark6::Mark6(void)
 {
-    clog << "mark6 started" << endl;
-    
     //set defaults 
     mountRootData_m = "/mnt/disks/";               
     mountRootMeta_m =  mountRootData_m + ".meta/";
-    
-    // create array holding slot ids
-    for (int i=0; i < NUMSLOTS; i++)
-    {
-        stringstream ss;
-        ss << i+1;
-        slotIds_m[i] = ss.str();
-    }
-    // create array holding disk ids
-    for (int i=0; i < Mark6Module::MAXDISKS; i++)
-    {
-        stringstream ss;
-        ss << i;
-        diskIds_m[i] = ss.str();
-    }
+    verifyDevices_m = false;
     
     // Create the udev object 
     udev_m = udev_new();
@@ -80,14 +68,58 @@ Mark6::Mark6(void)
     udev_monitor_filter_add_match_subsystem_devtype(mon, "block", NULL);
     udev_monitor_enable_receiving(mon);
 
-    // Get the file descriptor (fd) for the monitor. This fd will get passed to select() 
-    fd = udev_monitor_get_fd(mon);
+    // create the poll item
+    pollItems_m[0].fd = udev_monitor_get_fd(mon);
+    pollItems_m[0].events = POLLIN;
+    pollItems_m[0].revents = 0;
 
+    // identify SAS controllers
+    int numControllerDetect = enumerateControllers();
+
+    // look for controller config in /etc/default
+    int numControllerConf = readControllerConfig();
+    if (numControllerConf == -1)
+    {
+        // write the config
+        writeControllerConfig();
+        numControllerConf = readControllerConfig();
+    }
+
+    if (numControllerDetect == 0)
+        throw Mark6Exception (string("Did not find any SAS controllers. Is this a mark6?") );
+    else if (numControllerDetect < numControllerConf) 
+        throw Mark6Exception (string("Detected fewer SAS controllers than defined in the configuration.") );
+
+    numSlots_m = numControllerDetect * 2;
+    
+
+    // create array holding slot ids
+    for (int i=0; i < numSlots_m; i++)
+    {
+        stringstream ss;
+        ss << i+1;
+        slotIds_m.push_back( ss.str() );
+    }
+    // create array holding disk ids
+    for (int i=0; i < Mark6Module::MAXDISKS; i++)
+    {
+        stringstream ss;
+        ss << i;
+        diskIds_m[i] = ss.str();
+    }
+
+    for (int i=0; i < numSlots_m; i++)
+        {
+            modules_m.push_back(Mark6Module());
+        }
+    //
+    // remove any remaining mounts
+    cleanUp();
+
+    
     // check if required mount points exists; create them if not        
     validateMountPoints();
 
-    // remove any remaining mounts
-    cleanUp();
 
     if (enumerateDevices() > 0)
     {
@@ -145,7 +177,7 @@ void  Mark6::createMountPoint(string path)
 int Mark6::getSlot(string eMSN)
 {
     
-     for (int iSlot = 0; iSlot < NUMSLOTS; iSlot++) 
+     for (int iSlot = 0; iSlot < numSlots_m; iSlot++) 
         {
             if (modules_m[iSlot].getEMSN() == eMSN)
             {
@@ -156,6 +188,49 @@ int Mark6::getSlot(string eMSN)
      return(-1);
 }
 
+
+/**
+ * Sends out a Mark6StatusMessage
+ */
+void Mark6::sendSlotStatusMessage()
+{
+    //clog << "Mark6::sendStatusMessage" << endl;
+    DifxMessageMark6SlotStatus dm;
+    
+    memset(&dm, 0, sizeof(DifxMessageMark6SlotStatus));
+
+    
+    // set module group for each bank
+    for (int slot=0; slot < numSlots_m; slot++)
+    {
+        // slot
+        dm.slot = slot+1;
+
+        // get MSN
+        string msn = "";
+        msn = modules_m[slot].getEMSN().substr(0,DIFX_MESSAGE_MARK6_MSN_LENGTH);
+        strncpy(dm.msn, msn.c_str(), DIFX_MESSAGE_MARK6_MSN_LENGTH);
+                
+        // construct group string
+        string group = "";
+        for (int i=0; i < modules_m[slot].getGroupMembers().size(); i++)
+        {
+            string groupMsn =  modules_m[slot].getGroupMembers()[i].substr(0,DIFX_MESSAGE_MARK6_MSN_LENGTH);;
+            group += groupMsn;
+            if (i+1 < modules_m[slot].getGroupMembers().size())
+                group += ":";
+        }
+        strncpy(dm.group, group.c_str(), DIFX_MESSAGE_MARK6_GROUP_LENGTH);
+        // number of disks
+        dm.numDisks = modules_m[slot].getNumDiskDevices();
+        // number of missing disks
+        dm.numMissingDisks = modules_m[slot].getNumTargetDisks() - modules_m[slot].getNumDiskDevices();
+
+        difxMessageSendMark6SlotStatus(&dm);
+    }
+
+
+}
 
 /**
  * Sends out a Mark6StatusMessage
@@ -173,7 +248,7 @@ void Mark6::sendStatusMessage()
     strncpy(dm.msn4, modules_m[3].getEMSN().c_str(), DIFX_MESSAGE_MARK6_MSN_LENGTH);
 
     // set module group for each bank
-    for (int slot=0; slot < NUMSLOTS; slot++)
+    for (int slot=0; slot < numSlots_m; slot++)
     {
         // get MSN
         string msn = "";
@@ -227,6 +302,7 @@ void Mark6::sendStatusMessage()
 }
 
 
+
 /**
  * Manages devices that were added or removed by turning the Mark6 keys. Newly added devices will be mounted; removed devices will be unmounted. 
  * Prior to mounting validation is done to check if the new device is a Mark6 disk
@@ -248,15 +324,18 @@ void Mark6::manageDeviceChange()
             //cout << "Processing device: " << i << endl;
             if (tempDevices[i].isValid() == false)
             {
-                cout << "disk " << tempDevices[i].getName() << " is not a valid Mark6 disk device. Discarding." << endl;
+                clog << "disk " << tempDevices[i].getName() << " is not a valid Mark6 disk device. Discarding." << endl;
                 continue;
             }
 
-	    if (tempDevices[i].getPartitions().size() < 2)
-	    {
+            // verify that both partitions have been detected for this device
+	    if (tempDevices[i].getPartitions().size() < 2) {
 		newDevices_m.push_back(tempDevices[i]);
 		continue;
 	    }
+            else {
+                // work around due to partitions not getting detected reliably by udev in case of many simulataneous events
+            }
             
             // mount both partitions
             tempDevices[i].mountDisk(mountRootData_m, mountRootMeta_m);
@@ -284,18 +363,29 @@ void Mark6::manageDeviceChange()
                 if (modules_m[slot].getEMSN() == "")
                 {
                     modules_m[slot].setEMSN(tempDevices[i].getMeta().getEMSN());
-                    modules_m[slot].setGroupMembers(tempDevices[i].getMeta().getGroup());                  
+                    if (tempDevices[i].getMeta().getGroup().size() != 0)
+                    {
+                        modules_m[slot].setGroupMembers(tempDevices[i].getMeta().getGroup());
+                    }
+                    else
+                    {
+                        // Bug(?) from VLBA Mark6:
+                        //  - only one disk has a 'group' file on its .meta partition, vs. normally all disks
+                        //  - grouping unclear, default to single group identical to disk eMSN metadata
+                        std::string defaultGroup(tempDevices[i].getMeta().getEMSN());
+                        defaultGroup.resize(DIFX_MESSAGE_MARK6_MSN_LENGTH);
+                        clog << "Warning: metadata partition of disk " << tempDevices[i].getName() << " lacks 'group', defaulting group to " << defaultGroup << endl;
+                        std::vector<std::string> tempGroup;
+                        tempGroup.push_back(defaultGroup);
+                        modules_m[slot].setGroupMembers(tempGroup);
+                    }
                 }
-                
-
             }
             else
             {
                 //cout << "mount failed " << tempDevices[i].getPartitions()[0].deviceName << " " << tempDevices[i].getPartitions()[1].deviceName << " will try again" << endl;
                 newDevices_m.push_back(tempDevices[i]);
             }
-            
-            
         }  
     }
     
@@ -307,6 +397,7 @@ void Mark6::manageDeviceChange()
         // loop over all removed devices
         for(std::vector<Mark6DiskDevice>::size_type i = 0; i != tempRemoveDevices.size(); i++) {
                        
+	    //cout << "Removing device: " << tempRemoveDevices[i].getName() << endl;
             if ((disk = getMountedDevice(tempRemoveDevices[i].getName())) != NULL)
             {
                 // get the module slot           
@@ -321,10 +412,13 @@ void Mark6::manageDeviceChange()
                       
                     // remove disk from the vector of mounted devices
                     removeMountedDevice(tempRemoveDevices[i]);
-                    //cout << "Removed: " << tempRemoveDevices[i].getName() << " in slot: " << slot << endl;
+                    //cout << "Removed mount: " << tempRemoveDevices[i].getName() << " in slot: " << slot << endl;
                             
                     if (slot != -1)
+                    {
                         modules_m[slot].removeDiskDevice(tempRemoveDevices[i]);
+                        //cout << "Removed device: " << tempRemoveDevices[i].getName() << endl;
+                    }
                     else
                         throw  Mark6Exception("Trying to remove a disk device that has no associated slot.");
                 }
@@ -346,13 +440,13 @@ void Mark6::manageDeviceChange()
 */
 void  Mark6::validateMountPoints()
 {
-	clog << "validateMountPoints" << endl;
+	//clog << "validateMountPoints" << endl;
        
         
         createMountPoint(mountRootData_m);
         createMountPoint(mountRootMeta_m);
       
-	for(int i=0; i < NUMSLOTS; i++)
+	for(int i=0; i < numSlots_m; i++)
 	{
             //string path = mountRootData_m + slotIds_m[i];
             createMountPoint(mountRootData_m + slotIds_m[i]);
@@ -368,24 +462,26 @@ void  Mark6::validateMountPoints()
 
 /**
  * Adds a partition with the given name to the corresponding disk device object. 
- * @return 0 in case In case the corresponding disk device does not exist; 1 otherwise
+ * @return 1 in case the corresponding disk device does not exist; 0 otherwise
  */
 int Mark6::addPartitionDevice(string partitionName)
 {    
     // determine corresponding disk device (assuming less than 9 partitions per disk)
     string diskDevice = partitionName.substr(0, partitionName.size()-1);
+    //cout << "Adding partition " << partitionName << " to " << newDevices_m[i].getName() << endl;
     
      // check if disk device object already exists for this partition
     for(std::vector<Mark6DiskDevice>::size_type i = 0; i != newDevices_m.size(); i++) {
+        //cout << "Adding partition " << partitionName << " to " << newDevices_m[i].getName() << endl;
         if (newDevices_m[i].getName() == diskDevice)
         {
             //cout << "Adding partition " << partitionName << " to " << newDevices_m[i].getName() << endl;
             newDevices_m[i].addPartition(partitionName);
-            return(1);
+            return(0);
         }
     }
     
-    return(0);
+    return(1);
 }
 
 /**
@@ -424,6 +520,9 @@ Mark6DiskDevice *Mark6::getMountedDevice(string deviceName)
     return(NULL);
 }
 
+/**
+ * Removes the given device from the vector holding the currently mounted devices
+ */
 void Mark6::removeMountedDevice(Mark6DiskDevice device)
 {
     
@@ -439,13 +538,38 @@ void Mark6::removeMountedDevice(Mark6DiskDevice device)
 }
 
 /**
+ * Validates that the system devices corresponding to the currentlt mounted disk devices exist. This check is
+ * neccesary because catching remove events by libudev does not work reliably if many devices get turned off 
+ * simultaneously ( several Mark6 keys turned in a short time).
+ * If a system device does not exist anymore the device is removed from the vector of currently mounted devices.
+ */
+int Mark6::verifyDevices()
+{
+  int count = 0;
+
+  // loop over all mounted disks
+  for( vector<Mark6DiskDevice>::iterator iter = mountedDevices_m.begin(); iter != mountedDevices_m.end(); ++iter )
+  {
+      //cout << "verify " << (*iter).getName()  << endl;
+      if (access(("/dev/"+(*iter).getName()).c_str(), F_OK == -1))
+      {
+          //cout << "device " << (*iter).getName() << "does not exist anymore. Removing" << endl;
+          removedDevices_m.push_back(*iter);
+          count++;
+      }
+  }
+  return(count);
+  
+}
+
+/**
  * Cleans up any left-over mounts in the default mount location (default /mnt/disks). Such remaining mounts might
  * result from a crash of the mark5daemon or other unexpected events.
  */
 void Mark6::cleanUp()
 {
        
-    for(int i=0; i < NUMSLOTS; i++)
+    for(int i=0; i < numSlots_m; i++)
     {
         for(int j=0; j < Mark6Module::MAXDISKS; j++)
         {
@@ -464,18 +588,24 @@ void Mark6::cleanUp()
  */
 void Mark6::pollDevices()
 {
-    clog << "Polling for new devices" << endl;
-  
+    vector<std::string> tempPartitions;
 
-       // create the poll item
-       pollfd items[1];
-       items[0].fd = udev_monitor_get_fd(mon);
-       items[0].events = POLLIN;
-       items[0].revents = 0;
-       int changeCount = 0;
+    //cout << "Polling for new devices" << endl;
+    clog << "Polling for new devices" << endl;
+
+    
+    /*for(std::vector<Mark6DiskDevice>::size_type i = 0; i != newDevices_m.size(); i++) {
+        cout << " new: " << newDevices_m[i].getName() << endl;
+    }
+    for(std::vector<Mark6DiskDevice>::size_type i = 0; i != removedDevices_m.size(); i++) {
+        cout << " remove : " << removedDevices_m[i].getName() << endl;
+    }*/
 
        // while there are hotplug events to process
-       while(poll(items, 1, 100) > 0)
+       // NOTE: the timeout parameter should be large enough to cope with
+       // the large number of events in case of all keys get turned simultaneously.
+       // Reducing the timeout too much will lead to dropped hitplugged events
+       while(poll(pollItems_m, 1, 3000) > 0)
        {
 
               // receive the relevant device
@@ -491,29 +621,28 @@ void Mark6::pollDevices()
                 
                string action(udev_device_get_action(dev));
                 string devtype(udev_device_get_devtype(dev));
-
+/*
                cout << "hotplug[" << udev_device_get_action(dev) << "] ";
                cout << udev_device_get_devnode(dev) << ",";
                cout << udev_device_get_subsystem(dev) << ",";
                cout << udev_device_get_devtype(dev) << ",";
                 cout << endl;
-/*
+
                cout << " devpath="<< udev_device_get_devpath(dev) << endl;
                cout << " syspath="<< udev_device_get_syspath(dev) << endl;
                cout << " sysname="<< udev_device_get_sysname(dev) << endl;
                cout << " devnode="<< udev_device_get_devnode(dev) << endl;
                cout << " devnum="<< udev_device_get_devnum(dev) << endl;
-                //cout << " range="<< udev_device_get_sysattr_value(dev,"range")<< endl;
 
-               udev_device  *parent = udev_device_get_parent(dev);
+		udev_device  *parent = udev_device_get_parent(dev);
                 cout << "parent ";
                 
                 
-                 *             cout << " subsystem = " << udev_device_get_subsystem(parent) ;
+                cout << " subsystem = " << udev_device_get_subsystem(parent) ;
                 cout << " devtype = " << udev_device_get_devtype(parent);
                 cout << " devpath="<< udev_device_get_devpath(parent) << endl;
-               cout << " syspath="<< udev_device_get_syspath(parent) << endl;
-               cout << " sysname="<< udev_device_get_sysname(parent) << endl;
+                cout << " syspath="<< udev_device_get_syspath(parent) << endl;
+                cout << " sysname="<< udev_device_get_sysname(parent) << endl;
                 cout << " devnum = " << udev_device_get_devnum(parent) << endl;
                 cout << endl;
 */
@@ -521,8 +650,8 @@ void Mark6::pollDevices()
                {
                     if (devtype == "disk")
                     {
-                        //cout << " serial_short="<< udev_device_get_property_value(dev,"ID_SERIAL_SHORT") << endl;
-                        //cout << " sas_address="<< udev_device_get_sysattr_value(parent,"sas_address") << endl;
+                       // cout << " serial_short="<< udev_device_get_property_value(dev,"ID_SERIAL_SHORT") << endl;
+                       // cout << " sas_address="<< udev_device_get_sysattr_value(parent,"sas_address") << endl;
                        
                        
                         // add new disk device
@@ -534,7 +663,6 @@ void Mark6::pollDevices()
                             disk.setSerial(udev_device_get_property_value(dev,"ID_SERIAL_SHORT") );
 
                             newDevices_m.push_back(disk);
-                            changeCount++;
 			}
                         //cout << "Controller ID=" << disk.getControllerId() << endl;
                         //cout << "Disk ID=" << disk.getDiskId() << endl;
@@ -546,34 +674,52 @@ void Mark6::pollDevices()
 			if(0 != udev_device_get_sysattr_value(grandparent, "sas_address"))
 			{
                             string partitionName = string(udev_device_get_sysname(dev));
-                            // add partition to disk device object
-                            if (addPartitionDevice(partitionName) == 0)
-                            {
-                                throw Mark6Exception (string("New hotplug partition found (" + partitionName + ") without corresponding disk device") );              
-                            }
+                            newPartitions_m.push_back(partitionName);
 			}
                     }
                }
                else if ((action ==  "remove") && (devtype == "disk"))
                {
-                       //cout << "remove device action" << endl;
-                        Mark6DiskDevice disk(string(udev_device_get_sysname(dev)));
+                       Mark6DiskDevice disk(string(udev_device_get_sysname(dev)));
                        removedDevices_m.push_back(disk);
-                       changeCount++;
                }
 
                // destroy the relevant device
                udev_device_unref(dev);
 
                // clear the revents
-               items[0].revents = 0;
+               pollItems_m[0].revents = 0;
        }
 
-       if (changeCount > 0)
-       {
-               manageDeviceChange();                
-       }
-                
+      if ((newDevices_m.size() > 0) || (removedDevices_m.size() > 0))
+      {
+          manageDeviceChange();                
+          verifyDevices_m = true;
+      }
+      else
+      {
+          if (verifyDevices_m)
+          {
+              
+              verifyDevices();
+              verifyDevices_m = false;
+          }
+      }
+
+      if (newPartitions_m.size() > 0)
+      {
+          tempPartitions.swap(newPartitions_m);
+
+          /*for(std::vector<std::string>::size_type i = 0; i != tempPartitions.size(); i++) {
+              cout << " new partition: " << tempPartitions[i] << endl;
+          }*/
+          for( vector<std::string>::iterator iter = tempPartitions.begin(); iter != tempPartitions.end(); ++iter ) {
+              // add partition to disk device object
+              if (addPartitionDevice( *iter ) != 0) {
+                  newPartitions_m.push_back(*iter);
+              }
+          }
+      }
                 
 /*
                 cout << "Currently mounted devices:" << endl;
@@ -584,18 +730,171 @@ void Mark6::pollDevices()
                 cout << endl;
 */
                 
-                cout << "Currently mounted modules:" << endl;
+//                cout << "Currently mounted modules:" << endl;
                 clog << "Currently mounted modules:" << endl;
-                for (int iSlot=0; iSlot < 4; iSlot++)
+                for (int iSlot=0; iSlot < controllers_m.size()*2; iSlot++)
                 {
                     //modules_m[iSlot].isComplete();
                     //cout << "Slot " << iSlot << " = " << modules_m[iSlot].getEMSN() << " (" << modules_m[iSlot].getNumDiskDevices() << " disks) " << modules_m[iSlot].isComplete() << endl;
-                    cout << "Slot " << iSlot+1 << " = " << modules_m[iSlot].getEMSN() << " (" << modules_m[iSlot].getNumDiskDevices() << " disks) " << endl;
+ //                   cout << "Slot " << iSlot+1 << " = " << modules_m[iSlot].getEMSN() << " (" << modules_m[iSlot].getNumDiskDevices() << " disks) " << endl;
+                    clog << "Slot " << iSlot+1 << " = " << modules_m[iSlot].getEMSN() << " (" << modules_m[iSlot].getNumDiskDevices() << " disks) " << endl;
+		    /*if (modules_m[iSlot].getNumDiskDevices() > 0)
+		    {
+			//if (modules_m[iSlot].diskDevices_m.empty()) { continue; }
+			map<int, string> serials = modules_m[iSlot].getDiskDevice(0)->getMeta().getSerials();
+
+			// loop over all serials found in the meta data
+			map<int, string>::iterator it;
+			for ( it = serials.begin(); it != serials.end(); it++ )
+			{
+			   cout << "matching " << it->first << " " << it->second << endl;
+			}
+                        cout << endl;
+		    }*/
                 }
-                cout << endl;
+
     }
 
 
+void Mark6::writeControllerConfig()
+{
+    struct stat st;
+    bool host0 = false;
+    
+    // If /etc/default does not exist create it
+    if (stat("/etc/default", &st) == -1) {
+        mkdir("/etc/default", 0700);
+    }
+
+    // sort controller name alphabetically
+    std::set<std::string> sorted;
+    for(std::size_t i = 0; i < controllers_m.size(); ++i) {
+        // for compatibility always place host0 on index 1 so that it will mount under slots 3 and 4
+        if (controllers_m[i].getName() == "host0")
+        {
+            host0 = true; 
+            continue;
+        }
+        sorted.insert(controllers_m[i].getName());
+    }
+
+    ofstream conf ("/etc/default/mark6_slots");
+
+    conf << "# mark6 SAS controller configuration." << endl;
+    conf << "# each line contains the name of a SAS controller present in the system" << endl;
+    conf << "# the order determines the mount location (first line will mount slots 1&2, second line slots 3&4 etc.)" << endl;
+    conf << "# adapt the order to match the local cabling" << endl;
+    
+
+    for( std::set<std::string>::iterator it = sorted.begin(); it != sorted.end(); ++it )
+    {
+        if ((distance(sorted.begin(), it) == 1) && host0)
+        {
+          conf << "host0" << endl;
+          host0 = false;
+        } 
+        conf << *it << endl;
+    }
+    if (host0)
+      conf << "host0" << endl;
+
+    conf.close();
+
+    clog << "Wrote new sas controller configuration: /etc/default/mark6_slots. Check if automatic slot assignments matches local cabling" << endl;
+    
+}
+
+
+/**
+ * Reads the controller configuration file /etc/default/marks_slots
+ * in order to determine the mapping between controller and slots.
+ * The first controller in the file will mount its disks in slots 1&2
+ * The seconds one in slots 3&$ and so forth
+ *
+ * @returns the number of controllers found in the config file
+ * @returns -1 if the copnfig file cannot be read
+ * **/
+int Mark6::readControllerConfig()
+{
+    std::string line;
+    int count = 0;
+
+    // check for controller config
+    ifstream conf ("/etc/default/mark6_slots");
+    if (conf.is_open())
+    {
+        clog << "opened /etc/default/mark6_slots" << endl;
+        while ( getline (conf,line) )
+        {
+            if (line.rfind("#", 0) == 0) 
+                continue;
+            for(std::size_t i = 0; i < controllers_m.size(); ++i) {
+                if (line.rfind(controllers_m[i].getName(), 0) == 0) 
+                {
+                    controllers_m[i].setOrder(count);
+                    break;
+                }
+            }
+            count++;
+        }
+        conf.close();
+    }
+    else
+    {
+        return(-1);
+    }
+
+    return(count);
+}
+
+/**
+ * Uses udev to determine the number and names of the SAS controllers installed in the system
+ *
+ * @returns the number of SAS controllers identified in the system
+ * */
+
+int Mark6::enumerateControllers()
+{
+struct udev_enumerate *enumerate;
+    struct udev_list_entry *devices, *dev_list_entry;
+    struct udev_device *dev;
+
+    // obtain the list of currently present block devices
+    
+    //clog << "enumerateControllers" << endl;
+    
+    enumerate = udev_enumerate_new(udev_m);
+    udev_enumerate_add_match_subsystem(enumerate, "sas_host");
+    udev_enumerate_scan_devices(enumerate);
+    devices = udev_enumerate_get_list_entry(enumerate);
+
+    // loop over list of currently present block devices
+    udev_list_entry_foreach(dev_list_entry, devices)
+    {
+        const char *path;
+
+        path = udev_list_entry_get_name(dev_list_entry);
+        dev = udev_device_new_from_syspath(udev_m, path);
+/*        cout << udev_device_get_sysname(dev) <<  " " << path << " " << udev_device_get_devpath(dev) << endl;
+        cout << udev_device_get_subsystem(dev) << endl;
+        cout << udev_device_get_sysnum(dev) << endl;
+        cout << udev_device_get_devnum(dev) << endl;
+        cout << udev_device_get_seqnum(dev) << endl;
+*/
+        Mark6Controller controller;
+        controller.setName(udev_device_get_sysname(dev));
+        controller.setPath(udev_device_get_devpath(dev));
+        controller.setSysNum(udev_device_get_sysnum(dev));
+
+        clog << "Detected SAS controller: " << controller.getName() << " " << controller.getPath() << endl;
+
+        controllers_m.push_back(controller);
+    }
+
+    udev_enumerate_unref(enumerate);
+
+    return(controllers_m.size());
+}
 
 int Mark6::enumerateDevices()
 {
@@ -606,7 +905,7 @@ int Mark6::enumerateDevices()
         
     // obtain the list of currently present block devices
 
-    clog << "enumerateDevices" << endl;
+    //clog << "enumerateDevices" << endl;
 
     enumerate = udev_enumerate_new(udev_m);
     udev_enumerate_add_match_subsystem(enumerate, "block");
@@ -626,8 +925,11 @@ int Mark6::enumerateDevices()
             // error receiving device, skip it
             continue;
         }
-	udev_device  *parent = udev_device_get_parent(dev);
+
         string devtype(udev_device_get_devtype(dev));
+	//cout << devtype << path <<endl;
+        
+	udev_device  *parent = udev_device_get_parent(dev);
 
 	if (devtype =="disk")
 	{
@@ -639,7 +941,7 @@ int Mark6::enumerateDevices()
 			const char *serial = udev_device_get_property_value(dev,"ID_SERIAL_SHORT");
 	
 			if (sysname != NULL)
-			{
+			{ 
 				string devName = string(sysname);                               
 				Mark6DiskDevice disk(devName);
 
@@ -665,14 +967,14 @@ int Mark6::enumerateDevices()
 		{
 			string partitionName = string(udev_device_get_sysname(dev));
 			// add partition to disk device object
-			if (addPartitionDevice(partitionName) == 0)
+			if (addPartitionDevice(partitionName) != 0)
 			{
 			    throw Mark6Exception (string("Partition found (" + partitionName + ") without corresponding disk device") );              
 			}
 		}
 	    }
 	}
-    
+
     udev_enumerate_unref(enumerate);
 
     return(devCount);
@@ -683,15 +985,67 @@ int Mark6::enumerateDevices()
  * Obtains the sequence number of the disk device on the SAS controller by parsing the contents of the sas_device attribute provided by UDEV.
  * If cabeling of the Mark6 SAS controller 
  * is done correctly this sequence number should correspond to the module LEDs on the frontpack of the diskpack.
+ * Note that the disk id corresponds to the SAS phy* parameter not the port number which can be arbitrary
  * @returns the disk id; -1 if the id could not be parsed from the given sas address
  */
 long Mark6::parseDiskId(std::string sasAddress)
 {
+    long diskId = -1;
+
     //cout << "DiskID = " << strtoul(sasAddress.substr(11,1).c_str(), NULL, 16) << " " << sasAddress << " " << sasAddress.substr(11,1) << sasAddress.substr(1,1) << endl;
-    if (sasAddress.size() < 11)     
+    if (sasAddress.size() < 11)
         return(-1);
-    
-    return(strtol(sasAddress.substr(11,1).c_str(), NULL, 16));
+
+    // SAS Address does appear to encode the actual phy* iface number to which the disk is attached,
+    // but it is not clear if the encoding is consistent accross different systems.
+    // With mpt2sas-driven controllers the phy iface is apparently at addr_str[11],
+    // while for mpt3sas it is at the end of addr_str[].
+
+    // MPIfR mark6-06
+    //   slot 3, mpt2sas
+    //     sasAddress 0x4433221100000000
+    //     sasAddress 0x4433221101000000
+    //     sasAddress 0x4433221102000000
+    //     sasAddress 0x4433221103000000
+    //     sasAddress 0x4433221104000000
+    //     sasAddress 0x4433221105000000
+    //     sasAddress 0x4433221106000000
+    //     sasAddress 0x4433221107000000
+    //   slot 4, mpt2sas
+    //     sasAddress 0x4433221108000000
+    //     sasAddress 0x4433221109000000
+    //     sasAddress 0x443322110a000000
+    //     sasAddress 0x443322110b000000
+    //     sasAddress 0x443322110c000000
+    //     sasAddress 0x443322110d000000
+    //     sasAddress 0x443322110e000000
+    //     sasAddress 0x443322110f000000
+    //   slot 5, mpt3sas
+    //     sasAddress 0x300062b207676380
+    //     sasAddress 0x300062b207676381
+    //     sasAddress 0x300062b207676382
+    //     sasAddress 0x300062b207676383
+    //     sasAddress 0x300062b207676384
+    //     sasAddress 0x300062b207676385
+    //     sasAddress 0x300062b207676386
+    //     sasAddress 0x300062b207676387
+
+    size_t strlen = sasAddress.size();
+
+    if(sasAddress[strlen-2] == '0' && sasAddress[strlen-1] == '0')
+    {
+        // TODO: "if(driver==mpt2sas) {...}"
+        diskId = strtol(sasAddress.substr(11,1).c_str(), NULL, 16);
+    }
+    else
+    {
+        // TODO: "if(driver==mpt3sas) {...}"
+        diskId = strtol(sasAddress.substr(strlen-1,1).c_str(), NULL, 16);
+    }
+
+    //clog << "parseDiskId " << sasAddress << " -> disk id " << diskId << endl;
+
+    return diskId;
 }
 
 
@@ -707,15 +1061,31 @@ long Mark6::parseDiskId(std::string sasAddress)
  */
 int Mark6::parseControllerId(string devpath)
 {
-    //cout << "devpath=" << devpath << endl;
-    size_t found = devpath.find("host0");
-    if (found != string::npos)
-        return(0);
+    string name = "";
+
     
-    // any other host will receiver controllerId 1
-    found = devpath.find("host");
+    size_t end;
+    size_t found = devpath.find("host");
+
+    // determine name of SAS host adapter
     if (found != string::npos)
-        return(1);
-    
+    {
+        end = devpath.find("/", found);
+        if (end != string::npos)
+        {
+            name = devpath.substr(found, end-found);
+        }
+    }
+
+
+    // lookup controller id
+    for(std::size_t i = 0; i < controllers_m.size(); ++i) {
+	if (controllers_m[i].getName() == name)
+        {
+	    return(controllers_m[i].getOrder());
+        }
+		
+    }
     return(-1);
+
 }

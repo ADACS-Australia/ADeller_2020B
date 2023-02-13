@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifio.c 9868 2020-12-20 15:51:00Z WalterBrisken $
+// $Id: vdifio.c 9975 2021-03-16 10:11:42Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.c $
-// $LastChangedRevision: 9868 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
+// $LastChangedRevision: 9975 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-03-16 21:11:42 +1100 (Tue, 16 Mar 2021) $
 //
 //============================================================================
 
@@ -327,7 +327,7 @@ static void fprintVDIFHeaderLong(FILE *out, const vdif_header *header)
 
 			fprintf(out, "  samprate = 0x%06X = %d %s\n", edv1->samprate, edv1->samprate, edv1->samprateunits ? "MHz" : "kHz");
 			fprintf(out, "  syncword = 0x%08X\n", edv1->syncword);
-			fprintf(out, "  name = %8s", edv1->name);
+			fprintf(out, "  name = %8.8s", edv1->name);
 		}
 		else if(header->eversion == 2)
 		{
@@ -407,7 +407,7 @@ static void fprintVDIFHeaderShort(FILE *out, const vdif_header *header)
 			long long int samprate;
 
 			samprate = edv1->samprate * (edv1->samprateunits ? 1000000LL : 1000LL);
-			fprintf(out, " %10lld 0x%08X %8s", samprate, edv1->syncword, edv1->name);
+			fprintf(out, " %10lld 0x%08X %8.8s", samprate, edv1->syncword, edv1->name);
 		}
 		else if(header->eversion == 2)
 		{

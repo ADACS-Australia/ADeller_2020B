@@ -19,20 +19,23 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: utils.cpp 7763 2017-05-16 18:18:27Z WalterBrisken $
+// $Id: utils.cpp 10035 2021-06-24 10:10:29Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 7763 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:18:27 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 10035 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-06-24 20:10:29 +1000 (Thu, 24 Jun 2021) $
 //
 //============================================================================
 
 #include <cstdio>
+#include <string.h>
 
 char *fgetsNoCR(char *line, int MaxLineLength, FILE *in)
 {
 	char *v;
 	unsigned int i;
+
+	memset(line, 0, MaxLineLength);
 
 	v = fgets(line, MaxLineLength, in);
 	if(!v)

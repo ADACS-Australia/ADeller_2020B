@@ -6,7 +6,7 @@
 #define MAXBLOCKS 256
 #define MAXDEFS 512
 #define MAXREFS 256
-#define MAXSCANS 2048
+#define MAXSCANS 8192
 #define STATEMENT_SIZE 8192
 #define MAX_NAMESIZE 32
 #define MAX_PVALSIZE 128
@@ -226,5 +226,7 @@ struct param_val
     char *val[MAXNVAL];
     struct data_value dval[MAXNVAL];
     };
+
+extern int get_vex (char *filename, int vextype, char *key, struct vex *vex);
 
 #endif

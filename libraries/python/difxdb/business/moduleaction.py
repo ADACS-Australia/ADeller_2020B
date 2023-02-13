@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: moduleaction.py 8683 2019-02-05 12:56:42Z HelgeRottmann $
+# $Id: moduleaction.py 10705 2022-10-29 20:07:12Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/business/moduleaction.py $
-# $LastChangedRevision: 8683 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2019-02-05 23:56:42 +1100 (Tue, 05 Feb 2019) $
+# $LastChangedRevision: 10705 $
+# $Author: JanWagner $
+# $LastChangedDate: 2022-10-30 07:07:12 +1100 (Sun, 30 Oct 2022) $
 #
 #============================================================================
 from difxdb.model import model
@@ -76,7 +76,7 @@ def isCheckOutAllowed(session, vsn):
     
     # all experiments contained on this module must be released
     for exp in module.experiments:
-	expCount += 1
+        expCount += 1
         if exp.status.statuscode < 100:
             return(False)
         
@@ -92,9 +92,9 @@ def isMark6(vsn):
     Returns True if this is a Mark6 VSN; False otherwise
     '''
     if '%' in vsn:
-	return(True)
+        return(True)
     else:
-	return(False)
+        return(False)
 
     
 def hasDir(vsn, dirPath=None):
@@ -109,12 +109,12 @@ def hasDir(vsn, dirPath=None):
         if (dirPath == None):
             return(False)
              
-	if isMark6(vsn):
-	    if (os.path.isfile(dirPath + "/" + vsn + ".filelist")):
-		return(True)
-	else:
-	    if (os.path.isfile(dirPath + "/" + vsn + ".dir")):
-		return(True)
+        if isMark6(vsn):
+            if (os.path.isfile(dirPath + "/" + vsn + ".filelist")):
+                return(True)
+        else:
+            if (os.path.isfile(dirPath + "/" + vsn + ".dir")):
+                return(True)
         
     return(False)
     
@@ -137,4 +137,20 @@ def getScanCount(session, vsn):
         return
     
     return(module.numScans)
+
+def retire(session, moduleId):
+    '''
+    Sets the retired field for a module and removes the module from its slot
+    '''
+    try:
+        module=getModuleById(session, moduleId)
+        module.retired = 1
+        module.slot = None
+        session.commit()
+        session.flush()
+
+    except:
+        return
+        
+
     

@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifio.h 9868 2020-12-20 15:51:00Z WalterBrisken $
+// $Id: vdifio.h 9925 2021-02-23 15:43:09Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.h $
-// $LastChangedRevision: 9868 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-12-21 02:51:00 +1100 (Mon, 21 Dec 2020) $
+// $LastChangedRevision: 9925 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
 //
 //============================================================================
 	

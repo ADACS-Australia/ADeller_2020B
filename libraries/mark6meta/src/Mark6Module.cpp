@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6Module.cpp 7764 2017-05-16 18:23:07Z WalterBrisken $
+// $Id: Mark6Module.cpp 10539 2022-07-18 11:08:37Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 7764 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:23:07 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 10539 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2022-07-18 21:08:37 +1000 (Mon, 18 Jul 2022) $
 //
 //============================================================================
 #include "Mark6.h"
@@ -203,7 +203,7 @@ bool Mark6Module::isComplete(){
     
    
     map<int, string> serials = diskDevices_m[diskIndex].getMeta().getSerials();
-     cout << diskIndex << " " << serials.size() << endl;
+    // cout << diskIndex << " " << serials.size() << endl;
     // loop over all serials found in the meta data
     map<int, string>::iterator it;
     for ( it = serials.begin(); it != serials.end(); it++ )

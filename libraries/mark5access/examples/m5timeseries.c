@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2010-2017 by Walter Brisken, Chris Phillips             *
+ *   Copyright (C) 2010-2022 by Walter Brisken, Chris Phillips             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -38,8 +38,8 @@
 
 const char program[] = "m5timeseries";
 const char author[]  = "Chris Phillips";
-const char version[] = "0.2";
-const char verdate[] = "20170426";
+const char version[] = "0.3";
+const char verdate[] = "20220429";
 
 const int ChunkSize = 10000;
 
@@ -58,18 +58,17 @@ static void usage(const char *pgm) {
   printf("\n");
 
   printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-  printf("A Mark5 power averager.  Can use VLBA, Mark3/4, Mark5B and VDIF"
-	 "formats using the\nmark5access library.\n\n");
+  printf("A Mark5 power averager.  Can use VLBA, Mark3/4, Mark5B and single-thread\n");
+  printf("VDIF formats using the\nmark5access library.\n\n");
   printf("Usage: %s <infile> <dataformat> <tint> <time> <outfile> [<offset>]\n\n", program);
   printf("  <infile> is the name of the input file\n\n");
-  printf("  <dataformat> should be of the form: "
-	 "<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
+  printf("  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
   printf("    VLBA1_2-256-8-2\n");
   printf("    MKIV1_4-128-2-1\n");
   printf("    Mark5B-512-16-2\n");
   printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n");
   printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-  printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+  printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
   printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
   printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
   printf("  <tint> is the integration time, in millisec. Fractions allowed\n");
@@ -96,10 +95,6 @@ int average_real(struct mark5_stream *ms, int *nused, uint64_t nint, uint64_t *n
     if(status < 0) {
       return(status);
     } 
-    if(ms->consecutivefails > 5) {
-      printf("Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
-      return(-1);
-    }
     *nused = 0;
   } 
 
@@ -127,10 +122,6 @@ int average_complex(struct mark5_stream *ms, int *nused, uint64_t nint, uint64_t
     if(status < 0) {
       return(status);
     } 
-    if(ms->consecutivefails > 5) {
-      printf("Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
-      return(-1);
-    }
     *nused = 0;
   } 
 

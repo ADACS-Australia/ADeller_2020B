@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: DiFXFile.py 9514 2020-05-08 14:28:48Z JanWagner $
+# $Id: DiFXFile.py 10140 2021-09-09 11:47:57Z HelgeRottmann $
 # $HeadURL: $
-# $LastChangedRevision: 9514 $
-# $Author: JanWagner $
-# $LastChangedDate: 2020-05-09 00:28:48 +1000 (Sat, 09 May 2020) $
+# $LastChangedRevision: 10140 $
+# $Author: HelgeRottmann $
+# $LastChangedDate: 2021-09-09 21:47:57 +1000 (Thu, 09 Sep 2021) $
 #
 #============================================================================
 
@@ -62,7 +62,7 @@ class DiFXFile:
 
         difxfileslist = glob.glob(glob_pattern)
         if len(difxfileslist) <= 0:
-            print ('Warning: no visibility data file found in %s!' % (glob_pattern))
+            print(('Warning: no visibility data file found in %s!' % (glob_pattern)))
         else:
             self.difxfilename = difxfileslist[0]
             self.difxfile = open(self.difxfilename, 'rb')

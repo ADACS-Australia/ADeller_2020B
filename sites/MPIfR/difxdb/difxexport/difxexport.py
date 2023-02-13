@@ -4,15 +4,16 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: difxexport.py 9525 2020-05-15 08:56:53Z HelgeRottmann $
+# $Id: difxexport.py 10646 2022-09-21 11:42:36Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/sites/MPIfR/difxdb/difxexport/difxexport.py $
-# $LastChangedRevision: 9525 $
+# $LastChangedRevision: 10646 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2020-05-15 18:56:53 +1000 (Fri, 15 May 2020) $
+# $LastChangedDate: 2022-09-21 21:42:36 +1000 (Wed, 21 Sep 2022) $
 #
 #============================================================================
 
 import os
+import shutil
 import sys
 import random
 import argparse
@@ -30,8 +31,8 @@ from string import lower, strip
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9525 $"
-__date__ ="$Date: 2020-05-15 18:56:53 +1000 (Fri, 15 May 2020) $"
+__build__= "$Revision: 10646 $"
+__date__ ="$Date: 2022-09-21 21:42:36 +1000 (Wed, 21 Sep 2022) $"
 __lastAuthor__="$Author: HelgeRottmann $"
 
 ftpPath = "/ftp/vlbiarchive/correlator"
@@ -75,7 +76,7 @@ def getTransferFileCount(source, destination, options=""):
 
 def partialChecksum(filePath):
     
-   cmd = 'head -c 1000000 %s | md5sum' % ( filePath)
+   cmd = 'head -c 1000000 "%s" | md5sum' % ( filePath)
    output = ""
    checksum = ""
 
@@ -195,7 +196,7 @@ def deleteExportFiles(session, expCode):
     for dir in delDirs:
         try:
             if os.path.isdir(dir):
-                os.rmdir(dir)
+                shutil.rmtree(dir, ignore_errors=True)
         except:
             session.close()
             sys.exit("Cannot delete directory: %s. Aborting!" % dir)
@@ -212,6 +213,20 @@ def exitOnError(exception):
 	print "\nERROR: %s. Aborting\n\n" % exception
 	
 	sys.exit(1)
+
+def getRemoteDirName(dir, files):
+
+    dirName = dirName = ftpPath + "/" + args.exp + "_" + dir + "_" + randomString()
+
+    # in the update case obtain the exiting export directory name
+    if args.update:
+        for file in files:
+            expDir = os.path.basename(os.path.normpath(file.exportPath)).split("_")
+            if (dir == expDir[1]):
+                dirName = ftpPath + "/" + args.exp + "_" + dir + "_" + expDir[2]
+                break
+
+    return(dirName)
     
 
 #######################    
@@ -219,10 +234,13 @@ def exitOnError(exception):
 #######################
 parser = argparse.ArgumentParser(prog='PROG',description=description())
 
+#parser.add_argument('--dry-run', dest='dryRun', action='store_true', default=False, help='Dry run only. Do not actually archive files.')
+parser.add_argument('--update', action='store_true', default=False, help='Update an existing export (files and checksums).')
 parser.add_argument('exp', help='The experiment code')
 parser.add_argument('expDir', help='The full path to the experiment directory.')
 
 args = parser.parse_args()
+args.dryRun = False
 
 if args.expDir.endswith('/'):
          args.expDir= args.expDir[:-1]
@@ -258,7 +276,6 @@ if not isSchemaVersion(session, minSchemaMajor, minSchemaMinor):
         print "Current difxdb database schema is %s.%s but %s.%s is minimum requirement." % (major, minor, minSchemaMajor, minSchemaMinor)
         sys.exit(1)
 
-    
 # check that experiment exists
 if not experimentExists(session, args.exp):
     session.close()
@@ -275,32 +292,45 @@ expId = experiment.id
 files = getExportFiles(session, args.exp)
 
 if len(files) != 0:
-    print "-----------------------------------------------------------------------------"
-    print "The experiment %s already has one or more associated exported files:" % args.exp
-    print "name     path            checksum            creation date"
-    print "-----------------------------------------------------------------------------"
 
-    for file in files:
-        print file.filename, file.exportPath, file.checksum, file.dateCreated
-    print "-----------------------------------------------------------------------------"
-    
-    print "When proceeding all files will be deleted and will be replaced by the contents of %s\n\n" % args.rootDir
-    confirmAction()
-    
+    if args.update == False:
+        print "-----------------------------------------------------------------------------"
+        print "The experiment %s already has one or more associated exported files:" % args.exp
+        print "name     path            checksum            creation date"
+        print "-----------------------------------------------------------------------------"
 
-    deleteExportFiles(session, args.exp)
-    
+        for file in files:
+            print file.filename, file.exportPath, file.checksum, file.dateCreated
+        print "-----------------------------------------------------------------------------"
+        
+        print "When proceeding all files will be deleted and will be replaced by the contents of %s\n\n" % args.rootDir
+        confirmAction()
+        
+
+        if args.dryRun == False:
+            deleteExportFiles(session, args.exp)
+
+    else:
+        for file in files:
+            session.delete(file)
+
+        session.flush()
+        session.commit()
+
+#for file in files:
+#    print file.filename, file.exportPath, file.checksum, file.dateCreated
+
 exportFiles = []
-
 session.close()
-
 
 # loop over all source directories
 for dir in dirs:
     srcFiles = {}
     dstFiles = {}
     srcDir = args.rootDir + "/" + dir + "/"
-    exportDir = ftpPath + "/" + args.exp + "_" + dir + "_" + randomString()
+    #exportDir = ftpPath + "/" + args.exp + "_" + dir + "_" + randomString()
+    exportDir = getRemoteDirName(dir, files)
+
            
     # loop over src files and determine checksum
     for file in  os.listdir(srcDir):
@@ -308,7 +338,7 @@ for dir in dirs:
 	srcFiles[file] = partialChecksum(srcDir+file)
 
     # create directory on FTP server
-    if not os.path.exists(exportDir):
+    if not os.path.exists(exportDir) and not args.dryRun:
                 try:
                         os.makedirs(exportDir)
                 except:
@@ -322,10 +352,16 @@ for dir in dirs:
             break
 
         # copy files to the archive server
-        syncDir(srcDir, exportDir, total, False)
+        syncDir(srcDir, exportDir, total, args.dryRun)
+
+        if args.dryRun:
+            break
 
     # pause for a while to allow flushing of rsync 
     time.sleep(5)
+
+    if args.dryRun:
+        sys.exit(0)
 
     exportPath = exportDir 
     # loop over all files in the export dir and determine checksums
@@ -351,14 +387,18 @@ for dir in dirs:
 
     extra = 0
     for file in dstFiles:
+        if args.update:
+            os.remove(exportPath + "/" + file)
+            print "Removed: %s/%s" % (exportPath, file)
+            continue
+            
 	print "Export location contains a file not found at the src directory: %s" % (file)
-	extra += 1
+        extra += 1
     
     if extra > 0:
 	sys.exit(1)
 
     # update database
-
     for file in srcFiles:
 	print "updating database with file %s" % file
 	exportFile = ExportFile()

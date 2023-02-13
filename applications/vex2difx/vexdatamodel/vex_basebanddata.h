@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2015-2016 by Walter Brisken & Adam Deller               *
+ *   Copyright (C) 2015-2021 by Walter Brisken & Adam Deller               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_basebanddata.h 7267 2016-02-28 22:25:01Z WalterBrisken $
+ * $Id: vex_basebanddata.h 10363 2022-01-27 22:57:59Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 7267 $
+ * $LastChangedRevision: 10363 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2016-02-29 09:25:01 +1100 (Mon, 29 Feb 2016) $
+ * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
  *
  *==========================================================================*/
 
@@ -38,7 +38,7 @@
 class VexBasebandData : public Interval
 {
 	public:
-	VexBasebandData() : streamId(-1) { }
+	VexBasebandData() : recorderId(0), streamId(-1) { }
 	std::string filename;	// or VSN, ...
 	int recorderId;		// as specified in vex file, can be associated using DATASTREAM::recorder parameter; otherwise sort to assign
 	int streamId;		// 0-based; -1 means not assigned.  Must be assigned for > 1 datastream operation

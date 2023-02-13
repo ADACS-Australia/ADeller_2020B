@@ -83,7 +83,7 @@ def lbafile_timerange(filename, header):
 def vsib_header(filename):
     """Extract vsib header from LBA format file"""
 
-    FILE = open(filename, "r+b")
+    FILE = open(filename, "rb")
     header = FILE.read(4096).decode("utf-8").split("\n")
 
     return header
@@ -131,6 +131,14 @@ def m5_to_vextime(m5time):
     return vextime
 
 
+def parse_m5bsum(m5bsum_out):
+    starttime_m5, endtime_m5 = m5bsum_out.split()[1:3]
+    starttime = espressolib.convertdate(
+            float(starttime_m5), "vex")
+    endtime = espressolib.convertdate(float(endtime_m5), "vex")
+    return starttime, endtime
+
+
 def check_file(infile, m5bopts):
     """ check each file, then return time range and format. Check for
     Corrupt/missing files. """
@@ -176,32 +184,44 @@ def check_file(infile, m5bopts):
         # (YMMV). If we don't have m5bsum and m5time in our path we simply will
         # not do this.
 
-        summary_program = " ".join([m5bsum, m5bopts])
+        #summary_program = " ".join([m5bsum, m5bopts])
 
-        if '.vdif' in infile.lower():
-            # assume we must have a VDIF file.
+        #if '.vdif' in infile.lower():
+        #    # assume we must have a VDIF file.
 
-            summary_program = vsum
+        #    summary_program = vsum
+        error = str()
 
         try:
-            # get the start/stop time with m5bsum/vsum
-            command = " ".join([summary_program, "-s", infile])
-            error = str()
+            # get the start/stop time with m5bsum 
+            command = " ".join([m5bsum, m5bopts, "-s", infile])
             m5bsum_out, error = subprocess.Popen(
                     command, shell=True, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE).communicate()
-            starttime_m5, endtime_m5 = m5bsum_out.split()[1:3]
-            starttime = espressolib.convertdate(float(starttime_m5), "vex")
-            endtime = espressolib.convertdate(float(endtime_m5), "vex")
+                    stderr=subprocess.PIPE,
+                    encoding="utf-8").communicate()
+            starttime, endtime = parse_m5bsum(m5bsum_out)
             #print starttime, endtime
-        except:
+        except: 
+            starttime = None
+        if starttime is None:
             try:
-                # must be a mark5a then.
+                # get the start/stop time with vsum
+                command = " ".join([vsum, "-s", infile])
+                m5bsum_out, error = subprocess.Popen(
+                        command, shell=True, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        encoding="utf-8").communicate()
+                starttime, endtime = parse_m5bsum(m5bsum_out)
+            except:
+                starttime = None
+        if starttime is None:
+            try:
+                # must be a mark5a (or garbage) then.
                 #sys.stderr.write(infile)
                 command = " ".join([m5findformats, infile])
                 stdout, error = subprocess.Popen(
                         command, shell=True, stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE).communicate()
+                        stderr=subprocess.PIPE, encoding="utf-8").communicate()
                 #sys.stderr.write(error)
                 stdout = stdout.decode("utf-8")
                 error = error.decode("utf-8")
@@ -210,7 +230,7 @@ def check_file(infile, m5bopts):
                 command = " ".join([m5time, infile, m5format])
                 starttime_m5, error = subprocess.Popen(
                         command, shell=True, stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE).communicate()
+                        stderr=subprocess.PIPE, encoding="utf-8").communicate()
                 #sys.stderr.write(error)
 
                 lastsample = 1000000
@@ -219,22 +239,21 @@ def check_file(infile, m5bopts):
                         [m5time, infile, m5format, str(filesize-lastsample)])
                 endtime_m5, error = subprocess.Popen(
                         command, shell=True, stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE).communicate()
+                        stderr=subprocess.PIPE, encoding="utf-8").communicate()
                 #sys.stderr.write(error)
 
                 starttime = m5_to_vextime(starttime_m5)
                 endtime = m5_to_vextime(endtime_m5)
 
             except:
-                # couldn't decode time.
-                sys.stderr.write("cannot decode time for " + infile + "\n\n")
-                sys.stderr.write(error)
-
                 starttime = None
-                endtime = None
+                #pass
 
-        if not starttime:
+        if starttime is None:
+            # couldn't decode time.
             # we know nothing about this format, abandon this file
+            sys.stderr.write("cannot decode time for " + infile + "\n\n")
+            sys.stderr.write(error)
             corrupt = True
 
     return infile, starttime, endtime, corrupt

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2011-2013 by Walter Brisken                             *
+ *   Copyright (C) 2011-2021 by Walter Brisken & Leonid Petrov             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: util.h 5516 2013-07-24 20:48:43Z WalterBrisken $
+// $Id: util.h 10024 2021-05-25 14:53:00Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsTS.c $
-// $LastChangedRevision: 5516 $
+// $LastChangedRevision: 10024 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2013-07-25 06:48:43 +1000 (Thu, 25 Jul 2013) $
+// $LastChangedDate: 2021-05-26 00:53:00 +1000 (Wed, 26 May 2021) $
 //
 //============================================================================
 
@@ -39,5 +39,9 @@
 int glob2(const char *label, const char *pattern, int flags, int errfunc(const char *epath, int eerrno), glob_t *pglob);
 
 int globcase(const char *label, const char *match, char *fileName);
+
+int glob2_sort_pcal_files( glob_t *pglob);
+
+int sortjobpcal ( const DifxInput *D, int antennaId, int *jobxref );
 
 #endif

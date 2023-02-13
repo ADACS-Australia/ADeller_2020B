@@ -216,10 +216,7 @@ static int getFirstBlocks(Mark6File *m6f)
 		return -4;
 	}
 	v = fread(&m6f->block2, sizeof(m6f->block1), 1, m6f->in);
-	if(v < 1)
-	{
-		return -5;
-	}
+	/* No worries if this fails due to file size being short, it seems */
 
 	v = fseeko(m6f->in, offset, SEEK_SET);
 	if(v != 0)
@@ -520,6 +517,16 @@ int openMark6File(Mark6File *m6f, const char *filename)
 		return -5;
 	}
 
+	if(m6f->packetSize == 0 || m6f->maxBlockSize <= 16)
+	{
+		// TODO: try harder to figure out packetSize?
+		// There are a few rare test recordings that have packet_size=0 block_size=8 in the file header,
+		// their actual blocks have proper wb_size, but the "modulo by zero packet_size" in this library leads to segfaults.
+		deallocateMark6File(m6f);
+
+		return -7;
+	}
+
 	if(getFirstBlocks(m6f) < 0)
 	{
 		deallocateMark6File(m6f);
@@ -655,8 +662,11 @@ off_t getMark6GathererFileSize(const Mark6Gatherer *m6g)
 		m6f = m6g->mk6Files + i;
 		blockSize = m6f->maxBlockSize - ((m6f->maxBlockSize-m6f->blockHeaderSize) % m6f->packetSize);
 		n = (m6f->stat.st_size - sizeof(Mark6Header))/blockSize;
-
-		size += n*(blockSize-m6f->blockHeaderSize);
+		if(((m6f->stat.st_size - sizeof(Mark6Header)) % blockSize) != 0)
+		{
+			n += 1;
+		}
+		size += m6f->stat.st_size - sizeof(Mark6Header) - (n * m6f->blockHeaderSize);
 	}
 
 	return size;

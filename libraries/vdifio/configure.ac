@@ -1,14 +1,15 @@
-AC_INIT([VDIFIO], [1.5], [difx-developers@nrao.edu])
+AC_INIT([VDIFIO], [1.6], [difx-developers@nrao.edu])
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.50)
+#AC_PREREQ([2.69])
+AC_PREREQ([2.59])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/vdifio.h])
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CHECK_SIZEOF([size_t])
 AC_SYS_LARGEFILE
@@ -19,7 +20,7 @@ AC_C_BIGENDIAN
 # Checks for programs.
 AC_PATH_PROG([PYTHON],[python])
 AC_PROG_CC
-AC_PROG_LIBTOOL
+LT_INIT
 
 # Checks for libraries.
 AC_CHECK_LIB(m, sqrt)
@@ -57,7 +58,7 @@ if test -n "$PYTHON" -a "x$REQUESTED_PYTHON_CTYPES" = "xyes"; then
 fi
 AM_CONDITIONAL([ENABLE_PYTHON_CTYPES], [test -n "$PYTHON" -a "x$REQUESTED_PYTHON_CTYPES" = "xyes" -a -n "$GOT_PYTHON_CTYPES"])
 
-PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.2], [HAVE_MARK6SG=true], [HAVE_MARK6SG=false])
+PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.3], [HAVE_MARK6SG=true], [HAVE_MARK6SG=false])
 AM_CONDITIONAL(USE_MARK6SG, $HAVE_MARK6SG)
 if test ${HAVE_MARK6SG} = true; then
   AC_DEFINE(HAVE_MARK6SG, 1, [Define if you have mark6sg library.])
@@ -122,7 +123,7 @@ fi
 version=AC_PACKAGE_VERSION
 AC_SUBST(version)
 
-AC_OUTPUT([ \
+AC_CONFIG_FILES([ \
 	Makefile \
 	vlbi-vdifio.spec \
 	src/Makefile \
@@ -130,3 +131,5 @@ AC_OUTPUT([ \
 	python/Makefile \
 	vdifio.pc \
 ])
+
+AC_OUTPUT()

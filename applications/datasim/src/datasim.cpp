@@ -19,6 +19,7 @@
 *****************************************************************************/
 
 #include <iostream>
+#include <cstddef>
 #include <cstdlib>
 #include <unistd.h>
 #include <vector>

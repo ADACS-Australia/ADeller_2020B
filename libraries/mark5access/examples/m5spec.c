@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2019 by Walter Brisken & Chris Phillips            *
+ *   Copyright (C) 2008-2022 by Walter Brisken & Chris Phillips            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5spec.c 9523 2020-05-14 06:05:34Z ChrisPhillips $
+// $Id: m5spec.c 10609 2022-08-23 16:28:37Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_stream.c $
-// $LastChangedRevision: 9523 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2020-05-14 16:05:34 +1000 (Thu, 14 May 2020) $
+// $LastChangedRevision: 10609 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2022-08-24 02:28:37 +1000 (Wed, 24 Aug 2022) $
 //
 //============================================================================
 
@@ -47,7 +47,7 @@
 const char program[] = "m5spec";
 const char author[]  = "Walter Brisken, Chris Phillips";
 const char version[] = "1.6";
-const char verdate[] = "20191101";
+const char verdate[] = "20220429";
 
 volatile int die = 0;
 
@@ -68,8 +68,9 @@ static void usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("A Mark5 spectrometer.  Can use VLBA, Mark3/4, Mark5B, and single-\nthread VDIF formats using the mark5access library.\n\n");
-	printf("Usage : %s <infile> <dataformat> <nchan> <nint> <outfile> [<offset>]\n\n", program);
+	printf("A Mark5 spectrometer.  Can use VLBA, Mark3/4, Mark5B, and single-thread");
+	printf("VDIF formats using the mark5access library.\n\n");
+	printf("Usage : %s [options] <infile> <dataformat> <nchan> <nint> <outfile> [<offset>]\n\n", program);
 	printf("  <infile> is the name of the input file\n\n");
 	printf("  <dataformat> should be of the form: "
 		"<FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
@@ -82,7 +83,7 @@ static void usage(const char *pgm)
 	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27 ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <nchan> is the number of spectral points to make per baseband channel\n\n");
-	printf("  <nint> is the number of FFT frames to spectrometize\n\n");
+	printf("  <nint> is the number of FFT frames to spectrometize; 0 -> run until end of file\n\n");
 	printf("  <outfile> is the name of the output file\n\n");
 	printf("  <offset> is number of bytes into file to start decoding\n\n");
 	printf("\n");
@@ -141,11 +142,6 @@ int harvestComplexData(struct mark5_stream *ms, double **spec, fftw_complex **zd
 			*unpacked += status;
 		}
 
-		if(ms->consecutivefails > 5)
-		{
-			break;
-		}
-
 		for(i = 0; i < ms->nchan; ++i)
 		{
 			/* FFT */
@@ -184,6 +180,8 @@ int harvestComplexData(struct mark5_stream *ms, double **spec, fftw_complex **zd
 	}
 	free(plan);
 	free(cdata);
+
+	fftw_cleanup();
 
 	// If Double sideband need to move stuff around
 
@@ -253,11 +251,6 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 			*unpacked += status;
 		}
 
-		if(ms->consecutivefails > 5)
-		{
-			break;
-		}
-
 		for(i = 0; i < ms->nchan; ++i)
 		{
 			/* FFT */
@@ -278,7 +271,7 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 			}
 		}
 
-		if (polmode==VLBA) 
+		if(polmode==VLBA) 
 		{
 			for(i = 0; i < ms->nchan/2; ++i)
 			{
@@ -290,17 +283,17 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 				}
 			}
 		} 
-		else if (polmode==DBBC) 
+		else if(polmode==DBBC) 
 		{
-		  for(i = 0; i < ms->nchan/2; ++i)
-		  {
-			int c;
-
-			for(c = 0; c < nchan; ++c)
+			for(i = 0; i < ms->nchan/2; ++i)
 			{
-				zx[i][c] += zdata[i][c]*~zdata[i+ms->nchan/2][c];
+				int c;
+
+				for(c = 0; c < nchan; ++c)
+				{
+					zx[i][c] += zdata[i][c]*~zdata[i+ms->nchan/2][c];
+				}
 			}
-		  }
 		}
 	}
 	for(j = 0; j < ms->nchan; ++j)
@@ -310,6 +303,8 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 	}
 	free(plan);
 	free(data);
+
+	fftw_cleanup();
 
 	return 0;
 }
@@ -405,11 +400,12 @@ int spec(const char *filename, const char *formatname, int nchan, int nint, cons
 	}
 
 	f = ms->nchan*nchan/sum;
-	if (nonorm) {
-	  //printf("Norm Factor = %.3g\n", 1/f);
-	  //f *= unpacked*256;
-	  //printf("Updated Norm Factor = %.3g\n", 1/f);
-	  f = 1.0/unpacked/256.0;
+	if(nonorm)
+	{
+		//printf("Norm Factor = %.3g\n", 1/f);
+		//f *= unpacked*256;
+		//printf("Updated Norm Factor = %.3g\n", 1/f);
+		f = 1.0/unpacked/256.0;
 	}
 	
 	chanbw = ms->samprate/(2.0e6*nchan);
@@ -552,15 +548,14 @@ int main(int argc, char **argv)
 
 		buffer = malloc(bufferlen);
 
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
-			fprintf(stderr, "Error, buffer read failed.\n");
-
+			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
 			fclose(in);
 			free(buffer);
-
-			return EXIT_FAILURE;
+			return -1;
 		}
 		else
 		{

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "mk4_data.h"
+#include "mk4_dfio.h"
 #include "param_struct.h"
 #include "pass_struct.h"
 #include "vex.h"
@@ -44,6 +45,10 @@ struct type_206 *t206)
                                             /* Take account of fractional APs */
     if (pass->channels > 0)
         t206->intg_time = status->total_ap_frac * param->acc_period / pass->channels;
+
+    // this arises from bandwidth editing, see discussion in adjust_snr.c
+    if (status->tot_sb_bw_aperr > 0.0)
+        t206->intg_time += status->tot_sb_bw_aperr * param->acc_period / pass->channels;
 
     min = max = status->ap_num[0][0] + status->ap_num[1][0];
     samp_per_ap = param->acc_period / param->samp_period;

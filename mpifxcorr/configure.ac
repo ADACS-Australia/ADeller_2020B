@@ -1,10 +1,10 @@
-AC_INIT([mpifxcorr], [2.7], [Adam Deller <adeller@astro.swin.edu.au>])
+AC_INIT([mpifxcorr],[2.8],[Adam Deller <adeller@astro.swin.edu.au>])
 PACKAGE_VERSION=AC_PACKAGE_VERSION
 AC_SUBST([PACKAGE_VERSION])
 AC_SUBST([LIBRARY_VERSION])
 AM_INIT_AUTOMAKE([subdir-objects])
-AM_CONFIG_HEADER(config.h)
-AC_LANG_CPLUSPLUS
+AC_CONFIG_HEADERS(config.h)
+AC_LANG([C++])
 AC_PROG_CXX
 AX_OPENMP
 AC_PROG_RANLIB
@@ -51,7 +51,7 @@ AC_SUBST(mathcflags, [${MATH_CFLAGS}])
 dnl **********************************************************
 dnl **** Find difxmessage library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(DIFXMESSAGE, [difxmessage >= 2.7.0])
+PKG_CHECK_MODULES(DIFXMESSAGE, [difxmessage >= 2.8.0])
 CPPFLAGS="${CPPFLAGS} ${DIFXMESSAGE_CFLAGS}"
 
 dnl **********************************************************
@@ -63,7 +63,7 @@ CPPFLAGS="${CPPFLAGS} ${VDIFIO_CFLAGS}"
 dnl **********************************************************
 dnl **** Find mark6sg library                              ****
 dnl **********************************************************
-PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.2], [hasmark6sg=true], [hasmark6sg=false])
+PKG_CHECK_MODULES([MARK6SG], [mark6sg >= 2.0.3], [hasmark6sg=true], [hasmark6sg=false])
 AM_CONDITIONAL(WITH_MARK6SG, $hasmark6sg)
 if test $hasmark6sg = true; then
   CPPFLAGS="${CPPFLAGS} ${MARK6SG_CFLAGS}"
@@ -77,7 +77,7 @@ dnl **** Find mark5ipc library                            ****
 dnl **********************************************************
 m5ipc_enabled=true
 PKG_CHECK_MODULES(MARK5IPC,
-        [mark5ipc >= 2.7.0],
+        [mark5ipc >= 2.8.0],
 	[AC_DEFINE([HAVE_MARK5IPC], 1, [1=has MARK5IPC])],
 	m5ipc_enabled=false)
 AM_CONDITIONAL(WITH_MARK5IPC, $m5ipc_enabled)
@@ -138,7 +138,7 @@ AM_CONDITIONAL(WITH_SS, $ss_enabled)
 dnl **********************************************************
 dnl **** Find mark5access library                         ****
 dnl **********************************************************
-PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.5.4)
+PKG_CHECK_MODULES(M5ACCESS, mark5access >= 1.6)
 
 dnl **********************************************************
 dnl **** Check for CUDA                                   ****
@@ -175,9 +175,25 @@ AC_CHECK_LIB(rt, clock_gettime)
 CXXFLAGS="${CXXFLAGS} ${M5ACCESS_CFLAGS} ${VDIFIO_CFLAGS} ${MARK6SG_CFLAGS} ${MATH_CFLAGS} ${FFTW3_CFLAGS} ${DIFXMESSAGE_CFLAGS} ${MARK5IPC_CFLAGS} ${CFLAG_QUIET} ${OPENMP_CXXFLAGS} ${DIRLIST_CFLAGS} ${MARK6SG_CFLAGS}"
 LIBS="${M5ACCESS_LIBS} ${VDIFIO_LIBS} ${MARK6SG_LIBS} ${SS_LIBS} ${MATH_LIBS} ${DIFXMESSAGE_LIBS} ${MARK5IPC_LIBS} ${DIRLIST_LIBS} ${CUDA_LIBS} $LIBS"
 
+
+dnl **********************************************************
+dnl **** Check if AddressSanitizer was requested          ****
+dnl **********************************************************
+
+AC_ARG_ENABLE([asan], AS_HELP_STRING([--enable-asan],[enable compiler instrumentation (AddressSanitizer), cf. Google for when to use it]))
+enable_asan=`echo $enable_asan`
+if test "x${enable_asan}" == "xyes"; then
+	# Note:  To use the ASan code instrumentation it must be suppored by your compiler (gcc 4.8+, Clang/LLVM)
+	# Note2: Only use --enable-asan for your DEBUG builds - the injected runtime checks have a high overhead.
+	CPPFLAGS="${CPPFLAGS} -fsanitize=address -fno-omit-frame-pointer"
+	CXXFLAGS="${CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer"
+	LIBS="${LIBS} -static-libasan"  # gcc 4.8+
+fi
+
+
 echo "CXXFLAGS = ${CXXFLAGS}"
 echo "LIBS = ${LIBS}"
-AC_OUTPUT([
+AC_CONFIG_FILES([
 	Makefile \
 	mpifxcorr.pc \
 	fxcorr.pc \
@@ -185,3 +201,4 @@ AC_OUTPUT([
 	src/architecture.h \
 	utils/Makefile\
 ])
+AC_OUTPUT

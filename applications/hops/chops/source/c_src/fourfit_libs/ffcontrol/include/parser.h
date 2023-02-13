@@ -1,3 +1,6 @@
+#ifndef PARSER_H__
+#define PARSER_H__
+
               /* Structure definitions for the FSM table */
 
 struct fsm_table_entry
@@ -144,7 +147,15 @@ struct token_struct
 #define VBP_FIT_           116
 #define VBP_COEFFS_        117
 #define VBP_FILE_          118
-#define MAX_TOKENS         120   /* Increase to equal or exceed # tokens */
+#define AVXPZOOM_          119
+#define AVXPLOPT_          120
+#define MOUNT_TYPE_        121
+#define NO_MOUNT_TYPE_     122
+#define CASSEGRAIN_        123
+#define NASMYTHLEFT_       124
+#define NASMYTHRIGHT_      125
+                                /* add new tokens at the bottom of the list */
+#define MAX_TOKENS         126  /* increase to equal or exceed # tokens */
 
 
         /* Definitions of token categories */
@@ -229,3 +240,5 @@ struct token_struct
 #define SAVE_2ND_SCAN       18
 #define INSERT_STRING       19
 #define SAVE_CSV_LIST       20
+
+#endif

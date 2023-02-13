@@ -1,6 +1,6 @@
 AC_INIT([mark6meta], [0.3], [Helge Rottmann <rottmann@mpifr-bonn.mpg.de>])
 
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 
 #shared library versioning
 LIBRARY_VERSION=0:0:0
@@ -25,13 +25,14 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([foreign])
 
+LT_INIT
+
 AC_PROG_CXX
-AC_PROG_LIBTOOL
 AM_SANITY_CHECK
 
 AC_LANG(C++)
 
-PKG_CHECK_MODULES(DIFXMESSAGE, [difxmessage >= 2.4.0])
+PKG_CHECK_MODULES(DIFXMESSAGE, [difxmessage >= 2.8.0])
 #PKG_CHECK_MODULES(LIBUDEV, [libudev >= 1.0.0], [], [AC_MSG_ERROR(libudev not found)])
 AC_CHECK_LIB(udev, udev_ref)
 AC_CHECK_HEADERS(libudev.h)
@@ -42,8 +43,10 @@ CXXFLAGS="${CXXFLAGS} ${DIFXMESSAGE_CFLAGS} ${LIBUDEV_CFLAGS}"
 version=AC_PACKAGE_VERSION
 AC_SUBST(version)
 
-AC_OUTPUT([
+AC_CONFIG_FILES([
 	Makefile \
 	mark6meta.pc \
 	src/Makefile \
 ])
+
+AC_OUTPUT()

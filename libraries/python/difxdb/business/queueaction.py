@@ -17,11 +17,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: queueaction.py 7191 2016-01-15 13:00:39Z HelgeRottmann $
+# $Id: queueaction.py 10112 2021-08-26 12:31:31Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/business/queueaction.py $
-# $LastChangedRevision: 7191 $
+# $LastChangedRevision: 10112 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2016-01-16 00:00:39 +1100 (Sat, 16 Jan 2016) $
+# $LastChangedDate: 2021-08-26 22:31:31 +1000 (Thu, 26 Aug 2021) $
 #
 #============================================================================
 
@@ -96,6 +96,8 @@ def addQueueItem(session, job, expCode, passName):
         
     session.add(queueItem)
     session.commit()
+    session.refresh(queueItem)
+    return(queueItem.id)
     
     
 def deleteQueueItem(session, queueItem):

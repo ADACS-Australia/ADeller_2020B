@@ -60,20 +60,21 @@
 /*    mod 15 May 2006 ab/alr - strtok removed                 */
 /*                                                            */
 /*    mod 2015.3.2  rjc  fix behavior with new sked format    */
+/*    mod 2021.3.30 jpb  boost MAXSC form 2k to 10k           */
 /**************************************************************/
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> 
-
+#include "msg.h"
 #include "mk4_afio.h"
 
 /*  max baselines, sources and scans defined:   */
 /*  Note: actually baseline/freq, each scan has X baselines then S  */
 #define MAXBL 600 
 #define MAXSOR 256
-#define MAXSC 2000
+#define MAXSC 10000
 #define MAXLINLEN 6000  
 #define SNRMAX 10.0
 #define SNRWARN 5.0
@@ -99,8 +100,8 @@ struct {                          /* struct for bl means by source */
 void addsec();
 int parse_station_name (char *in_line, int nbl, char *ref, char *rem);
 
-char progname[8] = "snratio";
-int msglev = 3;
+// char progname[8] = "snratio";
+// int msglev = 3;
 
 int main(int argc, char *argv[])
 {
@@ -114,7 +115,9 @@ int main(int argc, char *argv[])
   int bln[MAXBL],n,nbl,nc,nsc,nsor,nline,nb,ns,type,exp,isnro,m,mm,colns;
   int return_code, done, stat_index, head_done, i;
   int offset;
- 
+
+  set_progname("snratio");
+  set_msglev(3);
 
 /* open snr apriori file (created from sked) */
 
@@ -433,11 +436,11 @@ int main(int argc, char *argv[])
 
 /*   ns=matching scbl index    */
 
-            isnro = snro;
+           /* isnro = snro; */
 
 /*   use snr from alist only if greater than existing value  */
 
-          if(isnro > scbl[ns].osnr[n] )  scbl[ns].osnr[n] = isnro;
+          if(snro > scbl[ns].osnr[n] )  scbl[ns].osnr[n] = snro;
         }
       }    
     }

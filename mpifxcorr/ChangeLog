@@ -1,3 +1,7 @@
+Version 2.8
+~~~~~~~~~~~
+* Version for DiFX-2.8
+
 Version 2.7
 ~~~~~~~~~~~
 * Fix problem with "Allow DifxParameter message to specify new stop time" that caused premature termination of the job.  Bug introduced in SVN commit 7910 on July 20, 2017
@@ -20,6 +24,17 @@ Version 2.7
 * Update File and Mark6 datastreams for interlaced VDIF to improve multiplexing
   - TODO: Set nGap to fraction of second rather than fixed number of frames?
 * VDIF file reading: don't bail if seeking fails, just don't perform file checking
+* startdifx: when run with --wait, skip jobs whose end time has passed
+* startdifx: when run with --wait, count down time to start
+* startdifx: support --checkfiles option: look at file content for compliance
+* add "--version" support to some utilities
+* checkmpifxcorr: option to quiet output if no errors found
+* startdifx: --log-file , --comment-start , and --comment-end options added
+* model.cpp: update to reflect two optional .calc file rows supported by difxio
+* configuration.cpp: fix logic in populating equivfrequsedbybaseline[]
+* VDIF processing: remove check after vdifmux() that checks input usage vs. output generation
+  - This check is wrong to perform in the case of considerably out-of-order data or data with a lot of gaps
+* Add flag 'mpifxcorr <job.input> --vgoscomplex' that flips the sideband of complex data recordings at all complex stations
 
 Version 2.6
 ~~~~~~~~~~~

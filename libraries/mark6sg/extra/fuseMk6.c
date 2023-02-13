@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fuseMk6.c 9559 2020-06-18 12:50:12Z JanWagner $
+// $Id: fuseMk6.c 10555 2022-07-27 09:33:51Z JanWagner $
 // $HeadURL$
-// $LastChangedRevision: 9559 $
+// $LastChangedRevision: 10555 $
 // $Author: JanWagner $
-// $LastChangedDate: 2020-06-18 22:50:12 +1000 (Thu, 18 Jun 2020) $
+// $LastChangedDate: 2022-07-27 19:33:51 +1000 (Wed, 27 Jul 2022) $
 //
 //============================================================================
 //
@@ -142,6 +142,15 @@ static int fusem6_open(const char *path, struct fuse_file_info *fi)
 	}
 	pthread_mutex_unlock(&dirlock);
 #endif
+
+	// Invent a "MSN" label for DifxMessageMark6Activity messages,
+	// to distinguish rate reports when multiple fuseMk6 mounts are active
+	// Note: "MSN" must have strlen() of 8, else difxmessage reverts MSN to "none"
+	// TODO: somehow determine actual MSN(s) list of the accessed module(s),
+	//       or the original MSN of off-module raw data
+	char fakeMSN[9] = { '\0' };
+	snprintf(fakeMSN, sizeof(fakeMSN), "fuse%04d", getpid() % 10000);
+	mark6_sg_active_msn(fi->fh, fakeMSN);
 
 	return 0;
 }

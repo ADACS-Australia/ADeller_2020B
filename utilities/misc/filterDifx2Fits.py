@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: filterDifx2Fits.py 9311 2019-11-15 04:07:22Z HelgeRottmann $
+# $Id: filterDifx2Fits.py 10597 2022-08-18 07:27:44Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/misc/filterDifx2Fits.py $
-# $LastChangedRevision: 9311 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-15 15:07:22 +1100 (Fri, 15 Nov 2019) $
+# $LastChangedRevision: 10597 $
+# $Author: JanWagner $
+# $LastChangedDate: 2022-08-18 17:27:44 +1000 (Thu, 18 Aug 2022) $
 #
 #============================================================================
 import os
@@ -34,9 +34,9 @@ from optparse import OptionParser
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9311 $"
-__date__ ="$Date: 2019-11-15 15:07:22 +1100 (Fri, 15 Nov 2019) $"
-__lastAuthor__="$Author: HelgeRottmann $"
+__build__= "$Revision: 10597 $"
+__date__ ="$Date: 2022-08-18 17:27:44 +1000 (Thu, 18 Aug 2022) $"
+__lastAuthor__="$Author: JanWagner $"
 
 
 def getUsage():
@@ -49,7 +49,7 @@ def getUsage():
         usage += '\n The fits file produced by the script will be named <outname>.fits'
         usage += '\n\n<outname> : base name for the output files <outname>.difx2fits and <outname>.fits)'
         usage += '\n<baseFileNameN> : name of the .difx output directories to consider.'
-        usage += '\n\tCan contain wildcards (e.g. r1111_*)\n'
+        usage += '\n\tCan contain wildcards (e.g. r1111_*.difx)\n'
         return usage
 
 def getVersion():
@@ -93,6 +93,7 @@ def buildCommandFile(baseName, fileList):
                 commandFile.write(ranges [:-2] + "\n")
         
         if len(fileList) == 0:
+                print("File list for %s turned out empty." % (commandFileName))
                 return
         commandFile.write("difx2fits \\\n")
         if options.d2fOptions is not None:
@@ -148,11 +149,14 @@ if __name__ == "__main__":
 
 
         # loop over calc files
-        files = glob.glob(args[0])
-        
+        files = glob.glob(args[1])
+        if (len(files) < 1) or not ('?' in args[1] or '*' in args[1]):
+                files = args[1:]
+      
         includeList = []
-        for arg in args:
+        for arg in files:
                 if not arg.endswith(".difx"):
+                        print("Skipping %s which did not end with .difx" % (arg))
                         continue
 
                 # open the corresponding calc file
@@ -205,7 +209,7 @@ if __name__ == "__main__":
                 if options.mode is not None:
                         modeMatch = False
                         if mode in options.mode:
-                                print("mode found")     
+                                # print("mode found")     
                                 modeMatch = True
 
                 # check if source name in selected source list
@@ -228,5 +232,6 @@ if __name__ == "__main__":
                         includeList.append(arg)
 
                 calc.close()
+        includeList.sort()
         buildCommandFile(baseName, includeList)
         print("Finished")

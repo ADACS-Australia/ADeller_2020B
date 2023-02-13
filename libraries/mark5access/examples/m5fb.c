@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2017 by Walter Brisken & Chris Phillips & Richard Dodson *
+ *   Copyright (C) 2008-2022 by Walter Brisken & Chris Phillips & Richard Dodson *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -47,8 +47,8 @@
 const char program[] = "m5fb";
 const char author[]  = "Richard Dodson";
 //  Copied extensively from m5spec by Walter Brisken & Chris Phillips
-const char version[] = "1.2";
-const char verdate[] = "20170426";
+const char version[] = "1.3";
+const char verdate[] = "20220429";
 
 volatile int die = 0;
 
@@ -71,7 +71,8 @@ static void usage(const char *pgm)
 	printf("\n");
 
 	printf("%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	printf("A Mark5 filterbank.  Can use VLBA, Mark3/4, and Mark5B formats using the\nmark5access library.\n\n");
+	printf("A Mark5 filterbank.  Can use VLBA, Mark3/4, Mark5B, and single-thread\n");
+	printf("VDIF formats using the\nmark5access library.\n\n");
 	printf("Usage : %s <infile> <dataformat> <nchan> <dint> <outfile> [<offset>]\n\n", program);
 	printf("  <infile> is the name of the input file\n\n");
 	printf("  <dataformat> should be of the form: "
@@ -81,7 +82,7 @@ static void usage(const char *pgm)
 	printf("    Mark5B-512-16-2\n");
 	printf("    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n\n");
 	printf("  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	printf("    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	printf("    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
 	printf("    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
 	printf("    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	printf("  <nchan> is the number of channels to make per IF\n\n");
@@ -138,11 +139,6 @@ int harvestComplexData(struct mark5_stream *ms, double **spec, fftw_complex **zd
 		{
 			*total += chunk;
 			*unpacked += status;
-		}
-
-		if(ms->consecutivefails > 5)
-		{
-			break;
 		}
 
 		for(i = 0; i < ms->nchan; ++i)
@@ -238,11 +234,6 @@ int harvestRealData(struct mark5_stream *ms, double **spec, fftw_complex **zdata
 		{
 			*total += chunk;
 			*unpacked += status;
-		}
-
-		if(ms->consecutivefails > 5)
-		{
-			break;
 		}
 
 		for(i = 0; i < ms->nchan; ++i)
@@ -709,15 +700,14 @@ int main(int argc, char **argv)
 
 		buffer = malloc(bufferlen);
 
-		r = fread(buffer, bufferlen, 1, in);
-		if(r < 1)
+		r = fread(buffer, 1, bufferlen, in);
+		if(r < bufferlen)
 		{
-			fprintf(stderr, "Error, buffer read failed.\n");
-
+			fprintf(stderr, "Error: cannot read %d bytes from file\n", bufferlen);
+			fprintf(stderr, "Error:   just read %d bytes from file\n", r);
 			fclose(in);
 			free(buffer);
-
-			return EXIT_FAILURE;
+			return -1;
 		}
 		else
 		{

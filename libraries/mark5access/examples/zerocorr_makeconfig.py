@@ -1,5 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: latin-1
+
+# should work under python2 or python3
 
 #===========================================================================
 # Copyright (C) 2017  Max-Planck-Institut für Radioastronomie, Bonn, Germany
@@ -18,11 +20,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: zerocorr_makeconfig.py 7679 2017-03-19 07:41:09Z HelgeRottmann $
+# $Id: zerocorr_makeconfig.py 10512 2022-06-22 22:08:07Z WalterBrisken $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/examples/zerocorr_makeconfig.py $
 # $LastChangedRevision$
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2017-03-19 18:41:09 +1100 (Sun, 19 Mar 2017) $
+# $Author: WalterBrisken $
+# $LastChangedDate: 2022-06-23 08:08:07 +1000 (Thu, 23 Jun 2022) $
 #
 #============================================================================
 import argparse

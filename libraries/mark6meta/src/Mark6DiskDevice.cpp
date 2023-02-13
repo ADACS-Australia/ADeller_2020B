@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6DiskDevice.cpp 9271 2019-11-13 03:10:11Z HelgeRottmann $
+// $Id: Mark6DiskDevice.cpp 10541 2022-07-18 11:25:16Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 9271 $
+// $LastChangedRevision: 10541 $
 // $Author: HelgeRottmann $
-// $LastChangedDate: 2019-11-13 14:10:11 +1100 (Wed, 13 Nov 2019) $
+// $LastChangedDate: 2022-07-18 21:25:16 +1000 (Mon, 18 Jul 2022) $
 //
 //============================================================================
 #include "Mark6DiskDevice.h"
@@ -28,9 +28,11 @@
 #include "Mark6Meta.h"
 
 #include <algorithm>
+#include <errno.h>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -99,6 +101,7 @@ std::string Mark6DiskDevice::getName() const {
  */
 bool Mark6DiskDevice::isValid()
 {
+    //clog << diskId_m << " " << controllerId_m << endl;
     if (diskId_m == -1)
         return(false);
     if (controllerId_m == -1)
@@ -127,29 +130,19 @@ int Mark6DiskDevice::getPosition() const {
 /**
  * Determines the slot (bank) in which the device is located by inspecting the controllerId and the diskId. 
  * NOTE: numbering of the slots is off by 1 compared to the bank labels written on the Mark6; e.g. slot=0 refers to bank=1 and so on. 
- * @return the slot number of the disk device (0-3)
+ * @return the slot number of the disk device (0-3), -1 in case of error
  */
 int Mark6DiskDevice::getSlot() const {
     
     //cout << "device: " << name_m << " diskid= " << diskId_m << " controllerid= " << controllerId_m << endl;
     if ((controllerId_m == -1) || (diskId_m == -1))
         return(-1);
-   
-    if (controllerId_m == 0)
-    {
-        if (diskId_m <= 7)
-            return(2);
-        else if ((diskId_m > 7) && (diskId_m <= 15))
-            return(3);
-    }
-    else if (controllerId_m == 1)
-    {
-        if (diskId_m <= 7)
-            return(0);
-        else if ((diskId_m > 7) && (diskId_m <= 15))
-            return(1);
-    }
 
+    if (diskId_m <= 7)
+        return(controllerId_m*2);
+    else if ((diskId_m > 7) && (diskId_m <= 15))
+        return(controllerId_m*2+1);
+   
     return(-1);
 }
 
@@ -204,9 +197,11 @@ int Mark6DiskDevice::mountPartition(int partitionNumber, string mountPath)
 
     if (ret == -1)
     {
+        char buffer[ 256 ];
+        char * errorMsg = strerror_r( errno, buffer, 256 );
         partitions_m[partitionNumber].mountPath = "";
         isMounted_m = false;
-        throw Mark6MountException (string("Cannot mount  device " + source + " under " + mountPath));
+        throw Mark6MountException (string("Cannot mount  partition " + source + " under " + mountPath + " Reason: " + errorMsg));
     }
 
     partitions_m[partitionNumber].mountPath = mountPath;
@@ -263,8 +258,11 @@ int Mark6DiskDevice::mountDisk(string dataPath, string metaPath)
     
         if (ret == -1)
         {
+            char buffer[ 256 ];
+            char *errorMsg = strerror_r( errno, buffer, 256 );
+
             isMounted_m = false;
-            throw Mark6MountException (string("Cannot mount  device " + source + " at " + dest.str()));
+            throw Mark6MountException (string("Cannot mount  device " + source + " at " + dest.str() + ".  Reason: " + errorMsg));
         }
         
         partitions_m[i].mountPath = dest.str();

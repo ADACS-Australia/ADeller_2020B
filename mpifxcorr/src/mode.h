@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mode.h 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: mode.h 10579 2022-08-02 10:58:00Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mode.h $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 10579 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-08-02 20:58:00 +1000 (Tue, 02 Aug 2022) $
 //
 //============================================================================
 #ifndef MODE_H
@@ -167,7 +167,7 @@ public:
   * @param subloopindex The "subloop" index to get the visibilities from
   * @return Pointer to the FFT'd data (complex 32 bit float)
   */
-  inline cf32* getFreqs(int outputband, int subloopindex) const { return fftoutputs[outputband][subloopindex]; };
+  inline const cf32* getFreqs(int outputband, int subloopindex) const { return fftoutputs[outputband][subloopindex]; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product

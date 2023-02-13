@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: sniffer.c 8628 2019-01-11 02:51:53Z WalterBrisken $
+// $Id: sniffer.c 10605 2022-08-22 22:53:15Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/sniffer.c $
-// $LastChangedRevision: 8628 $
+// $LastChangedRevision: 10605 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2019-01-11 13:51:53 +1100 (Fri, 11 Jan 2019) $
+// $LastChangedDate: 2022-08-23 08:53:15 +1000 (Tue, 23 Aug 2022) $
 //
 //============================================================================
 
@@ -216,6 +216,7 @@ static void deleteAccumulatorArray(Accumulator *A, int n)
 				free(A[a].ifSpectrum[i]);
 			}
 			free(A[a].spectrum);
+			free(A[a].ifSpectrum);
 			free(A[a].nRec);
 			free(A[a].isLSB);
 			free(A[a].weightSum);
@@ -1040,6 +1041,8 @@ static int dump(Sniffer *S, Accumulator *A)
 		fprintf(S->apd, "\n");
 		fprintf(S->apc, "\n");
 	}
+
+	free(amp);
 
 	return 0;
 }

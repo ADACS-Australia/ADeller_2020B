@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bfile.h 7249 2016-02-24 10:43:39Z AdamDeller $
+// $Id: mark5bfile.h 9925 2021-02-23 15:43:09Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.h $
-// $LastChangedRevision: 7249 $
-// $Author: AdamDeller $
-// $LastChangedDate: 2016-02-24 21:43:39 +1100 (Wed, 24 Feb 2016) $
+// $LastChangedRevision: 9925 $
+// $Author: JanWagner $
+// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
 //
 //============================================================================
 #ifndef Mark5BFILE_H

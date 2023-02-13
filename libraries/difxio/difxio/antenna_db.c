@@ -6,6 +6,7 @@
  * to allow unique identification of an antenna based on location, so ~1 meter accuracy
  * is all that should be assumed
  */
+
 AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays? */
 {
 	{ "AGGO",           "AGGO",      2765116.7009,  -4449233.7840,  -3626420.5633,  6.0 },		/* ITRF2014, 2019d solution */
@@ -14,17 +15,19 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "ALMA",           "",          2225061.1636,  -5440057.36994, -2481681.15054, 12.0, 10.0 },
 	{ "Apex",           "",          2225039.5297,  -5441197.6292,  -2479303.3597,  12.0, 0, "NASL" },
 	{ "Arecibo",        "ARECIBO",   2390486.9000,  -5564731.4400,   1994720.4500,  300.0 },
-	{ "ASKAP 07",       "",         -2556279.416,    5097245.383,   -2848523.218,   12.0 }, /* FIXME check diam */
+	{ "Arecibo 12m",    "",          2390512.68647, -5564470.08390,  1995124.38504, 12.0 },
+	{ "ASKAP 07",       "",         -2556279.416,    5097245.383,   -2848523.218,   12.0 },
 	{ "ATCA",           "ATCA",     -4751685.98800,  2791621.22300, -3200491.70000, 22.0, 6.0 },
-	{ "Azores",         "AZORES",    4552174.62052, -2186664.67586,  3882779.78919, 0.0 },
+	{ "Azores",         "AZORES",    4552174.62052, -2186664.67586,  3882779.78919, 3.9 },
 	{ "Badary",         "BADARY",    -838201.2618,   3865751.5589,   4987670.8708,  32.0 },		/* ITRF2014, 2019d solution */
+	{ "Badary 13m",     "BADAR13M",  -838326.334,    3865797.228,    4987598.328,   13.0 },
 	{ "Brewster",       "BR-VLBA",  -2112065.3082,  -3705356.5142,   4726813.6124,  25.0 },
 	{ "Cambridge",      "CAMBRIDG",  3920356.1500,      2542.0200,   5014284.4200,  32.0 },
 	{ "Chichijima",     "CHICHI10", -4490617.9108,   3483908.7523,   2884899.3203,  10.26 },	/* ITRF2014, 2019d solution */
 	{ "Ceduna",         "CEDUNA",   -3753442.7457,   3912709.7530,  -3348067.6095,  30.0 },
-	{ "Chilbolton",     "CHLBOLTN",  4008309.8765,   -100650.4260,   4943794.9323,  0.0 },
+	{ "Chilbolton",     "CHLBOLTN",  4008309.8765,   -100650.4260,   4943794.9323,  26.0 },
 	{ "TIGO Conception","TIGOCONC",  1492051.10792, -4887961.52962, -3803541.76919, 6.0 },
-	{ "Crimea",         "CRIMEA",    3785230.5786,   2551207.7722,   4439796.6036,  0.0 },		/* ITRF2014, 2019d solution */
+	{ "Crimea",         "CRIMEA",    3785230.5786,   2551207.7722,   4439796.6036,  22.0 },		/* ITRF2014, 2019d solution */
 	{ "Darnhall",       "",          3829087.8990,   -169568.9550,   5081082.3460,  25.0 },
 	{ "Defford",        "",          3923442.5660,   -146914.3300,   5009755.1250,  25.0 },
 	{ "DS3",            "DSA03",     1823351.5,     -4850434.0,     -3708961.7,     35.0 },  /* approximate coordinates */
@@ -53,7 +56,8 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "Effelsberg",     "EFLSBERG",  4033947.1525,    486990.8961,   4900431.0604,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Fort Davis",     "FD-VLBA",  -1324009.4120,  -5332181.9576,   3231962.3492,  25.0 },
 	{ "MacDonald",      "MACGO12M", -1330788.46447, -5328106.58850,  3236427.49718, 12.0 },		/* Chet; VGOS positions 2020 */
-	{ "Fortaleza",      "FORTLEZA",  4985369.9984,  -3955020.4158,   -428471.9983,  0.0 },
+	{ "MacDonald 13m",  "MCD 7850", -1330008.085,   -5328391.578,    3236502.734,   13.0 },
+	{ "Fortaleza",      "FORTLEZA",  4985369.9984,  -3955020.4158,   -428471.9983,  14.2 },
 	{ "GBT",            "GBT-VLBA",   882589.574,   -4924872.334,    3943729.336,   100.0 },	/* ITRF2014 */
 	{ "GBANK_TS",       "GBANK_TS",   884084.2636,  -4924578.7481,   3943734.3354,  0.0 },
 	{ "GMRT",           "",          1656988.9135,   5797576.2281,   2073756.22,    36.0, 12 },	/* Approximate location of a random antenna */
@@ -69,7 +73,7 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "Irbene 16",      "IRBENE16",  3183295.000,    1276276.000,    5359611.000,   16.0 },
 	{ "Iriki",          "VERAIRIK", -3521719.7439,   4132174.6639,   3336994.1873,  20.0 },
 	{ "Ishigaki",       "VERAISGK", -3263995.4716,   4808056.4149,   2619948.5632,  20.0 },		/* ITRF2014, 2019d solution */
-	{ "Ishioka",        "ISHIOKA",  -3959636.1869,   3296825.4610,   3747042.5843,  0.0 },		/* ITRF2014, 2019d solution */
+	{ "Ishioka",        "ISHIOKA",  -3959636.1869,   3296825.4610,   3747042.5843,  13.0 },		/* ITRF2014, 2019d solution */
 	{ "JCMT",           "",         -5464584.676,   -2493001.1700,   2150653.982,   15.0 },
 	{ "Jodrell Lovell", "",          3822626.0400,   -154105.6500,   5086486.0400,  76.0 },
 	{ "Jodrell Mk2",    "",          3822846.7600,   -153802.2800,   5086285.9000,  25.0 },
@@ -79,20 +83,21 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "Kitt Peak",      "KP-VLBA",  -1995678.9310,  -5037317.6982,   3357327.9645,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Kitt Peak 12",   "",         -1995954.4000,  -5037389.4000,   3357044.3000,  12.0 },
 	{ "Knockin",        "",          3860084.8980,   -202105.0390,   5056568.8480,  25.0 },
-	{ "Koganei",        "KOGANEI",  -3941937.6547,   3368150.8022,   3702235.3081,  0.0 },		/* ITRF2014, 2019d solution */
+	{ "Koganei",        "KOGANEI",  -3941937.6547,   3368150.8022,   3702235.3081,  11.0 },		/* ITRF2014, 2019d solution */
 	{ "Kokee",          "KOKEE",    -5543837.8341,  -2054566.4187,   2387852.6678,  20.0 },		/* ITRF2014, 2019d solution */
 	{ "Kokee 12",       "KOKEE12M", -5543831.405,   -2054585.733,    2387828.797,   12.0 },		/* Chet; VGOS 2020 */
 	{ "Kutunse",        "",          6346232.8,       -33799.5,       634818.7,     32.0 },  /* approximate coordinates */
 	{ "Kunming",        "KUNMING",  -1281153.0881,   5640864.4401,   2682653.3857,  40.0 },		/* ITRF2014, 2019d solution */
 	{ "LMT",            "",          -768715.6320,  -5988507.0720,   2063354.8520,  50.0, 0, "NASL" },
 	{ "Los Alamos",     "LA-VLBA",  -1449752.6814,  -4975298.5778,   3709123.7971,  25.0 },		/* ITRF2014, 2019d solution */
-	{ "Marpoint",       "MARPOINT",  1106628.9344,  -4882907.1606,   3938086.9735,   0.0 },		/* ITRF2014, 2019d solution */
+	{ "Marpoint",       "MARPOINT",  1106628.9344,  -4882907.1606,   3938086.9735,  25.9 },		/* ITRF2014, 2019d solution */
 	{ "Matera",         "MATERA",    4641938.3458,   1393003.4508,   4133325.8833,  20.0 },		/* ITRF2014, 2019d solution */
 	{ "Mauna Kea",      "MK-VLBA",  -5464075.2736,  -2495247.6825,   2148297.5617,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Medicina",       "MEDICINA",  4461369.5682,    919597.2489,   4449559.4702,  32.0 },		/* ITRF2014, 2019d solution */
 	{ "Metsahovi",      "METSAHOV",  2892584.7339,   1311715.6918,   5512640.2335,  14.0 },		/* ITRF2014, 2019d solution */
 	{ "Miyun",          "",         -2201304.5880,   4324789.2160,   4125367.9130,  50.0 },
 	{ "Mizusawa",       "VERAMZSW", -3857244.2418,   3108783.5264,   4003899.4149,  20.0 },		/* ITRF2014, 2019d solution */
+	{ "Mizusawa 10m",   "MIZNAO10", -3857236.086,    3108803.330,    4003883.012,   10.0 },
 	{ "Mopra",          "MOPRA",    -4682769.05850,  2802619.04217, -3291759.33837, 22.0 },
 	{ "North Liberty",  "NL-VLBA",   -130872.6044,  -4762317.0907,   4226850.9773,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Noto",           "NOTO",      4934562.7154,   1321201.6601,   3806484.8461,  32.0 },		/* ITRF2014, 2019d solution */
@@ -100,7 +105,7 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "NRAO 20m",       "NRAO20",     883772.4123,  -4924385.6260,   3944042.5492,  20.0 },		/* ITRF2014, 2019d solution */
 	{ "NRAO 85-1",      "NRAO85_1",   883555.2130,  -4924490.9278,   3943962.0221,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "NRAO 85-3",      "NRAO85_3",   882325.2253,  -4925138.0268,   3943397.7393,  25.0 },		/* ITRF2014, 2019d solution */
-	{ "Ny Alesund 13S", "NYALES13S", 1201071.41854,   252129.5366,   6238022.33843, 13.0 },
+	{ "Ny Alesund 13S", "NYALES13S", 1201071.41854,   252129.5366,   6238022.33843, 13.2 },
 	{ "Ny Alesund",     "NYALES20",  1202462.4209,    252734.5625,   6237766.2835,  20.0 },		/* ITRF2014, 2019d solution */
 	{ "Ogasawara",      "VERAOGSW", -4491068.6486,   3481545.0064,   2887399.6888,  20.0 },
 	{ "O'Higgins",      "OHIGGINS",  1525833.4537,  -2432463.6962,  -5676174.4977,  10.0 },		/* ITRF2014, 2019d solution */
@@ -111,14 +116,15 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "OVRO 130ft",     "OVRO_130", -2409601.2327,  -4478349.2744,   3838603.1279,  39.6 },		/* ITRF2014, 2019d solution */
 	{ "Owens Valley",   "OV-VLBA",  -2409150.5277,  -4478573.0798,   3838617.2999,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Parkes",         "PARKES",   -4554232.7408,   2816758.8590,  -3454034.6988,  64.0 },		/* ITRF2014, 2019d solution */
-	{ "Penticton",      "PENTICTN", -2058840.8971,  -3621286.7090,   4814420.9163,  0.0 },
+	{ "Penticton",      "PENTICTN", -2058840.8971,  -3621286.7090,   4814420.9163,  25.6 },
 	{ "Pico Veleta",    "",          5088967.74544,  -301681.18586,  3825012.20561, 30.0, 0, "NASL" },
 	{ "Pie Town",       "PIETOWN",  -1640954.0357,  -5014816.0281,   3575411.7374,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Saint Croix",    "SC-VLBA",   2607848.6985,  -5488069.4801,   1932739.8169,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "Sardinia",       "",          4865182.7660,    791922.6890,   4035137.1740,  65.0 },
 	{ "Santa Maria",    "RAEGSMAR",  4618524.3781,  -2166020.7378,   3816270.3654,  13.2 },		/* ITRF2014, 2019d solution */
-	{ "Santia12",       "SANTIA12",  1769693.5857,  -5044504.7132,  -3468434.7322,  12.0 },		/* ITRF2014, 2019d solution */
-	{ "Sejong",         "SEJONG",   -3110080.2102,   4082066.5941,   3775076.7543,  0.0 },		/* ITRF2014, 2019d solution */
+	{ "Santia 12m",     "SANTIA12",  1769693.5857,  -5044504.7132,  -3468434.7322,  12.0 },		/* ITRF2014, 2019d solution */
+	{ "Sejong",         "SEJONG",   -3110080.2102,   4082066.5941,   3775076.7543,  22.0 },		/* ITRF2014, 2019d solution */
+	{ "Seshan 13m",     "SESHAN13", -2831647.050,    4675729.464,    3275365.079,   13.0 },
 	{ "Seshan",         "SESHAN25", -2831687.6066,   4675733.3922,   3275327.4239,  25.0 },		/* ITRF2014, 2019d solution */
 	{ "SEST",           "SEST",      1838237.9028,  -5258699.2884,  -3100588.8399,  15.0 },		/* ITRF2014, 2019d solution */
 	{ "SMA",            "",         -5464555.4930,  -2492927.9890,   2150797.1760,  6.0, 3.0, "NASL" },
@@ -128,10 +134,11 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "Syowa",          "SYOWA",     1766194.2549,   1460410.9101,  -5932273.3328,  11.0 },		/* ITRF2014, 2019d solution */
 	{ "Tabley",         "",          3817549.9560,   -163031.1410,   5089896.6540,  25.0 },
 	{ "Tamna",          "",         -3171731.4809,   4292677.3733,   3481040.4580,  21.0 },
+	{ "Tianma 13m",     "TIANMA13", -2826801.912,    4679253.999,    3274516.066,   13.0 },
 	{ "Tianma",         "TIANMA65", -2826708.8081,   4679236.9722,   3274667.4495,  65.0 },		/* ITRF2014, 2019d solution */
 	{ "Tidbinbilla",    "TIDBIN64", -4460895.4973,   2682361.5220,  -3674747.2763,  64.0 },		/* ITRF2014, 2019d solution */
 	{ "Torun",          "TORUN",     3638558.5100,   1221969.7200,   5077036.7600,  32.0 },
-	{ "Tsukuba",        "",         -3957409.3668,   3310228.7947,   3737494.6747,  34.0 },
+	{ "Tsukuba",        "TSUKUB32", -3957409.3668,   3310228.7947,   3737494.6747,  32.0 },
 	{ "Uchinoura",      "UCHINOUR", -3586229.4414,   4114103.6829,   3290224.6489,  32.0 },		/* ITRF2014, 2019d solution */
 	{ "Ulsan",          "",         -3287268.1566,   4023449.1207,   3687380.1796,  21.0 },
 	{ "Urunqi",         "URUMQI",     228309.9922,   4631922.8975,   4367064.2407,  25.0 },		/* ITRF2014, 2019d solution */
@@ -150,18 +157,33 @@ AntennaDBEntry antennaDBEntries[] =	/* FIXME: add individual antennas of arrays?
 	{ "Yamaguchi 32",   "",         -3502544.2588,   3950966.3969,   3566381.1649,  32.0 },
 	{ "Yarragadee",     "YARRA12M", -2388896.4538,   5043350.0584,  -3078590.5092,  12.0 },		/* ITRF2014, 2019d solution */
 	{ "Yebes 40",       "YEBES40M",  4848761.7579,   -261484.0570,   4123085.1343,  40.0 },		/* ITRF2014, 2019d solution */
-	{ "Yebes VGOS",     "RAEGYEB",   4848831.338,    -261629.412,    4122976.448,   0.0 },		/* Chet; VGOS 2020 */
+	{ "Yebes VGOS",     "RAEGYEB",   4848831.338,    -261629.412,    4122976.448,   13.2 },		/* Chet; VGOS 2020 */
 	{ "Yonsei",         "",         -3042278.2562,   4045902.8094,   3867376.1435,  21.0 },
 	{ "Zelenchukskya",  "ZELENCHK",  3451207.3892,   3060375.5196,   4391915.1199,  32.0 },		/* ITRF2014, 2019d solution */
+	{ "Zelenchukskya13","ZELEN13M",  3451257.496,    3060268.081,    4391933.089,   13.0 },
 	{ "", "", 0.0, 0.0, 0.0, 0.0 },	/* this must terminate the list */
 
-	/* Known Missing: 
-		Nyalesund 13N VGOS
-		Fort Davis VGOS
-		Seshan VGOS
-		Tianma VGOS
+	/* Known Missing:
+		Hartebeesthoek VGOS 13.2m
+		Nyalesund 13N VGOS 13.2m
+		Gran Canaria VGOS 13.2m
+		Flores VGOS 13.2m
+		Matera VGOS
+		Urumqi VGOS 13.2m
+		Jilin VGOS 13m
+		Kashi VGOS 13m
+		Sanya VGOS 13m
+		Tahiti VGOS 12.0m
+		TNRT (Thailand)
+		Thailand VGOS
+		Svetloe VGOS 13.2m
 		Evpatoria
-		"ZELRT13V"
+
+	 * Sources of info:
+	 	https://raw.githubusercontent.com/anothnagel/antenna-info/master/antenna-info.txt
+		https://ivscc.gsfc.nasa.gov/about/org/components/ns-list.html
+		https://ivscc.gsfc.nasa.gov/technology/vgos-sites.html
+		https://cddis.nasa.gov/archive/vlbi/gsfc/ancillary/solve_apriori/blokq.c11.dat
 	 */
 };
 

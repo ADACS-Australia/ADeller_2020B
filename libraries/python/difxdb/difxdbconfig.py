@@ -16,16 +16,21 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: difxdbconfig.py 7191 2016-01-15 13:00:39Z HelgeRottmann $
+# $Id: difxdbconfig.py 10112 2021-08-26 12:31:31Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxdb/difxdbconfig.py $
-# $LastChangedRevision: 7191 $
+# $LastChangedRevision: 10112 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2016-01-16 00:00:39 +1100 (Sat, 16 Jan 2016) $
+# $LastChangedDate: 2021-08-26 22:31:31 +1000 (Thu, 26 Aug 2021) $
 #
 #============================================================================
 __author__="Helge Rottmann"
 
-import ConfigParser
+import sys
+if sys.version_info < (3, 0):
+    import ConfigParser as configparser
+else:
+    import configparser
+
 import os
 
 class DifxDbConfig(object):
@@ -40,7 +45,7 @@ class DifxDbConfig(object):
         '''
         
         self.configFile = configFile
-        self.config = ConfigParser.RawConfigParser()
+        self.config = configparser.RawConfigParser()
         
         if (not os.path.isfile(configFile)):
             if (create):

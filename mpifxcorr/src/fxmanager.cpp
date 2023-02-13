@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fxmanager.cpp 7910 2017-07-20 15:24:29Z WalterBrisken $
+// $Id: fxmanager.cpp 10579 2022-08-02 10:58:00Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/fxmanager.cpp $
-// $LastChangedRevision: 7910 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-07-21 01:24:29 +1000 (Fri, 21 Jul 2017) $
+// $LastChangedRevision: 10579 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-08-02 20:58:00 +1000 (Tue, 02 Aug 2022) $
 //
 //============================================================================
 #include "config.h"
@@ -132,7 +132,7 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
     minchans = 999999;
     for(int j=0;j<config->getFreqTableLength();j++)
     {
-      if(config->isFrequencyUsed(i,j) && config->getFNumChannels(j)/config->getFChannelsToAverage(j) < minchans)
+      if(config->isFrequencyOutput(i,j) && config->getFNumChannels(j)/config->getFChannelsToAverage(j) < minchans)
         minchans = config->getFNumChannels(j)/config->getFChannelsToAverage(j);
     }
     headerbloatfactor = 1.0 + ((double)(Visibility::HEADER_BYTES))/(minchans*8);
@@ -141,6 +141,11 @@ FxManager::FxManager(Configuration * conf, int ncores, int * dids, int * cids, i
   }
 
   todiskbuffer = (char*)vectorAlloc_u8(todiskbufferlen);
+  if(!todiskbuffer)
+  {
+    cfatal << "Failed to allocate " << todiskbufferlen << " bytes in fxmanager for 'todiskbuffer' output writer buffer" << endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
   estimatedbytes += todiskbufferlen;
   datastreamids = new int[numdatastreams];
   coreids = new int[numcores];

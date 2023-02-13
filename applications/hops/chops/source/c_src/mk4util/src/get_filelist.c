@@ -79,7 +79,7 @@ get_filelist (int argc, char **argv, int type, fstruct **files)
         if (stat(argv[i], &file_status) != 0)
 	    {
 	    msg ("Cannot find %s locally.", 1, argv[i]);
-	    ddargv = malloc(strlen(argv[i]) + strlen(datadir) + 3);
+	    ddargv = (char*) malloc(strlen(argv[i]) + strlen(datadir) + 3);
 	    if (ddargv == NULL)
 		{
 		msg ("Unable to allocate space for datadir/file", 2);
@@ -89,7 +89,7 @@ get_filelist (int argc, char **argv, int type, fstruct **files)
 	    msg ("Trying %s in datadir.", 1, ddargv);
 	    if (stat(ddargv, &file_status) == 0) argv[i] = ddargv;
 	    else continue;		/* that didn't work, either */
-	    msg ("Examining %s", argv[i]);
+	    msg ("Examining %s", 3, argv[i]);
 #else /* HAVE_CONFIG_H */
         if (stat(argv[i], &file_status) != 0) continue
 #endif /* HAVE_CONFIG_H */

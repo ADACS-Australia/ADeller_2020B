@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mpifxcorr.cpp 9674 2020-08-22 21:37:21Z WalterBrisken $
+// $Id: mpifxcorr.cpp 10839 2022-11-30 10:46:48Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mpifxcorr.cpp $
-// $LastChangedRevision: 9674 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
+// $LastChangedRevision: 10839 $
+// $Author: JanWagner $
+// $LastChangedDate: 2022-11-30 21:46:48 +1100 (Wed, 30 Nov 2022) $
 //
 //============================================================================
 
@@ -276,6 +276,7 @@ int main(int argc, char *argv[])
   int * datastreamids;
   bool monitor = false;
   bool nocommandthread = false;
+  bool vgoscomplexvdifhack = false;
   string monitoropt;
   pthread_t commandthread;
   //pthread_attr_t attr;
@@ -396,6 +397,7 @@ int main(int argc, char *argv[])
     MPI_Abort(MPI_COMM_WORLD, 1);
     return EXIT_FAILURE;
   }
+  config->setVGOSComplexVDIFHack(vgoscomplexvdifhack); // hopefully a temporary thing till VGOS fixes their firmware
 
   //handle difxmessage setup for sending and receiving
   if (isDifxMessageInUse() && !nocommandthread) { 

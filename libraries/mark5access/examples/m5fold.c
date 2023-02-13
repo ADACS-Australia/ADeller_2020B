@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2010-2020 by Walter Brisken and Chris Phillips          *
+ *   Copyright (C) 2010-2022 by Walter Brisken and Chris Phillips          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m5fold.c 9397 2020-01-14 16:16:59Z WalterBrisken $
+// $Id: m5fold.c 10490 2022-06-03 14:18:03Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/examples/m5fold.c $
-// $LastChangedRevision: 9397 $
+// $LastChangedRevision: 10490 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2020-01-15 03:16:59 +1100 (Wed, 15 Jan 2020) $
+// $LastChangedDate: 2022-06-04 00:18:03 +1000 (Sat, 04 Jun 2022) $
 //
 //============================================================================
 
@@ -31,14 +31,15 @@
 #include <complex.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <signal.h>
 #include "../mark5access/mark5_stream.h"
 
 const char program[] = "m5fold";
 const char author[]  = "Walter Brisken";
-const char version[] = "1.7";
-const char verdate[] = "20200114";
+const char version[] = "1.8";
+const char verdate[] = "20220429";
 
 const int ChunkSize = 10000;
 
@@ -59,7 +60,8 @@ static void usage(const char *pgm)
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "%s ver. %s   %s  %s\n\n", program, version, author, verdate);
-	fprintf(stderr, "A Mark5 power folder.  Can use VLBA, Mark3/4, Mark5B and VDIF " "formats using the\nmark5access library.\n\n");
+	fprintf(stderr, "A Mark5 power folder.  Can use VLBA, Mark3/4, Mark5B and single-thread VDIF\n"); 
+	fprintf(stderr, "formats using the\nmark5access library.\n\n");
 	fprintf(stderr, "Usage: %s <infile> <dataformat> <nbin> <nint> <freq> <outfile> [<offset>]\n\n", program);
 	fprintf(stderr, "  <infile> is the name of the input file\n\n");
 	fprintf(stderr, "  <dataformat> should be of the form: <FORMAT>-<Mbps>-<nchan>-<nbit>, e.g.:\n");
@@ -68,14 +70,14 @@ static void usage(const char *pgm)
 	fprintf(stderr, "    Mark5B-512-16-2\n");
 	fprintf(stderr, "    VDIF_1000-64-1-2 (here 1000 is payload size in bytes)\n\n");
 	fprintf(stderr, "  alternatively for VDIF and CODIF, Mbps can be replaced by <FramesPerPeriod>m<AlignmentSeconds>, e.g.\n");
-	fprintf(stderr, "    VDIF_1000-64000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
+	fprintf(stderr, "    VDIF_1000-8000m1-1-2 (8000 frames per 1 second, x1000 bytes x 8 bits= 64 Mbps)\n");
 	fprintf(stderr, "    CODIFC_5000-51200m27-8-1 (51200 frames every 27 seconds, x5000 bytes x 8 bits / 27  ~= 76 Mbps\n");
 	fprintf(stderr, "    This allows you to specify rates that are not an integer Mbps value, such as 32/27 CODIF oversampling\n\n");
 	fprintf(stderr, "  <nbin> is the number of bins per if across 1 period\n");
 	fprintf(stderr, "         if negative, the conversion to true power is not performed\n\n");
 	fprintf(stderr, "  <nint> is the number of %d sample chunks to work on\n\n", ChunkSize);
 	fprintf(stderr, "  <freq> [Hz] -- the inverse of the period to be folded\n\n");
-	fprintf(stderr, "  <outfile> is the name of the output file\n\n");
+	fprintf(stderr, "  <outfile> is the name of the output file, or - for stdout\n\n");
 	fprintf(stderr, "  <offset> is number of bytes into file to start decoding\n\n");
 	fprintf(stderr, "Example: look for the 80 Hz switched power:\n\n");
 	fprintf(stderr, "  m5fold 2bit.data.vlba VLBA1_1-128-8-2 128 10000 80 switched_power.out\n\n");
@@ -131,7 +133,11 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 		docorrection = 0;
 	}
 
-	mark5_stream_print(ms);
+	
+	if(strcmp(outfile, "-") != 0)
+	{
+		mark5_stream_print(ms);
+	}
 
 	if(ms->iscomplex) 
 	{
@@ -141,13 +147,20 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 
 	sampnum = (long long)((double)ms->ns*(double)ms->samprate*1.0e-9 + 0.5);
 
-	out = fopen(outfile, "w");
-	if(!out)
+	if(strcmp(outfile, "-") == 0)
 	{
-		fprintf(stderr, "Error: cannot open %s for write\n", outfile);
-		delete_mark5_stream(ms);
+		out = stdout;
+	}
+	else
+	{
+		out = fopen(outfile, "w");
+		if(!out)
+		{
+			fprintf(stderr, "Error: cannot open %s for write\n", outfile);
+			delete_mark5_stream(ms);
 
-		return EXIT_FAILURE;
+			return EXIT_FAILURE;
+		}
 	}
 
 	R = nbin*freq/ms->samprate;
@@ -197,13 +210,6 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 			{
 				total += ChunkSize;
 				unpacked += status;
-			}
-
-			if(ms->consecutivefails > 5)
-			{
-				fprintf(stderr, "Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
-
-				break;
 			}
 
 			for(k = 0; k < ChunkSize; ++k)
@@ -264,13 +270,6 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 				unpacked += status;
 			}
 
-			if(ms->consecutivefails > 5)
-			{
-				fprintf(stderr, "Too many failures.  consecutive, total fails = %d %d\n", ms->consecutivefails, ms->nvalidatefail);
-
-				break;
-			}
-
 			for(k = 0; k < ChunkSize; ++k)
 			{
 				if(cdata[0][k] != 0.0)
@@ -293,7 +292,10 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 		free(cdata);
 	}
 
-	fprintf(stderr, "%lld / %lld samples unpacked\n", unpacked, total);
+	if(out != stdout)
+	{
+		fprintf(stderr, "%lld / %lld samples unpacked\n", unpacked, total);
+	}
 
 	/* normalize */
 	for(k = 0; k < nbin; ++k)
@@ -330,7 +332,10 @@ static int fold(const char *filename, const char *formatname, int nbin, int nint
 		fprintf(out, "\n");
 	}
 
-	fclose(out);
+	if(out != stdout)
+	{
+		fclose(out);
+	}
 
 	for(i = 0; i < nif; ++i)
 	{

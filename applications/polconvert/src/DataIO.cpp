@@ -1,9 +1,10 @@
 /* DATAIO - FITS-IDI interface to PolConvert
 
-             Copyright (C) 2013  Ivan Marti-Vidal
+             Copyright (C) 2013-2022  Ivan Marti-Vidal
              Nordic Node of EU ALMA Regional Center (Onsala, Sweden)
              Max-Planck-Institut fuer Radioastronomie (Bonn, Germany)
-  
+             University of Valencia (Spain)  
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -32,8 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>
 #include "fitsio.h"
 
 
-//#define   NIOBUF = 1;
-
 
 
 
@@ -41,7 +40,7 @@ DataIO::~DataIO() {
 
 };
 
-DataIO::DataIO() { printf("\nCreating VLBI data structure");};
+DataIO::DataIO() { printf("\nCreating VLBI data structure"); nautos=0;};
 
 
 // SELF-EXPLANATORY FUNCTIONS:
@@ -70,87 +69,48 @@ double DataIO::getDay0(){return day0;};
 
 
 cplx32f DataIO::getAmpRatio(int ant, int spw, int chan){
-    
-
-
- //   int i; 
- //   int iX = -1;
- //   int iY = -1;
- //   double ret;
-    
-/*
-    for (i=0; i<nautos; i++){
-      if(AutoCorrs[i].AntIdx == ant && AutoCorrs[i].IF == spw){
-        if (AutoCorrs[i].Pol == 1 && std::abs(JD - AutoCorrs[i].JD) < minJDX){iX = i;};
-        if (AutoCorrs[i].Pol == 2 && std::abs(JD - AutoCorrs[i].JD) < minJDY){iY = i;};
-      }; if (iX>=0 && iY>=0){break;};
-    };
-    
-    ret = (iX>=0 && iY>= 0)? std::sqrt(AutoCorrs[iY].AC/AutoCorrs[iX].AC) : 1.0; 
-    return cplx32f(ret,0.);
-//   printf("AUTOCORRS %.2f\n",ret);
-
-*/
-
-
-
-
-
-    return cplx32f(averAutocorrs[ant][spw][chan],0.);
-    
-    
+  return cplx32f(averAutocorrs[ant][spw][chan],0.);
 };
 
 
 
 
 
-void DataIO::getParAng(int sidx, int Ant1, int Ant2, double*UVW, double &P1, double &P2){
+void DataIO::getParAng(int sidx, int Ant1, int Ant2, 
+        double*UVW, double &MJD, double &P1, double &P2){
 
-double V2, Bx, By; //, Bz;
-double CH, SH, CT1, CT2, HAng, H1, H2, Elev1, Elev2;
-int ibas;
+double GMST;
+double CT1, CT2, HAng, H1, H2, Elev1, Elev2;
 
 Elev1 = 0.0; Elev2 = 0.0;
 
+double days = MJD/86400.;
+double t = (days-51544.0)/36525.;
+double Hh = days - floor(days);
+double GMsec = 24110.54841 + 8640184.812866*t + 0.093104*t*t - 0.0000062*t*t*t;
+GMST = (GMsec/86400. + Hh)*2.*3.1415926535;
 
-// Dummy value if autocorrelation:
-if (Ant1==Ant2){P1 = -1.e9; P2 = -1.e9; return;};
+
+// Dummy value if this is an autocorrelation:
+//if (Ant1==Ant2){P1 = -1.e9; P2 = -1.e9; return;};
+
 
 
 if(sidx<Geometry->NtotSou && Ant1<Geometry->NtotAnt && Ant2<Geometry->NtotAnt){
 
-  V2 = Geometry->SinDec[sidx]*UVW[1] - Geometry->CosDec[sidx]*UVW[2];
-  ibas = Geometry->BasNum[Ant1][Ant2];
-
-
-  if (ibas<0){
-  ibas = -ibas;
-   Bx = -Geometry->BaseLine[0][ibas];
-   By = -Geometry->BaseLine[1][ibas];
-//   Bz = -Geometry->BaseLine[2][ibas];
-  } else {
-   Bx = Geometry->BaseLine[0][ibas];
-   By = Geometry->BaseLine[1][ibas];
-//   Bz = Geometry->BaseLine[2][ibas];
-  };
-
-  CH = (UVW[0]*By - V2*Bx); // /(By**2. + Bx**2.);
-  SH = (UVW[0]*Bx + V2*By); // /(By**2. + Bx**2.);
   CT1 = Geometry->CosDec[sidx]*tan(Geometry->Lat[Ant1]);
   CT2 = Geometry->CosDec[sidx]*tan(Geometry->Lat[Ant2]);
 
-  HAng = atan2(SH,CH);
+
+  HAng = GMST - Geometry->RA[sidx];
   H1 = HAng + Geometry->AntLon[Ant1];
   H2 = HAng + Geometry->AntLon[Ant2];
-
-  // sin(lat)*sin(dec)+cos(lat)cos(dec)cos(H)
 
   if (Geometry->Mount[Ant1] > 3){
   Elev1 = asin(sin(Geometry->Lat[Ant1])*Geometry->SinDec[sidx]+cos(Geometry->Lat[Ant1])*Geometry->CosDec[sidx]*cos(H1));};
 
   if (Geometry->Mount[Ant2] > 3){
-  Elev2 = asin(sin(Geometry->Lat[Ant1])*Geometry->SinDec[sidx]+cos(Geometry->Lat[Ant1])*Geometry->CosDec[sidx]*cos(H1));};
+  Elev2 = asin(sin(Geometry->Lat[Ant2])*Geometry->SinDec[sidx]+cos(Geometry->Lat[Ant2])*Geometry->CosDec[sidx]*cos(H2));};
  
 
   switch (Geometry->Mount[Ant1]){
@@ -174,8 +134,6 @@ if(sidx<Geometry->NtotSou && Ant1<Geometry->NtotAnt && Ant2<Geometry->NtotAnt){
   default: P2 = 0.;
 
   };
-
-//  P2 = atan2(sin(H2), CT2 - Geometry->SinDec[sidx]*cos(H2));
 
 
 } else {

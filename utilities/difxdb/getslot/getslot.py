@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 # coding: latin-1
 
 #===========================================================================
@@ -18,11 +18,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: getslot.py 9293 2019-11-14 03:55:04Z HelgeRottmann $
+# $Id: getslot.py 10129 2021-08-27 18:53:25Z HelgeRottmann $
 # $HeadURL: https://svn.atnf.csiro.au/difx/utilities/trunk/difxdb/getslot/getslot.py $
-# $LastChangedRevision: 9293 $
+# $LastChangedRevision: 10129 $
 # $Author: HelgeRottmann $
-# $LastChangedDate: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $
+# $LastChangedDate: 2021-08-28 04:53:25 +1000 (Sat, 28 Aug 2021) $
 #
 #============================================================================
 
@@ -35,17 +35,17 @@ from difxdb.model import model
 
 __author__="Helge Rottmann <rottmann@mpifr-bonn.mpg.de>"
 __prog__ = os.path.basename(__file__)
-__build__= "$Revision: 9293 $"
-__date__ ="$Date: 2019-11-14 14:55:04 +1100 (Thu, 14 Nov 2019) $"
+__build__= "$Revision: 10129 $"
+__date__ ="$Date: 2021-08-28 04:53:25 +1000 (Sat, 28 Aug 2021) $"
 __lastAuthor__="$Author: HelgeRottmann $"
 
 def printUsage():
-    print "%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__)
-    print "A program to get the location of a disk module\n"
-    print "Usage: %s <VSN>\n\n"  % __prog__
-    print "%s requires the DIFXROOT environment to be defined." % __prog__
-    print "The program will read the database configuration from difxdb.ini located under $DIFXROOT/conf."
-    print "If the configuration is not found a sample one will be created for you."
+    print("%s   %s  %s (last changes by %s) \n" % (__prog__, __build__, __author__, __lastAuthor__))
+    print("A program to get the location of a disk module\n")
+    print("Usage: %s <VSN>\n\n"  % __prog__)
+    print("%s requires the DIFXROOT environment to be defined." % __prog__)
+    print("The program will read the database configuration from difxdb.ini located under $DIFXROOT/conf.")
+    print("If the configuration is not found a sample one will be created for you.")
 
     
     sys.exit(1)
@@ -82,9 +82,9 @@ if __name__ == "__main__":
         if (moduleExists(session,vsn)):
             module = getModuleByVSN(session, vsn)
         
-            print module.slot.location
+            print(module.slot.location)
         else:
-            print "Unknown"
+            print("Unknown")
         
         
     
