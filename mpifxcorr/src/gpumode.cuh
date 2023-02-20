@@ -27,7 +27,7 @@ public:
     void preprocess(int index, int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
-    void complexRotate(int subloopindex);
+    void complexRotate(int index, int subloopindex);
 
 protected:
     float **unpackedarrays_gpu;
@@ -47,8 +47,11 @@ protected:
 
     cf32** fracsamprotatorA_array;
 
+    // Todo: Make this not shit
     double* bigA_d;
     double* bigB_d;
+    int* nearestSamples;
+    int* unpackStartSamples;
 private:
 
     cufftHandle fft_plan;
