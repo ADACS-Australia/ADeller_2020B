@@ -168,11 +168,11 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         if (i >= startblock + numblocks)
             break; // may not have to fully complete last fftloop
 
-//        process_unpack(i, subloopindex);
+        process_unpack(i, subloopindex);
     }
 
     // Copy the data to the gpu
-//    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
 
     // Get everything ready for an FFT
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
@@ -327,8 +327,6 @@ void GPUMode::process_unpack(int index, int subloopindex) {
 
 void GPUMode::preprocess(int index, int subloopindex) {
     int status;
-
-    process_unpack(index, subloopindex);
 
     if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
         return;
