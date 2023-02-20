@@ -20,11 +20,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: gmva_vlba_archive.py 10792 2022-11-07 14:14:46Z JanWagner $
+# $Id: gmva_vlba_archive.py 10887 2023-02-15 08:32:23Z JanWagner $
 # $HeadURL: $
-# $LastChangedRevision: 10792 $
+# $LastChangedRevision: 10887 $
 # $Author: JanWagner $
-# $LastChangedDate: 2022-11-08 01:14:46 +1100 (Tue, 08 Nov 2022) $
+# $LastChangedDate: 2023-02-15 19:32:23 +1100 (Wed, 15 Feb 2023) $
 #
 #============================================================================
 
@@ -140,7 +140,7 @@ print ("Please insert the Project Code of the experiment, that is composed by")
 print ("2 letter and 3 numbers plus possibly a capital letter (called segment) at the end")
 print ("E.g. gb077a")
 
-ex       = input_with_default("Project Code", exper)
+exper    = input_with_default("Project Code", exper).upper()
 vexstart = input_with_default("Observations started - vex time (format <yyyy>y<doy>d<hh>h<mm>m<ss>s)", vexstart)
 vexstop  = input_with_default("Observations ended   - vex time (format <yyyy>y<doy>d<hh>h<mm>m<ss>s)", vexstop)
 segm     = input_with_default("Segment (must be a capital letter, or 'none')", default_segment)
@@ -151,6 +151,8 @@ if segm not in segmlist:
 tscope   = input_with_default("Telescope", default_tscope)
 arch_fmt = input_with_default("Archive format (UV_FITS or IDIFITS)", default_archfmt)
 expname  = exper.lower()
+if exper[-1] in segmlist:
+	exper = exper[:-1]
 
 suggestedName = 'GMVA_'+ expname + 'Part1.' + arch_fmt.lower()
 
@@ -170,7 +172,6 @@ if check == 0:
 	print ("The filename should be :")
 	print (rightname)
 	print ("Please check the filename and run again the program.")
-	meta.close()
 	sys.exit()
 
 pre, ext = os.path.splitext(fitsfilename)
@@ -204,7 +205,7 @@ meta.write('ARCH_FORMAT      = %s\n' % (arch_fmt))
 meta.write('DATA_TYPE        = raw\n')
 meta.write('ARCH_FILE        = %s\n'%(fitsfilename))
 meta.write('FILE_SIZE        = %f\n'%file_size)
-meta.write('RAW_PROJECT_CODE = %s\n'%(exper))
+meta.write('RAW_PROJECT_CODE = %s\n'%(expname))
 meta.write('OBS_BANDS        = %s\n'%(bandcode))
 meta.close()
 
