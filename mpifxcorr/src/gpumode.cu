@@ -24,7 +24,7 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     this->unpackedarrays_elem_count = unpacksamples;
 
     // idk why, but an early allocation is required to get correct output results ????????????
-    gpu_malloc<float>(1);
+    gpu_malloc<char>(1);
 
     this->complexunpacked_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels * cfg_numBufferedFFTs * numrecordedbands);
     this->estimatedbytes_gpu += sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands;
@@ -42,10 +42,10 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
         }
     }
 
-
     this->unpackedarrays_gpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
     this->estimatedbytes += sizeof(float *) * numrecordedbands;
 
+    big_array = nullptr;
     checkCuda(cudaMalloc(&big_array, sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs));
     this->estimatedbytes_gpu += sizeof(float) * this->unpacksamples * numrecordedbands * cfg_numBufferedFFTs;
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
@@ -60,8 +60,8 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
         fracsamprotatorA_array[j] = vectorAlloc_cf32(recordedbandchannels);
     }
 
-    bigA_d = new double[cfg_numBufferedFFTs * numrecordedbands];
-    bigB_d = new double[cfg_numBufferedFFTs * numrecordedbands];
+//    bigA_d = new double[cfg_numBufferedFFTs * numrecordedbands];
+//    bigB_d = new double[cfg_numBufferedFFTs * numrecordedbands];
 
     // TODO: PWC: allocations for complex
 
@@ -162,6 +162,18 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         NOT_SUPPORTED("phase polarisation offset");
     }
 
+    // First unpack all the data
+    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
+        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+        if (i >= startblock + numblocks)
+            break; // may not have to fully complete last fftloop
+
+//        process_unpack(i, subloopindex);
+    }
+
+    // Copy the data to the gpu
+//    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+
     // Get everything ready for an FFT
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int i = fftloop * numBufferedFFTs + subloopindex + startblock;
@@ -171,17 +183,14 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         preprocess(i, subloopindex);
     }
 
-    // Copy the data to the gpu
-//    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpacksamples * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
-
     // Run the rotator
-    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
-        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
-        if (i >= startblock + numblocks)
-            break; // may not have to fully complete last fftloop
-
-        complexRotate(subloopindex);
-    }
+//    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
+//        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+//        if (i >= startblock + numblocks)
+//            break; // may not have to fully complete last fftloop
+//
+//        complexRotate(subloopindex);
+//    }
 
     // Actually run the FFT
     runFFT();
@@ -199,19 +208,10 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     return numfftsprocessed;
 }
 
-void GPUMode::preprocess(int index, int subloopindex) {
-    static int nth_call = 0;
-    ++nth_call;
+bool GPUMode::is_dataweight_valid(int subloopindex) {
+    int status;
 
-    //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
-
-    // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
-    dataweight[subloopindex] = 0.0;
-
-    if ((datalengthbytes <= 1) || (offsetseconds == INVALID_SUBINT) ||
-        (((validflags[index / FLAGS_PER_INT] >> (index % FLAGS_PER_INT)) & 0x01) == 0)) {
-        //std::cout << "call " << nth_call << "to M::p_g; we are in the weird place with the datalengthbytes" << std::endl;
-        //std::cout << "call " << nth_call << "to M::p_g; numrecorededbands = " << numrecordedbands << std::endl;
+    if (!(dataweight[subloopindex] > 0.0)) {
         for (int i = 0; i < numrecordedbands; i++) {
             status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
             if (status != vecNoErr)
@@ -220,22 +220,44 @@ void GPUMode::preprocess(int index, int subloopindex) {
             if (status != vecNoErr)
                 csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
         }
-        //cout << "Mode for DS " << datastreamindex << " is bailing out of index " << index << "/" << subloopindex << " which is scan " << currentscan << ", sec " << offsetseconds << ", ns " << offsetns << " because datalengthbytes is " << datalengthbytes << " and validflag was " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
-        return; //don't process crap data
+        return false;
     }
 
-    fftcentre = index + 0.5;
-    averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
-    fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
-    starttime = (offsetseconds - datasec) * 1000000.0 +
-                (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
-                averagedelay;
-    nearestsample = int(starttime / sampletime + 0.5);
-    walltimesecs =
-            model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds +
-            offsetns / 1.0e9 + fftstartmicrosec / 1.0e6;
-    intwalltime = static_cast<int>(walltimesecs);
-    fracwalltime = walltimesecs - intwalltime;
+    return true;
+}
+
+bool GPUMode::is_data_valid(int index, int subloopindex) {
+    int status;
+
+    // Check the data is valid for this index
+    if ((datalengthbytes <= 1) || (offsetseconds == INVALID_SUBINT) ||
+        (((validflags[index / FLAGS_PER_INT] >> (index % FLAGS_PER_INT)) & 0x01) == 0)) {
+//        std::cerr << "to M::p_g; we are in the weird place with the datalengthbytes" << std::endl;
+//        std::cerr << "to M::p_g; numrecorededbands = " << numrecordedbands << std::endl;
+        for (int i = 0; i < numrecordedbands; i++) {
+            status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
+            if (status != vecNoErr)
+                csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
+            status = vectorZero_cf32(conjfftoutputs[i][subloopindex], recordedbandchannels);
+            if (status != vecNoErr)
+                csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
+        }
+//        cerr << "Mode for DS " << datastreamindex << " is bailing out of index " << index << "/" << subloopindex << " which is scan " << currentscan << ", sec " << offsetseconds << ", ns " << offsetns << " because datalengthbytes is " << datalengthbytes << " and validflag was " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
+        return false; //don't process crap data
+    }
+
+    // Check that the nearest sample is valid
+    double fftcentre = index + 0.5;
+    double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
+
+    fftstartmicrosec = index * fftchannels * sampletime;
+
+    double starttime = (offsetseconds - datasec) * 1000000.0 +
+                       (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
+                       averagedelay;
+
+    int nearestsample = int(starttime / sampletime + 0.5);
+
     //cinfo << startl << "ATD: fftstartmicrosec " << fftstartmicrosec << ", sampletime " << sampletime << ", fftchannels " << fftchannels << ", bytesperblocknumerator " << bytesperblocknumerator << ", nearestsample " << nearestsample << endl;
 
     //if we need to, unpack some more data - first check to make sure the pos is valid at all
@@ -248,7 +270,7 @@ void GPUMode::preprocess(int index, int subloopindex) {
     if (nearestsample < -1 ||
         (((nearestsample + fftchannels) / samplesperblock) * bytesperblocknumerator) / bytesperblockdenominator >
         datalengthbytes) {
-        std::cout << "call " << nth_call << "to M::p_g; we are in the 'crap data' branch" << std::endl;
+//        std::cerr << "to M::p_g; we are in the 'crap data' branch" << std::endl;
         cerror << startl << "MODE error for datastream " << datastreamindex
                << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample
                << ", the max bytes should be " << datalengthbytes << " and hence last sample should be "
@@ -264,70 +286,76 @@ void GPUMode::preprocess(int index, int subloopindex) {
             if (status != vecNoErr)
                 csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
         }
+        return false;
+    }
+
+    return true;
+}
+
+void GPUMode::process_unpack(int index, int subloopindex) {
+    static int nth_call = 0;
+    ++nth_call;
+
+    // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
+    dataweight[subloopindex] = 0.0;
+
+    if (!is_data_valid(index, subloopindex)) {
         return;
     }
+
+    double fftcentre = index + 0.5;
+    double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
+
+    fftstartmicrosec = index * fftchannels * sampletime;
+
+    double starttime = (offsetseconds - datasec) * 1000000.0 +
+                       (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
+                       averagedelay;
+
+    int nearestsample = int(starttime / sampletime + 0.5);
+
     if (nearestsample == -1) {
         nearestsample = 0;
         dataweight[subloopindex] = unpack(nearestsample, subloopindex);
     } else if (nearestsample < unpackstartsamples || nearestsample > unpackstartsamples + unpacksamples - fftchannels)
         //need to unpack more data
         dataweight[subloopindex] = unpack(nearestsample, subloopindex);
+}
 
-    /*
-     * After DiFX-2.4, it is proposed to change the handling of lower sideband and dual sideband data, such
-     * that the data are manipulated here (directly after unpacking) to ensure that it appears like single
-     * sideband USB data.  In order to do that, we will loop over all recorded bands, performing the
-     * following checks and if necessary manipulations:
-     * 1) if band sense is LSB, cast the unpacked data as a complex f32 and conjugate it.  If it was a complex
-     *    sampled band, this flips the sideband.  If it was a real sampled band, then every second sample
-     *    will be multiplied by -1, which is exactly was is required to flip the sideband also.
-     *    *** NOTE: For real data, will need to use fracwalltimesecs plus the sampling rate to determine
-     *              whether it is necessary to offset the start of the vector by one sample.
-     * 2) Now the frequencies definitely run from most negative to most positive, but we also want the lowest
-     *    frequency channel to be "DC", and this is not the case for complex double sideband data.  So for
-     *    complex double sideband data, rotate the unpacked data by e^{-i 2 pi BW t} to shift the most negative
-     *    frequency component up to 0 Hz.  Need to use wallclocksecs for time here too.
-     * Now nothing in mode.cpp or core.cpp needs to know about whether the data was originally lower sideband
-     * or not.  That will mean taking out some of the current logic, pretty much all to do with fractional sample
-     * correction.
-     *
-     * Some other specific implementation notes:
-     * - Need to do this straight after an unpack, for the whole unpacksamples, so the two calls to unpack()
-     *   above will need to be combined.
-     * - It may be profitable to move the LO offset correction up to here also, and possibly also to refactor
-     *   it to change the steptval array rather than doing a separate addition. (although a separate addition
-     *   for fraclooffset if required would still be needed).  Be careful of zero-order fringe rotation.
-     * - lsbfracsample arrays will need to be removed, as will the checks that select them.
-     * - Elsewhere, it will probably be preferable to maintain information slightly differently (for each
-     *   subband, maintain lower edge frequency, bandwidth, SSLO, sampling type [real/complex], matching band).
-     *   This would be in configuration.cpp/.h, maybe also vex2difx?
-     * - mark5access has option to unpack real data as complex - could consider using this to save time.
-     *   Would need to make a similar option for LBA data.
-     */
+void GPUMode::preprocess(int index, int subloopindex) {
+    int status;
 
-    if (!(dataweight[subloopindex] > 0.0)) {
-        for (int i = 0; i < numrecordedbands; i++) {
-            status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
-            if (status != vecNoErr)
-                csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-            status = vectorZero_cf32(conjfftoutputs[i][subloopindex], recordedbandchannels);
-            if (status != vecNoErr)
-                csevere << startl << "Error trying to zero fftoutputs when data is bad!" << endl;
-        }
+    process_unpack(index, subloopindex);
+
+    if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
         return;
     }
 
-    nearestsampletime = nearestsample * sampletime;
-    fracsampleerror = float(starttime - nearestsampletime);
+    //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
 
-    integerdelay = 0;
+    double fftcentre = index + 0.5;
+    double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
+    fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
+    double starttime = (offsetseconds - datasec) * 1000000.0 +
+                (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
+                averagedelay;
+    int nearestsample = int(starttime / sampletime + 0.5);
+    double walltimesecs =
+            model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds +
+            offsetns / 1.0e9 + fftstartmicrosec / 1.0e6;
+    int intwalltime = static_cast<int>(walltimesecs);
+    double fracwalltime = walltimesecs - intwalltime;
+
+    double nearestsampletime = nearestsample * sampletime;
+    f32 fracsampleerror = float(starttime - nearestsampletime);
+
     //std::cout << "call " << nth_call << "to M::p_g; fringerotationorder = " << fringerotationorder << std::endl;
-    d0 = interpolator[0] * index * index + interpolator[1] * index + interpolator[2];
-    d1 = interpolator[0] * (index + 0.5) * (index + 0.5) + interpolator[1] * (index + 0.5) + interpolator[2];
-    d2 = interpolator[0] * (index + 1) * (index + 1) + interpolator[1] * (index + 1) + interpolator[2];
+    double d0 = interpolator[0] * index * index + interpolator[1] * index + interpolator[2];
+    double d1 = interpolator[0] * (index + 0.5) * (index + 0.5) + interpolator[1] * (index + 0.5) + interpolator[2];
+    double d2 = interpolator[0] * (index + 1) * (index + 1) + interpolator[1] * (index + 1) + interpolator[2];
     a = d2 - d0;
     b = d0 + (d1 - (a * 0.5 + d0)) / 3.0;
-    integerdelay = static_cast<int>(b);
+    int integerdelay = static_cast<int>(b);
     b -= integerdelay;
 
     status = vectorMulC_f64(subxoff, a, subxval, arraystridelength);
@@ -345,15 +373,15 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
     //updated so that Nyquist channel is not accumulated for either USB or LSB data
     //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
-    currentstepchannelfreqs = stepchannelfreqs;
-    currentsubchannelfreqs = subchannelfreqs;
+    f32* currentstepchannelfreqs = stepchannelfreqs;
+    f32* currentsubchannelfreqs = subchannelfreqs;
     if (config->getDRecordedLowerSideband(configindex, datastreamindex, 0)) {
         currentstepchannelfreqs = lsbstepchannelfreqs;
     }
 
     //get ready to apply fringe rotation, if it is pre-F.
     //By default, the local oscillator frequency (which is used for fringe rotation) is the band edge, as specified inthe input file
-    lofreq = config->getDRecordedFreq(configindex, datastreamindex, 0);
+    double lofreq = config->getDRecordedFreq(configindex, datastreamindex, 0);
 
     // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
 
@@ -455,20 +483,29 @@ void GPUMode::preprocess(int index, int subloopindex) {
                 << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!"
                 << endl;
 
+    double fraclooffset = 0;
+
     // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
     // Loop over all recorded bands looking for the matching frequency we should be dealing with
     for (int j = 0; j < numrecordedbands; j++) {
         if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
-            bigA_d[subloopindex * numrecordedbands + j] = a * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
-            bigB_d[subloopindex * numrecordedbands + j] = b * lofreq   // NOTE - no division by /fftchannels here
+            const double biga = a * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
+            const double bigb = b * lofreq   // NOTE - no division by /fftchannels here
                                   + (lofreq - int(lofreq)) * integerdelay
                                   - recordedfreqlooffsets[0] * fracwalltime
                                   - fraclooffset * intwalltime;
 
             gpu_RtoC(
                     &complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                    &(unpackedarrays_gpu[j][nearestsample - unpackstartsamples]),
+                    &unpackedarrays_gpu[j][nearestsample - unpackstartsamples],
                     fftchannels
+            );
+
+            gpu_complexrotatorMultiply(
+                    this->fftchannels,
+                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
+                    biga,
+                    bigb
             );
         }
     }
@@ -478,18 +515,24 @@ void GPUMode::complexRotate(int subloopindex) {
     for (int j = 0; j < numrecordedbands; j++) {
         if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
             // In place
-            gpu_complexrotatorMultiply(
-                    this->fftchannels,
-                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                    bigA_d[subloopindex * numrecordedbands + j],
-                    bigB_d[subloopindex * numrecordedbands + j]
-            );
+//            gpu_complexrotatorMultiply(
+//                    this->fftchannels,
+//                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
+//                    bigA_d[subloopindex * numrecordedbands + j],
+//                    bigB_d[subloopindex * numrecordedbands + j]
+//            );
         }
     }
 }
 
 void GPUMode::postprocess(int index, int subloopindex) {
-    count = 0;
+    int status;
+    int count = 0;
+    int indices[10];
+
+    if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
+        return;
+    }
 
     // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
     // Loop over all recorded bands looking for the matching frequency we should be dealing with

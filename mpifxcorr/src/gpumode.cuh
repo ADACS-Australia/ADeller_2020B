@@ -23,6 +23,7 @@ public:
     int process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                     int numblocks) override;  //frac sample error is in microseconds
 
+    void process_unpack(int index, int subloopindex);
     void preprocess(int index, int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
@@ -52,12 +53,9 @@ private:
 
     cufftHandle fft_plan;
     int cfg_numBufferedFFTs;
-    double averagedelay, nearestsampletime, starttime, lofreq, walltimesecs, fracwalltime, fftcentre, d0, d1, d2, fraclooffset;
-    f32 fracsampleerror;
-    int status, count, nearestsample, integerdelay, intwalltime;
-    f32 *currentstepchannelfreqs;
-    f32 *currentsubchannelfreqs;
-    int indices[10];
+
+    bool is_dataweight_valid(int subloopindex);
+    bool is_data_valid(int index, int subloopindex);
 };
 
 #endif
