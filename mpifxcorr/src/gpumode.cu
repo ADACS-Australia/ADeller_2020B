@@ -39,7 +39,7 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
         }
     }
 
-    this->unpackedarrays_gpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
+    this->unpackedarrays_gpu = new float*[numrecordedbands * cfg_numBufferedFFTs];
     this->estimatedbytes += sizeof(float *) * numrecordedbands;
 
     big_array = nullptr;
@@ -60,8 +60,14 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     bigA_d = new double[cfg_numBufferedFFTs * numrecordedbands];
     bigB_d = new double[cfg_numBufferedFFTs * numrecordedbands];
-    nearestSamples = new int[cfg_numBufferedFFTs];
-    unpackStartSamples = new int[cfg_numBufferedFFTs];
+    sampleIndexes = new int[cfg_numBufferedFFTs];
+    validSamples = new bool[cfg_numBufferedFFTs];
+
+    checkCuda(cudaMalloc(&gBigA, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands));
+    checkCuda(cudaMalloc(&gBigB, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands));
+    checkCuda(cudaMalloc(&gSampleIndexes, sizeof(int) * cfg_numBufferedFFTs));
+    checkCuda(cudaMalloc(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs));
+    checkCuda(cudaMalloc(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs));
 
     // TODO: PWC: allocations for complex
 
@@ -94,6 +100,11 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 GPUMode::~GPUMode() {
     checkCuda(cudaFree(this->complexunpacked_gpu));
     checkCuda(cudaFree(this->fftd_gpu));
+
+    checkCuda(cudaFree(gBigA));
+    checkCuda(cudaFree(gBigB));
+    checkCuda(cudaFree(gSampleIndexes));
+    checkCuda(cudaFree(gValidSamples));
 
     // Allocated on the GPU as one big array so we don't need to free them all
     checkCuda(cudaFree(this->unpackedarrays_gpu[0]));
@@ -184,13 +195,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     }
 
     // Run the rotator
-    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
-        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
-        if (i >= startblock + numblocks)
-            break; // may not have to fully complete last fftloop
-
-        complexRotate(i, subloopindex);
-    }
+    complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // Actually run the FFT
     runFFT();
@@ -300,8 +305,11 @@ void GPUMode::process_unpack(int index, int subloopindex) {
     dataweight[subloopindex] = 0.0;
 
     if (!is_data_valid(index, subloopindex)) {
+        validSamples[subloopindex] = false;
         return;
     }
+
+    validSamples[subloopindex] = true;
 
     double fftcentre = index + 0.5;
     double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
@@ -321,14 +329,17 @@ void GPUMode::process_unpack(int index, int subloopindex) {
         //need to unpack more data
         dataweight[subloopindex] = unpack(nearestsample, subloopindex);
 
-    nearestSamples[subloopindex] = nearestsample;
-    unpackStartSamples[subloopindex] = unpackstartsamples;
+    sampleIndexes[subloopindex] = nearestsample - unpackstartsamples;
+
+    if (!is_dataweight_valid(subloopindex)) {
+        validSamples[subloopindex] = false;
+    }
 }
 
 void GPUMode::preprocess(int index, int subloopindex) {
     int status;
 
-    if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
+    if (!validSamples[subloopindex]) {
         return;
     }
 
@@ -499,24 +510,37 @@ void GPUMode::preprocess(int index, int subloopindex) {
     }
 }
 
-void GPUMode::complexRotate(int index, int subloopindex) {
+void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
 
-    if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
-        return;
-    }
+    // At this point we have
+    // * Unpacked data on GPU
+    // * Output buffer on GPU ready to go
+    // * Sample indexes in the unpacked data
+    // * BigA and BigB
+    // * Which samples are valid - ie that we need to operate on
 
-    for (int j = 0; j < numrecordedbands; j++) {
-        if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
-            // In place
-            gpu_complexrotatorMultiply(
-                    this->fftchannels,
-                    &this->complexunpacked_gpu[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                    &unpackedarrays_gpu[(subloopindex * numrecordedbands) + j][nearestSamples[subloopindex] - unpackStartSamples[subloopindex]],
-                    bigA_d[subloopindex * numrecordedbands + j],
-                    bigB_d[subloopindex * numrecordedbands + j]
-            );
-        }
-    }
+    // We need to copy the sample indexes, big a and big b on to the gpu
+    checkCuda(cudaMemcpy(gBigA, bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(gBigB, bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(gSampleIndexes, sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+
+    // Run the kernel
+    gpu_complexrotatorMultiply(
+            this->fftchannels,
+            this->complexunpacked_gpu,
+            gUnpackedArraysGpu,
+            gBigA,
+            gBigB,
+            gSampleIndexes,
+            gValidSamples,
+            numrecordedbands,
+            fftloop,
+            numBufferedFFTs,
+            startblock,
+            numblocks
+    );
 }
 
 void GPUMode::postprocess(int index, int subloopindex) {
@@ -524,7 +548,7 @@ void GPUMode::postprocess(int index, int subloopindex) {
     int count = 0;
     int indices[10];
 
-    if (!is_data_valid(index, subloopindex) || !is_dataweight_valid(subloopindex)) {
+    if (!validSamples[subloopindex]) {
         return;
     }
 
@@ -656,29 +680,59 @@ void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const s
                            cudaMemcpyHostToDevice));
 }
 
-__global__ void _gpu_RtoC(cuFloatComplex *const dst, const float *const src) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    dst[idx] = make_cuFloatComplex(src[idx], 0.f);
-}
+__global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **const src, const double* const bigA, const double* const bigB, const int* const sampleIndexes, const bool* const validSamples, int fftloop, int startblock, int numblocks) {
+    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
 
-void gpu_RtoC(cuFloatComplex *const dst, const float *const src, const size_t len) {
-    _gpu_RtoC<<<len, 1>>>(dst, src);
-    //checkCuda(cudaDeviceSynchronize());
-}
+    // blockIdx.x in this case is the subloopindex index [0 .. numBufferedFFTs]
+    // threadIdx.x in this case is the numrecordedbands index [0 .. numrecordedbands]
+    // threadIdx.y in this case is the fftchannels index [0 .. fftchannels]
+    // blockDim.x in this case is the numrecordedbands size
+    // blockDim.y in this case is the fftchannels size
+    // gridDim.x in this case is the numBufferedFFTs size
 
-__global__ void _gpu_complexrotatorMultiply(cuFloatComplex *const dest, const float *const src, const double bigA, const double bigB) {
-    const size_t j = blockIdx.x * blockDim.x + threadIdx.x;
-    double bigB_reduced = bigB - int(bigB);
-    double exponent = (bigA * j + bigB_reduced);
+    // Check if this subloopindex is valid
+    const size_t subloopindex = blockIdx.x;
+    if (!validSamples[subloopindex]) {
+        // Not valid, so don't do anything
+        return;
+    }
+
+    // Check if we should bother processing this sample
+    size_t index = fftloop * gridDim.x + subloopindex + startblock;
+    if (index >= startblock + numblocks) {
+        // May not have to fully complete last fftloop, drop out
+        return;
+    }
+
+    const size_t bandindex = threadIdx.x;
+    const size_t channelindex = threadIdx.y;
+    const size_t numrecordedbands = blockDim.x;
+    const size_t fftchannels = blockDim.y;
+
+    // Calculate the destination index
+    const size_t destIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
+
+    // Calculate the source index and get the source value
+    const size_t srcIndex = (subloopindex * numrecordedbands) + bandindex;
+    const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
+
+    // Get BigA and BigB
+    double bigAval = bigA[subloopindex * numrecordedbands + bandindex];
+    double bigBval = bigB[subloopindex * numrecordedbands + bandindex];
+
+    // Calculate
+    double bigB_reduced = bigBval - int(bigBval);
+    double exponent = (bigAval * channelindex + bigB_reduced);
     exponent -= int(exponent);
     cuFloatComplex cr;
     sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
-    cuFloatComplex c = make_cuFloatComplex(src[j], 0.f);
-    dest[j] = cuCmulf(c, cr);
+    cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
+    dest[destIndex] = cuCmulf(c, cr);
 }
 
-void gpu_complexrotatorMultiply(const size_t len, cuFloatComplex *const dest, const float* const src, const double bigA, const double bigB) {
-    _gpu_complexrotatorMultiply<<<1, len>>>(dest, src, bigA, bigB);
+void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
+    _gpu_complexrotatorMultiply<<<numBufferedFFTs, dim3(numrecordedbands, fftchannels)>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks);
 }
 
 void *gpu_malloc(const size_t amt) {
