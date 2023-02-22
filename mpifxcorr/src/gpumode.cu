@@ -118,6 +118,24 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     checkCuda(cudaMalloc(&gInterpolator, sizeof(double) * 3));
     checkCuda(cudaHostRegister(interpolator, sizeof(double) * 3, cudaHostRegisterPortable));
 
+    checkCuda(cudaMalloc(&gLittleA, sizeof(double) * cfg_numBufferedFFTs));
+    checkCuda(cudaMalloc(&gLittleB, sizeof(double) * cfg_numBufferedFFTs));
+    checkCuda(cudaMalloc(&gIntegerDelay, sizeof(int) * cfg_numBufferedFFTs));
+
+    littleA = new double[cfg_numBufferedFFTs];
+    littleB = new double[cfg_numBufferedFFTs];
+    integerDelay = new int[cfg_numBufferedFFTs];
+
+    checkCuda(cudaHostRegister(littleA, sizeof(double) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(littleB, sizeof(double) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(integerDelay, sizeof(int) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+
+    // precalc
+    fracSampleError = new float[cfg_numBufferedFFTs];
+    fracWallTime = new double[cfg_numBufferedFFTs];
+    intWallTime = new int[cfg_numBufferedFFTs];
+    nearestSample = new int[cfg_numBufferedFFTs];
+
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     cout << "GPUMode(): " << duration.count() << endl;
@@ -159,6 +177,24 @@ GPUMode::~GPUMode() {
     cufftDestroy(this->fft_plan);
 
     checkCuda(cudaStreamDestroy(cuStream));
+
+    // little A/B
+    checkCuda(cudaFree(gLittleA));
+    checkCuda(cudaFree(gLittleB));
+    checkCuda(cudaFree(gIntegerDelay));
+
+    checkCuda(cudaHostUnregister(littleA));
+    checkCuda(cudaHostUnregister(littleB));
+    checkCuda(cudaHostUnregister(integerDelay));
+
+    delete littleA;
+    delete littleB;
+    delete integerDelay;
+
+    // precalc
+    delete intWallTime;
+    delete fracWallTime;
+    delete fracSampleError;
 
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
@@ -230,6 +266,8 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     }
 
     auto start = high_resolution_clock::now();
+    calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
+
     // First unpack all the data
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int i = fftloop * numBufferedFFTs + subloopindex + startblock;
@@ -249,7 +287,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     start = high_resolution_clock::now();
     calculateLittleAB(fftloop, numBufferedFFTs, startblock, numblocks);
-    calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // Get everything ready for an FFT
     int startIndex = fftloop * numBufferedFFTs + startblock;
@@ -261,17 +298,18 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         preprocess(i - startIndex, subloopindex);
     }
 
-    cleanupPre_cpu();
-    calculateLittleABCleanup();
-
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     cout << "preprocess: " << duration.count() << endl;
     avg_preprocess += duration.count();
 
+    checkCuda(cudaStreamSynchronize(cuStream));
+
     start = high_resolution_clock::now();
     // Run the rotator
     complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
+
+    checkCuda(cudaStreamSynchronize(cuStream));
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -350,37 +388,17 @@ bool GPUMode::is_data_valid(int index, int subloopindex) {
     }
 
     // Check that the nearest sample is valid
-    double fftcentre = index + 0.5;
-    double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
-
-    double fftstartmicrosec = index * fftchannels * sampletime;
-
-    double starttime = (offsetseconds - datasec) * 1000000.0 +
-                       (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
-                       averagedelay;
-
-    int nearestsample = int(starttime / sampletime + 0.5);
-
-    //cinfo << startl << "ATD: fftstartmicrosec " << fftstartmicrosec << ", sampletime " << sampletime << ", fftchannels " << fftchannels << ", bytesperblocknumerator " << bytesperblocknumerator << ", nearestsample " << nearestsample << endl;
-
-    //if we need to, unpack some more data - first check to make sure the pos is valid at all
-    //cout << "Datalengthbytes for " << datastreamindex << " is " << datalengthbytes << endl;
-    //cout << "Fftchannels for " << datastreamindex << " is " << fftchannels << endl;
-    //cout << "samplesperblock for " << datastreamindex << " is " << samplesperblock << endl;
-    //cout << "nearestsample for " << datastreamindex << " is " << nearestsample << endl;
-    //cout << "bytesperblocknumerator for " << datastreamindex << " is " << bytesperblocknumerator << endl;
-    //cout << "bytesperblockdenominator for " << datastreamindex << " is " << bytesperblockdenominator << endl;
-    if (nearestsample < -1 ||
-        (((nearestsample + fftchannels) / samplesperblock) * bytesperblocknumerator) / bytesperblockdenominator >
+    if (nearestSample[subloopindex] < -1 ||
+        (((nearestSample[subloopindex] + fftchannels) / samplesperblock) * bytesperblocknumerator) / bytesperblockdenominator >
         datalengthbytes) {
 //        std::cerr << "to M::p_g; we are in the 'crap data' branch" << std::endl;
-        cerror << startl << "MODE error for datastream " << datastreamindex
-               << " - trying to process data outside range - aborting!!! nearest sample was " << nearestsample
-               << ", the max bytes should be " << datalengthbytes << " and hence last sample should be "
-               << (datalengthbytes * bytesperblockdenominator) / (bytesperblocknumerator * samplesperblock)
-               << " (fftchannels is " << fftchannels << "), offsetseconds was " << offsetseconds << ", offsetns was "
-               << offsetns << ", index was " << index << ", average delay was " << averagedelay << ", datasec was "
-               << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
+//        cerror << startl << "MODE error for datastream " << datastreamindex
+//               << " - trying to process data outside range - aborting!!! nearest sample was " << nearestSample[subloopindex]
+//               << ", the max bytes should be " << datalengthbytes << " and hence last sample should be "
+//               << (datalengthbytes * bytesperblockdenominator) / (bytesperblocknumerator * samplesperblock)
+//               << " (fftchannels is " << fftchannels << "), offsetseconds was " << offsetseconds << ", offsetns was "
+//               << offsetns << ", index was " << index << ", average delay was " << nearestSample[subloopindex] << ", datasec was "
+//               << datasec << ", datans was " << datans << ", fftstartmicrosec was " << fftstartmicrosec << endl;
         for (int i = 0; i < numrecordedbands; i++) {
             status = vectorZero_cf32(fftoutputs[i][subloopindex], recordedbandchannels);
             if (status != vecNoErr)
@@ -465,48 +483,20 @@ void GPUMode::calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock
     int startIndex = fftloop * numBufferedFFTs + startblock;
     int endIndex = startblock + numblocks;
 
+    cout << numBufferedFFTs << " - " << endIndex - startIndex << endl;
+
     checkCuda(cudaMemcpyAsync(gInterpolator, interpolator, sizeof(double) * 3, cudaMemcpyHostToDevice, cuStream));
 
-    checkCuda(cudaMalloc(&gLittleA, sizeof(double) * (endIndex - startIndex)));
-    checkCuda(cudaMalloc(&gLittleB, sizeof(double) * (endIndex - startIndex)));
-    checkCuda(cudaMalloc(&gIntegerDelay, sizeof(int) * (endIndex - startIndex)));
+    cudaCalculateLittleAB(gLittleA, gLittleB, gIntegerDelay, gInterpolator, startIndex, startIndex + numBufferedFFTs, cuStream);
 
-    cudaCalculateLittleAB(gLittleA, gLittleB, gIntegerDelay, gInterpolator, startIndex, endIndex, cuStream);
-
-    littleA = new double[endIndex - startIndex];
-    littleB = new double[endIndex - startIndex];
-    integerDelay = new int[endIndex - startIndex];
-
-    checkCuda(cudaHostRegister(littleA, sizeof(double) * (endIndex - startIndex), cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(littleB, sizeof(double) * (endIndex - startIndex), cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(integerDelay, sizeof(int) * (endIndex - startIndex), cudaHostRegisterPortable));
-
-    checkCuda(cudaMemcpyAsync(littleA, gLittleA, sizeof(double) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
-    checkCuda(cudaMemcpyAsync(littleB, gLittleB, sizeof(double) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
-    checkCuda(cudaMemcpyAsync(integerDelay, gIntegerDelay, sizeof(int) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
-}
-
-void GPUMode::calculateLittleABCleanup() {
-    checkCuda(cudaFree(gLittleA));
-    checkCuda(cudaFree(gLittleB));
-    checkCuda(cudaFree(gIntegerDelay));
-
-    checkCuda(cudaHostUnregister(littleA));
-    checkCuda(cudaHostUnregister(littleB));
-    checkCuda(cudaHostUnregister(integerDelay));
-
-    delete littleA;
-    delete littleB;
-    delete integerDelay;
+    checkCuda(cudaMemcpyAsync(littleA, gLittleA, sizeof(double) * numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
+    checkCuda(cudaMemcpyAsync(littleB, gLittleB, sizeof(double) * numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
+    checkCuda(cudaMemcpyAsync(integerDelay, gIntegerDelay, sizeof(int) * numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
 }
 
 void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
     int startIndex = fftloop * numBufferedFFTs + startblock;
     int endIndex = startblock + numblocks;
-
-    fracSampleError = new float[endIndex - startIndex];
-    fracWallTime = new double[endIndex - startIndex];
-    intWallTime = new int[endIndex - startIndex];
 
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int index = startIndex + subloopindex;
@@ -519,23 +509,21 @@ void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock,
         double starttime = (offsetseconds - datasec) * 1000000.0 +
                            (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
                            averagedelay;
-        int nearestsample = int(starttime / sampletime + 0.5);
+        nearestSample[subloopindex] = int(starttime / sampletime + 0.5);
         double walltimesecs =
                 model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds +
                 offsetns / 1.0e9 + fftstartmicrosec / 1.0e6;
-        intWallTime[index - startIndex] = static_cast<int>(walltimesecs);
-        fracWallTime[index - startIndex] = walltimesecs - intWallTime[index - startIndex];
+        intWallTime[subloopindex] = static_cast<int>(walltimesecs);
+        fracWallTime[subloopindex] = walltimesecs - intWallTime[subloopindex];
 
-        double nearestsampletime = nearestsample * sampletime;
-        fracSampleError[index - startIndex] = float(starttime - nearestsampletime);
+        double nearestsampletime = nearestSample[subloopindex] * sampletime;
+        fracSampleError[subloopindex] = float(starttime - nearestsampletime);
     }
 }
 
-void GPUMode::cleanupPre_cpu() {
-    delete intWallTime;
-    delete fracWallTime;
-    delete fracSampleError;
-}
+//void GPUMode::prerocess_gpu() {
+//
+//}
 
 void GPUMode::preprocess(int index, int subloopindex) {
     int status;
@@ -631,14 +619,14 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
     status = vectorMulC_f32(currentsubchannelfreqs,
-                            fracSampleError[index] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
+                            fracSampleError[subloopindex] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
                             subfracsamparg, arraystridelength);
     if (status != vecNoErr) {
         csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
         exit(1);
     }
     status = vectorMulC_f32(currentstepchannelfreqs,
-                            fracSampleError[index] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
+                            fracSampleError[subloopindex] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
                             stepfracsamparg, numfracstrides / 2);
     if (status != vecNoErr)
         csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
@@ -680,8 +668,8 @@ void GPUMode::preprocess(int index, int subloopindex) {
             bigA_d[subloopindex * numrecordedbands + j] = littleA[index] * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
             bigB_d[subloopindex * numrecordedbands + j] = littleB[index] * lofreq   // NOTE - no division by /fftchannels here
                                                           + (lofreq - int(lofreq)) * integerDelay[index]
-                                  - recordedfreqlooffsets[0] * fracWallTime[index]
-                                  - fraclooffset * intWallTime[index];
+                                  - recordedfreqlooffsets[0] * fracWallTime[subloopindex]
+                                  - fraclooffset * intWallTime[subloopindex];
         }
     }
 }
