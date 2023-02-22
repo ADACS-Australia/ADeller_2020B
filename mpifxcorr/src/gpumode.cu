@@ -10,6 +10,7 @@
 #include "gpumode_kernels.cuh"
 #include <chrono>
 #include <omp.h>
+#include <thread>
 
 using namespace std::chrono;
 
@@ -123,6 +124,7 @@ unsigned long long avg_preprocess;
 unsigned long long avg_rotate;
 unsigned long long avg_fft;
 unsigned long long avg_postprocess;
+unsigned long long processing_time;
 
 int calls = 0;
 
@@ -163,11 +165,14 @@ GPUMode::~GPUMode() {
     cout << "Average rotate: " << avg_rotate / calls << endl;
     cout << "Average fft: " << avg_fft / calls << endl;
     cout << "Average postprocess: " << avg_postprocess / calls << endl;
+    cout << "Actual time processing (seconds): " << (double) processing_time / 1000. / 1000. << endl;
 }
 
 int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
 {
+    auto begin_time = high_resolution_clock::now();
+
     calls += 1;
 //    std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
 
@@ -290,6 +295,8 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     cout << "postprocess: " << duration.count() << endl;
     avg_postprocess += duration.count();
 
+    processing_time += duration_cast<microseconds>(stop - begin_time).count();
+
     return numfftsprocessed;
 }
 
@@ -335,7 +342,7 @@ bool GPUMode::is_data_valid(int index, int subloopindex) {
     double fftcentre = index + 0.5;
     double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
 
-    fftstartmicrosec = index * fftchannels * sampletime;
+    double fftstartmicrosec = index * fftchannels * sampletime;
 
     double starttime = (offsetseconds - datasec) * 1000000.0 +
                        (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
@@ -394,7 +401,7 @@ void GPUMode::process_unpack(int index, int subloopindex) {
     double fftcentre = index + 0.5;
     double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
 
-    fftstartmicrosec = index * fftchannels * sampletime;
+    double fftstartmicrosec = index * fftchannels * sampletime;
 
     double starttime = (offsetseconds - datasec) * 1000000.0 +
                        (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
@@ -427,7 +434,7 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
     double fftcentre = index + 0.5;
     double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
-    fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
+    double fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
     double starttime = (offsetseconds - datasec) * 1000000.0 +
                 (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
                 averagedelay;

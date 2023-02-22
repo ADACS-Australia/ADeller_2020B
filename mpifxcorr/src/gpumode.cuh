@@ -6,6 +6,7 @@
 #include <cufft.h>
 #include <cufftXt.h>
 #include "mode.h"
+#include <mutex>
 
 class Configuration;
 

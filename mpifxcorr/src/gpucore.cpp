@@ -1,7 +1,11 @@
 #include "gpucore.h"
 #include "gpumode.cuh"
 #include "alert.h"
+#include <thread>
 //#include <iostream>
+#include <chrono>
+
+using namespace std::chrono;
 
 void GPUCore::loopprocess(int threadid) {
     int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
@@ -352,11 +356,27 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
 
     // process each chunk of FFTs in turn
     for (int fftloop = 0; fftloop < numfftloops; fftloop++) {
+        auto start = high_resolution_clock::now();
+
         numfftsprocessed = 0;   // not strictly needed, but to prevent compiler warning
-        //do the station-based processing for this batch of FFT chunks
+
+        // do the station-based processing for this batch of FFT chunks
+        vector<std::thread> streamThreads;
+
         for (int j = 0; j < numdatastreams; j++) {
-            numfftsprocessed = ((GPUMode *) modes[j])->process_gpu(fftloop, numBufferedFFTs, startblock, numblocks);
+            streamThreads.emplace_back([&numfftsprocessed, &modes, j, fftloop, numBufferedFFTs, startblock, numblocks] {
+                numfftsprocessed = ((GPUMode *) modes[j])->process_gpu(fftloop, numBufferedFFTs, startblock, numblocks);
+            });
         }
+
+        for (auto& t : streamThreads) {
+            t.join();
+        }
+
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(stop - start);
+        cout << "total processing: " << duration.count() << endl;
+        start = high_resolution_clock::now();
 
         //if necessary, work out the pulsar bins
         if (procslots[index].pulsarbin) {
@@ -533,6 +553,12 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
             }
         }
 
+        stop = high_resolution_clock::now();
+        duration = duration_cast<microseconds>(stop - start);
+        cout << "baseline based processing: " << duration.count() << endl;
+
+        start = high_resolution_clock::now();
+
         xcblockcount += numfftsprocessed;
         if (xcblockcount == maxxcblocks) {
             //shift/average and then lock results and copy data
@@ -600,7 +626,13 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                 }
             }
         }
+
+        stop = high_resolution_clock::now();
+        duration = duration_cast<microseconds>(stop - start);
+        cout << "baseline weight: " << duration.count() << endl;
     }
+
+    auto start = high_resolution_clock::now();
 
     if (xcblockcount != 0) {
         uvshiftAndAverage(index, threadid,
@@ -676,5 +708,9 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
     if (perr != 0)
         csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock mutex " << index
                 << endl;
+
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    cout << "the rest: " << duration.count() << endl;
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab
