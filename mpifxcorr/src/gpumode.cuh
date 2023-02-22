@@ -32,6 +32,8 @@ public:
     void postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculateLittleABCleanup();
+    void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void cleanupPre_cpu();
 
 protected:
     float **unpackedarrays_gpu;
@@ -63,7 +65,7 @@ protected:
 
     cudaStream_t cuStream;
 
-    // calculateLittleAB
+    // calculate A/B
     double* gInterpolator;
     double* littleA;
     double* littleB;
@@ -72,6 +74,9 @@ protected:
     int* integerDelay;
     int* gIntegerDelay;
 
+    float* fracSampleError;
+    double* fracWallTime;
+    int* intWallTime;
 private:
 
     cufftHandle fft_plan;

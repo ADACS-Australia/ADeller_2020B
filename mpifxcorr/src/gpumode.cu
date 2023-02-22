@@ -249,16 +249,19 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     start = high_resolution_clock::now();
     calculateLittleAB(fftloop, numBufferedFFTs, startblock, numblocks);
+    calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // Get everything ready for an FFT
+    int startIndex = fftloop * numBufferedFFTs + startblock;
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int i = fftloop * numBufferedFFTs + subloopindex + startblock;
         if (i >= startblock + numblocks)
             break; // may not have to fully complete last fftloop
 
-        preprocess(i, subloopindex);
+        preprocess(i - startIndex, subloopindex);
     }
 
+    cleanupPre_cpu();
     calculateLittleABCleanup();
 
     stop = high_resolution_clock::now();
@@ -432,15 +435,19 @@ void GPUMode::process_unpack(int index, int subloopindex) {
 }
 
 __global__ void _cudaCalculateLittleAB(double *const littleA, double *const littleB, int *const integerDelay, const double *const interpolator, const int startIndex, const int endIndex) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x + startIndex;
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx > endIndex) {
+    size_t count = endIndex - startIndex;
+
+    if (idx > count) {
         return;
     }
 
-    double d0 = interpolator[0] * idx * idx + interpolator[1] * idx + interpolator[2];
-    double d1 = interpolator[0] * (idx + 0.5) * (idx + 0.5) + interpolator[1] * (idx + 0.5) + interpolator[2];
-    double d2 = interpolator[0] * (idx + 1) * (idx + 1) + interpolator[1] * (idx + 1) + interpolator[2];
+    int adjusted_index = idx + startIndex;
+
+    double d0 = interpolator[0] * adjusted_index * adjusted_index + interpolator[1] * adjusted_index + interpolator[2];
+    double d1 = interpolator[0] * (adjusted_index + 0.5) * (adjusted_index + 0.5) + interpolator[1] * (adjusted_index + 0.5) + interpolator[2];
+    double d2 = interpolator[0] * (adjusted_index + 1) * (adjusted_index + 1) + interpolator[1] * (adjusted_index + 1) + interpolator[2];
 
     littleA[idx] = d2 - d0;
     littleB[idx] = d0 + (d1 - (littleA[idx] * 0.5 + d0)) / 3.0;
@@ -460,23 +467,23 @@ void GPUMode::calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock
 
     checkCuda(cudaMemcpyAsync(gInterpolator, interpolator, sizeof(double) * 3, cudaMemcpyHostToDevice, cuStream));
 
-    checkCuda(cudaMalloc(&gLittleA, sizeof(double) * endIndex));
-    checkCuda(cudaMalloc(&gLittleB, sizeof(double) * endIndex));
-    checkCuda(cudaMalloc(&gIntegerDelay, sizeof(int) * endIndex));
+    checkCuda(cudaMalloc(&gLittleA, sizeof(double) * (endIndex - startIndex)));
+    checkCuda(cudaMalloc(&gLittleB, sizeof(double) * (endIndex - startIndex)));
+    checkCuda(cudaMalloc(&gIntegerDelay, sizeof(int) * (endIndex - startIndex)));
 
     cudaCalculateLittleAB(gLittleA, gLittleB, gIntegerDelay, gInterpolator, startIndex, endIndex, cuStream);
 
-    littleA = new double[endIndex];
-    littleB = new double[endIndex];
-    integerDelay = new int[endIndex];
+    littleA = new double[endIndex - startIndex];
+    littleB = new double[endIndex - startIndex];
+    integerDelay = new int[endIndex - startIndex];
 
-    checkCuda(cudaHostRegister(littleA, sizeof(double) * endIndex, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(littleB, sizeof(double) * endIndex, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(integerDelay, sizeof(int) * endIndex, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(littleA, sizeof(double) * (endIndex - startIndex), cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(littleB, sizeof(double) * (endIndex - startIndex), cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(integerDelay, sizeof(int) * (endIndex - startIndex), cudaHostRegisterPortable));
 
-    checkCuda(cudaMemcpyAsync(littleA, gLittleA, sizeof(double) * endIndex, cudaMemcpyDeviceToHost, cuStream));
-    checkCuda(cudaMemcpyAsync(littleB, gLittleB, sizeof(double) * endIndex, cudaMemcpyDeviceToHost, cuStream));
-    checkCuda(cudaMemcpyAsync(integerDelay, gIntegerDelay, sizeof(int) * endIndex, cudaMemcpyDeviceToHost, cuStream));
+    checkCuda(cudaMemcpyAsync(littleA, gLittleA, sizeof(double) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
+    checkCuda(cudaMemcpyAsync(littleB, gLittleB, sizeof(double) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
+    checkCuda(cudaMemcpyAsync(integerDelay, gIntegerDelay, sizeof(int) * (endIndex - startIndex), cudaMemcpyDeviceToHost, cuStream));
 }
 
 void GPUMode::calculateLittleABCleanup() {
@@ -493,6 +500,43 @@ void GPUMode::calculateLittleABCleanup() {
     delete integerDelay;
 }
 
+void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+    int startIndex = fftloop * numBufferedFFTs + startblock;
+    int endIndex = startblock + numblocks;
+
+    fracSampleError = new float[endIndex - startIndex];
+    fracWallTime = new double[endIndex - startIndex];
+    intWallTime = new int[endIndex - startIndex];
+
+    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
+        int index = startIndex + subloopindex;
+        if (index >= endIndex)
+            break; // may not have to fully complete last fftloop
+
+        double fftcentre = index + 0.5;
+        double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
+        double fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
+        double starttime = (offsetseconds - datasec) * 1000000.0 +
+                           (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
+                           averagedelay;
+        int nearestsample = int(starttime / sampletime + 0.5);
+        double walltimesecs =
+                model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds +
+                offsetns / 1.0e9 + fftstartmicrosec / 1.0e6;
+        intWallTime[index - startIndex] = static_cast<int>(walltimesecs);
+        fracWallTime[index - startIndex] = walltimesecs - intWallTime[index - startIndex];
+
+        double nearestsampletime = nearestsample * sampletime;
+        fracSampleError[index - startIndex] = float(starttime - nearestsampletime);
+    }
+}
+
+void GPUMode::cleanupPre_cpu() {
+    delete intWallTime;
+    delete fracWallTime;
+    delete fracSampleError;
+}
+
 void GPUMode::preprocess(int index, int subloopindex) {
     int status;
 
@@ -500,27 +544,7 @@ void GPUMode::preprocess(int index, int subloopindex) {
         return;
     }
 
-    //cout << "For Mode of datastream " << datastreamindex << ", index " << index << ", validflags is " << validflags[index/FLAGS_PER_INT] << ", after shift you get " << ((validflags[index/FLAGS_PER_INT] >> (index%FLAGS_PER_INT)) & 0x01) << endl;
-
-    double fftcentre = index + 0.5;
-    double averagedelay = interpolator[0] * fftcentre * fftcentre + interpolator[1] * fftcentre + interpolator[2];
-    double fftstartmicrosec = index * fftchannels * sampletime; //CHRIS CHECK
-    double starttime = (offsetseconds - datasec) * 1000000.0 +
-                       (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
-                       averagedelay;
-    int nearestsample = int(starttime / sampletime + 0.5);
-    double walltimesecs =
-            model->getScanStartSec(currentscan, config->getStartMJD(), config->getStartSeconds()) + offsetseconds +
-            offsetns / 1.0e9 + fftstartmicrosec / 1.0e6;
-    int intwalltime = static_cast<int>(walltimesecs);
-    double fracwalltime = walltimesecs - intwalltime;
-
-    double nearestsampletime = nearestsample * sampletime;
-    f32 fracsampleerror = float(starttime - nearestsampletime);
-
     checkCuda(cudaStreamSynchronize(cuStream));
-
-    vector<int> a, b;
 
     status = vectorMulC_f64(subxoff, littleA[index], subxval, arraystridelength);
     if (status != vecNoErr)
@@ -607,14 +631,14 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
     status = vectorMulC_f32(currentsubchannelfreqs,
-                            fracsampleerror - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
+                            fracSampleError[index] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
                             subfracsamparg, arraystridelength);
     if (status != vecNoErr) {
         csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
         exit(1);
     }
     status = vectorMulC_f32(currentstepchannelfreqs,
-                            fracsampleerror - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
+                            fracSampleError[index] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
                             stepfracsamparg, numfracstrides / 2);
     if (status != vecNoErr)
         csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
@@ -656,8 +680,8 @@ void GPUMode::preprocess(int index, int subloopindex) {
             bigA_d[subloopindex * numrecordedbands + j] = littleA[index] * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
             bigB_d[subloopindex * numrecordedbands + j] = littleB[index] * lofreq   // NOTE - no division by /fftchannels here
                                                           + (lofreq - int(lofreq)) * integerDelay[index]
-                                  - recordedfreqlooffsets[0] * fracwalltime
-                                  - fraclooffset * intwalltime;
+                                  - recordedfreqlooffsets[0] * fracWallTime[index]
+                                  - fraclooffset * intWallTime[index];
         }
     }
 }
