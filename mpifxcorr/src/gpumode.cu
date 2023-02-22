@@ -8,6 +8,10 @@
 #include <cufftXt.h>
 
 #include "gpumode_kernels.cuh"
+#include <chrono>
+#include <omp.h>
+
+using namespace std::chrono;
 
 GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend,
                  int gsamples, int nrecordedfreqs, double recordedbw, double *recordedfreqclkoffs,
@@ -19,6 +23,8 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
              recordedfreqclkoffs, recordedfreqclkoffsdelta, recordedfreqphaseoffs, recordedfreqlooffs, nrecordedbands,
              nzoombands, nbits, sampling, tcomplex, unpacksamp, fbank, linear2circular, fringerotorder, arraystridelen,
              cacorrs, bclock), estimatedbytes_gpu(0) {
+
+    auto start = high_resolution_clock::now();
 
     cfg_numBufferedFFTs = config->getNumBufferedFFTs(confindex);
     this->unpackedarrays_elem_count = unpacksamples;
@@ -69,6 +75,16 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     checkCuda(cudaMalloc(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs));
     checkCuda(cudaMalloc(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs));
 
+    // Register host ram used to copy data to gpu
+    checkCuda(cudaHostRegister(this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(fftd_gpu_out, sizeof(cf32) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
+
+    checkCuda(cudaStreamCreate(&cuStream));
+
     // TODO: PWC: allocations for complex
 
     int n[] = {this->fftchannels};
@@ -95,9 +111,31 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
                     numrecordedbands * cfg_numBufferedFFTs
             )
     );
+    checkCufft(cufftSetStream(fft_plan, cuStream));
+
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    cout << "GPUMode(): " << duration.count() << endl;
 }
 
+unsigned long long avg_unpack;
+unsigned long long avg_preprocess;
+unsigned long long avg_rotate;
+unsigned long long avg_fft;
+unsigned long long avg_postprocess;
+
+int calls = 0;
+
 GPUMode::~GPUMode() {
+    auto start = high_resolution_clock::now();
+
+    checkCuda(cudaHostUnregister(this->unpackedarrays_cpu[0]));
+    checkCuda(cudaHostUnregister(bigA_d));
+    checkCuda(cudaHostUnregister(bigB_d));
+    checkCuda(cudaHostUnregister(sampleIndexes));
+    checkCuda(cudaHostUnregister(validSamples));
+    checkCuda(cudaHostUnregister(fftd_gpu_out));
+
     checkCuda(cudaFree(this->complexunpacked_gpu));
     checkCuda(cudaFree(this->fftd_gpu));
 
@@ -113,10 +151,19 @@ GPUMode::~GPUMode() {
     // TODO: PWC: dealloctions for complex
 
     cufftDestroy(this->fft_plan);
-}
 
-// typical numrecordedbands = 2
-int calls = 0;
+    checkCuda(cudaStreamDestroy(cuStream));
+
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    cout << "~GPUMode(): " << duration.count() << endl;
+
+    cout << "Average unpack: " << avg_unpack / calls << endl;
+    cout << "Average preprocess: " << avg_preprocess / calls << endl;
+    cout << "Average rotate: " << avg_rotate / calls << endl;
+    cout << "Average fft: " << avg_fft / calls << endl;
+    cout << "Average postprocess: " << avg_postprocess / calls << endl;
+}
 
 int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
@@ -173,6 +220,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         NOT_SUPPORTED("phase polarisation offset");
     }
 
+    auto start = high_resolution_clock::now();
     // First unpack all the data
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int i = fftloop * numBufferedFFTs + subloopindex + startblock;
@@ -183,8 +231,14 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     }
 
     // Copy the data to the gpu
-    checkCuda(cudaMemcpy(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpyAsync(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
 
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    cout << "unpack: " << duration.count() << endl;
+    avg_unpack += duration.count();
+
+    start = high_resolution_clock::now();
     // Get everything ready for an FFT
     for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
         int i = fftloop * numBufferedFFTs + subloopindex + startblock;
@@ -194,11 +248,32 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         preprocess(i, subloopindex);
     }
 
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    cout << "preprocess: " << duration.count() << endl;
+    avg_preprocess += duration.count();
+
+    start = high_resolution_clock::now();
     // Run the rotator
     complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
 
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    cout << "rotate: " << duration.count() << endl;
+    avg_rotate += duration.count();
+
+    start = high_resolution_clock::now();
     // Actually run the FFT
     runFFT();
+
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    cout << "fft: " << duration.count() << endl;
+    avg_fft += duration.count();
+
+    start = high_resolution_clock::now();
+
+    postprocess_gpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
     int numfftsprocessed = 0;
     // Do stuff with the FFT results
@@ -209,6 +284,11 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
         postprocess(i, numfftsprocessed);
     }
+
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    cout << "postprocess: " << duration.count() << endl;
+    avg_postprocess += duration.count();
 
     return numfftsprocessed;
 }
@@ -520,11 +600,11 @@ void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, in
     // * Which samples are valid - ie that we need to operate on
 
     // We need to copy the sample indexes, big a and big b on to the gpu
-    checkCuda(cudaMemcpy(gBigA, bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(gBigB, bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(gSampleIndexes, sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpyAsync(gBigA, bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gBigB, bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gSampleIndexes, sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
 
     // Run the kernel
     gpu_complexrotatorMultiply(
@@ -539,8 +619,15 @@ void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, in
             fftloop,
             numBufferedFFTs,
             startblock,
-            numblocks
+            numblocks,
+            cuStream
     );
+}
+
+void GPUMode::postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+    // At this point, we have processed the FFT's and have them in GPU ram
+
+
 }
 
 void GPUMode::postprocess(int index, int subloopindex) {
@@ -648,9 +735,11 @@ void GPUMode::postprocess(int index, int subloopindex) {
 
 void GPUMode::runFFT() {
     checkCufft(cufftExecC2C(this->fft_plan, this->complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
-    checkCuda(cudaMemcpy(fftd_gpu_out, this->fftd_gpu,
+    checkCuda(cudaMemcpyAsync(fftd_gpu_out, this->fftd_gpu,
                          sizeof(cuFloatComplex) * this->fftchannels * numrecordedbands * cfg_numBufferedFFTs,
-                         cudaMemcpyDeviceToHost));
+                         cudaMemcpyDeviceToHost, cuStream));
+
+    checkCuda(cudaStreamSynchronize(cuStream));
 }
 
 __global__ void _cudaMul_f64(const double *const src, const double by, double *const dest) {
@@ -730,9 +819,9 @@ __global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **
     dest[destIndex] = cuCmulf(c, cr);
 }
 
-void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks, cudaStream_t cuStream) {
     // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
-    _gpu_complexrotatorMultiply<<<numBufferedFFTs, dim3(numrecordedbands, fftchannels)>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks);
+    _gpu_complexrotatorMultiply<<<numBufferedFFTs, dim3(numrecordedbands, fftchannels), 0, cuStream>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks);
 }
 
 void *gpu_malloc(const size_t amt) {

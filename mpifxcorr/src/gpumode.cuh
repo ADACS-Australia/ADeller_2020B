@@ -28,6 +28,7 @@ public:
     void postprocess(int index, int subloopindex);
     void runFFT();
     void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
 protected:
     float **unpackedarrays_gpu;
@@ -56,6 +57,8 @@ protected:
     int *gSampleIndexes;
     bool *gValidSamples;
     float** gUnpackedArraysGpu;
+
+    cudaStream_t cuStream;
 private:
 
     cufftHandle fft_plan;

@@ -49,7 +49,7 @@ void gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *con
  */
 void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
 
-void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks, cudaStream_t cuStream);
 
 /**
  * Typesafe allocation of device (GPU) memory using cudaMalloc, checking to
