@@ -438,11 +438,9 @@ __global__ void _cudaCalculateLittleAB(double *const littleA, double *const litt
         return;
     }
 
-    double fidx = idx;
-
-    double d0 = interpolator[0] * fidx * fidx + interpolator[1] * fidx + interpolator[2];
-    double d1 = interpolator[0] * (fidx + 0.5) * (fidx + 0.5) + interpolator[1] * (fidx + 0.5) + interpolator[2];
-    double d2 = interpolator[0] * (fidx + 1) * (fidx + 1) + interpolator[1] * (fidx + 1) + interpolator[2];
+    double d0 = interpolator[0] * idx * idx + interpolator[1] * idx + interpolator[2];
+    double d1 = interpolator[0] * (idx + 0.5) * (idx + 0.5) + interpolator[1] * (idx + 0.5) + interpolator[2];
+    double d2 = interpolator[0] * (idx + 1) * (idx + 1) + interpolator[1] * (idx + 1) + interpolator[2];
 
     littleA[idx] = d2 - d0;
     littleB[idx] = d0 + (d1 - (littleA[idx] * 0.5 + d0)) / 3.0;
