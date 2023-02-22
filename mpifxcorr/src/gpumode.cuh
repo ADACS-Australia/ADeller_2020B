@@ -30,6 +30,8 @@ public:
     void runFFT();
     void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void calculateLittleABCleanup();
 
 protected:
     float **unpackedarrays_gpu;
@@ -60,6 +62,16 @@ protected:
     float** gUnpackedArraysGpu;
 
     cudaStream_t cuStream;
+
+    // calculateLittleAB
+    double* gInterpolator;
+    double* littleA;
+    double* littleB;
+    double* gLittleA;
+    double* gLittleB;
+    int* integerDelay;
+    int* gIntegerDelay;
+
 private:
 
     cufftHandle fft_plan;
