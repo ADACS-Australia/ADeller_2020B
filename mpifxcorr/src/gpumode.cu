@@ -30,6 +30,11 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     cfg_numBufferedFFTs = config->getNumBufferedFFTs(confindex);
     this->unpackedarrays_elem_count = unpacksamples;
 
+    cudaDeviceProp prop;
+    checkCuda(cudaGetDeviceProperties( &prop, 0));
+
+    cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
+
     this->complexunpacked_gpu = gpu_malloc<cuFloatComplex>(this->fftchannels * cfg_numBufferedFFTs * numrecordedbands);
     this->estimatedbytes_gpu += sizeof(cuFloatComplex) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands;
 
@@ -729,27 +734,6 @@ __global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **
     dest[destIndex] = cuCmulf(c, cr);
 }
 
-void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks, cudaStream_t cuStream) {
-    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
-    size_t fftchannels_block;
-    size_t fftchannels_grid;
-
-    size_t divisor = 1024 / numrecordedbands;
-    if (fftchannels > divisor) {
-        fftchannels_block = divisor;
-        fftchannels_grid = (fftchannels / divisor);
-
-        if (fftchannels % divisor != 0) {
-            fftchannels_grid++;
-        }
-    } else {
-        fftchannels_block = fftchannels;
-        fftchannels_grid = 1;
-    }
-
-    _gpu_complexrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks, fftchannels);
-}
-
 void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
 
     // At this point we have
@@ -766,22 +750,36 @@ void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, in
     checkCuda(cudaMemcpyAsync(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
     checkCuda(cudaMemcpyAsync(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
 
-    // Run the kernel
-    gpu_complexrotatorMultiply(
-            this->fftchannels,
-            this->complexunpacked_gpu,
-            gUnpackedArraysGpu,
-            gBigA,
-            gBigB,
-            gSampleIndexes,
-            gValidSamples,
-            numrecordedbands,
-            fftloop,
-            numBufferedFFTs,
-            startblock,
-            numblocks,
-            cuStream
-    );
+    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
+    size_t fftchannels_block;
+    size_t fftchannels_grid;
+
+    size_t divisor = cudaMaxThreadsPerBlock / numrecordedbands;
+    if (fftchannels > divisor) {
+        fftchannels_block = divisor;
+        fftchannels_grid = (fftchannels / divisor);
+
+        if (fftchannels % divisor != 0) {
+            fftchannels_grid++;
+        }
+    } else {
+        fftchannels_block = fftchannels;
+        fftchannels_grid = 1;
+    }
+
+    _gpu_complexrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>
+    (
+             complexunpacked_gpu,
+             gUnpackedArraysGpu,
+             gBigA,
+             gBigB,
+             sampleIndexes,
+             validSamples,
+             fftloop,
+             startblock,
+             numblocks,
+             fftchannels
+     );
 }
 
 void GPUMode::postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {

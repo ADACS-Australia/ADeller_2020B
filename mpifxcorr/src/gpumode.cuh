@@ -34,6 +34,7 @@ public:
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
 protected:
+    int cudaMaxThreadsPerBlock;
     float **unpackedarrays_gpu;
     float **unpackedarrays_cpu;
 
