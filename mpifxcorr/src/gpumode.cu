@@ -479,20 +479,21 @@ __global__ void _cudaCalculateLittleAB(double *const littleA, double *const litt
     littleB[idx] -= integerDelay[idx];
 }
 
-void cudaCalculateLittleAB(double *const littleA, double *const littleB, int *const integerDelay, const double *const interpolator, int startIndex, int endIndex, cudaStream_t cuStream) {
-    auto count = endIndex - startIndex;
-    _cudaCalculateLittleAB<<<(count / 1000) + 1, 1000, 0, cuStream>>>(littleA, littleB, integerDelay, interpolator, startIndex, endIndex);
-}
-
 void GPUMode::calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
     int startIndex = fftloop * numBufferedFFTs + startblock;
     int endIndex = startblock + numblocks;
 
-    cout << numBufferedFFTs << " - " << endIndex - startIndex << endl;
-
     checkCuda(cudaMemcpyAsync(gInterpolator, interpolator, sizeof(double) * 3, cudaMemcpyHostToDevice, cuStream));
 
-    cudaCalculateLittleAB(gLittleA, gLittleB, gIntegerDelay, gInterpolator, startIndex, startIndex + numBufferedFFTs, cuStream);
+    auto count = endIndex - startIndex;
+    _cudaCalculateLittleAB<<<(count / cudaMaxThreadsPerBlock) + 1, cudaMaxThreadsPerBlock, 0, cuStream>>>(
+            gLittleA,
+            gLittleB,
+            gIntegerDelay,
+            gInterpolator,
+            startIndex,
+            startIndex + numBufferedFFTs
+    );
 
     checkCuda(cudaMemcpyAsync(littleA, gLittleA, sizeof(double) * numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
     checkCuda(cudaMemcpyAsync(littleB, gLittleB, sizeof(double) * numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
