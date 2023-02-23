@@ -25,13 +25,14 @@ public:
                     int numblocks) override;  //frac sample error is in microseconds
 
     void process_unpack(int index, int subloopindex);
-    void preprocess(int index, int subloopindex);
+    void preprocess(int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
     void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void preprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
 protected:
     int cudaMaxThreadsPerBlock;
@@ -78,6 +79,15 @@ protected:
     double* fracWallTime;
     int* intWallTime;
     int* nearestSample;
+
+    // preprocess
+    double* gSubXOff;
+    double* gSubXVal;
+    double* subxval_cpu;
+
+    double* gStepXOff;
+    double* gStepXVal;
+    double* stepxval_cpu;
 private:
 
     cufftHandle fft_plan;

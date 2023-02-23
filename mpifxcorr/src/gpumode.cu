@@ -70,21 +70,21 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
         fracsamprotatorA_array[j] = vectorAlloc_cf32(recordedbandchannels);
     }
 
-    bigA_d = new double[cfg_numBufferedFFTs * numrecordedbands];
-    bigB_d = new double[cfg_numBufferedFFTs * numrecordedbands];
+    bigA_d = new double[cfg_numBufferedFFTs];
+    bigB_d = new double[cfg_numBufferedFFTs];
     sampleIndexes = new int[cfg_numBufferedFFTs];
     validSamples = new bool[cfg_numBufferedFFTs];
 
-    checkCuda(cudaMalloc(&gBigA, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands));
-    checkCuda(cudaMalloc(&gBigB, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands));
+    checkCuda(cudaMalloc(&gBigA, sizeof(double) * cfg_numBufferedFFTs));
+    checkCuda(cudaMalloc(&gBigB, sizeof(double) * cfg_numBufferedFFTs));
     checkCuda(cudaMalloc(&gSampleIndexes, sizeof(int) * cfg_numBufferedFFTs));
     checkCuda(cudaMalloc(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs));
     checkCuda(cudaMalloc(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs));
 
     // Register host ram used to copy data to gpu
     checkCuda(cudaHostRegister(this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(bigA_d, sizeof(double) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(bigB_d, sizeof(double) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
     checkCuda(cudaHostRegister(sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
     checkCuda(cudaHostRegister(validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
     checkCuda(cudaHostRegister(fftd_gpu_out, sizeof(cf32) * this->fftchannels * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
@@ -140,6 +140,21 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     fracWallTime = new double[cfg_numBufferedFFTs];
     intWallTime = new int[cfg_numBufferedFFTs];
     nearestSample = new int[cfg_numBufferedFFTs];
+
+    // preprocess
+    checkCuda(cudaMalloc(&gSubXOff, sizeof(double) * arraystridelength));
+    checkCuda(cudaMemcpy(gSubXOff, subxoff, sizeof(double) * arraystridelength, cudaMemcpyHostToDevice));
+
+    checkCuda(cudaMalloc(&gSubXVal, sizeof(double) * arraystridelength * cfg_numBufferedFFTs));
+    subxval_cpu = new double[arraystridelength * cfg_numBufferedFFTs];
+    checkCuda(cudaHostRegister(subxval_cpu, sizeof(double) * arraystridelength * cfg_numBufferedFFTs, cudaHostRegisterPortable));
+
+    checkCuda(cudaMalloc(&gStepXOff, sizeof(double) * numfrstrides));
+    checkCuda(cudaMemcpy(gStepXOff, stepxoff, sizeof(double) * numfrstrides, cudaMemcpyHostToDevice));
+
+    checkCuda(cudaMalloc(&gStepXVal, sizeof(double) * numfrstrides * cfg_numBufferedFFTs));
+    stepxval_cpu = new double[numfrstrides * cfg_numBufferedFFTs];
+    checkCuda(cudaHostRegister(stepxval_cpu, sizeof(double) * numfrstrides * cfg_numBufferedFFTs, cudaHostRegisterPortable));
 
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
@@ -291,7 +306,10 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     avg_unpack += duration.count();
 
     start = high_resolution_clock::now();
+
+    // Order here is important
     calculateLittleAB(fftloop, numBufferedFFTs, startblock, numblocks);
+    preprocess_gpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // Get everything ready for an FFT
     int startIndex = fftloop * numBufferedFFTs + startblock;
@@ -300,7 +318,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         if (i >= startblock + numblocks)
             break; // may not have to fully complete last fftloop
 
-        preprocess(i - startIndex, subloopindex);
+        preprocess(subloopindex);
     }
 
     stop = high_resolution_clock::now();
@@ -527,11 +545,45 @@ void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock,
     }
 }
 
-//void GPUMode::prerocess_gpu() {
-//
-//}
+__global__ void _cudaMul_f64_many(double *const src, double *const dest, double *const a, int vecElems, int numVecs) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-void GPUMode::preprocess(int index, int subloopindex) {
+    if(idx >= vecElems * numVecs)
+        return;
+
+    dest[idx] = src[idx % vecElems] * a[idx / vecElems];
+}
+
+void cudaMul_f64_many(double *const src, double *const dest, double *const a, int vecElems, int numVecs, int cudaMaxThreadsPerBlock, cudaStream_t cuStream) {
+    size_t elems_block;
+    size_t elems_grid;
+
+    size_t elems = vecElems * numVecs;
+
+    if (elems > cudaMaxThreadsPerBlock) {
+        elems_block = cudaMaxThreadsPerBlock;
+        elems_grid = (elems / cudaMaxThreadsPerBlock);
+
+        if (elems % cudaMaxThreadsPerBlock != 0) {
+            elems_grid++;
+        }
+    } else {
+        elems_block = elems;
+        elems_grid = 1;
+    }
+
+    _cudaMul_f64_many<<<elems_grid, elems_block, 0, cuStream>>>(src, dest, a, vecElems, numVecs);
+}
+
+void GPUMode::preprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+//    cudaMul_f64_many(gSubXOff, gSubXVal, gLittleA, arraystridelength, numBufferedFFTs, cudaMaxThreadsPerBlock, cuStream);
+//    cudaMul_f64_many(gStepXOff, gStepXVal, gLittleA, numfrstrides, numBufferedFFTs, cudaMaxThreadsPerBlock, cuStream);
+//
+//    checkCuda(cudaMemcpyAsync(subxval_cpu, gSubXVal, sizeof(double) * arraystridelength * cfg_numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
+//    checkCuda(cudaMemcpyAsync(stepxval_cpu, gStepXVal, sizeof(double) * numfrstrides * cfg_numBufferedFFTs, cudaMemcpyDeviceToHost, cuStream));
+}
+
+void GPUMode::preprocess(int subloopindex) {
     int status;
 
     if (!validSamples[subloopindex]) {
@@ -539,16 +591,6 @@ void GPUMode::preprocess(int index, int subloopindex) {
     }
 
     checkCuda(cudaStreamSynchronize(cuStream));
-
-    status = vectorMulC_f64(subxoff, littleA[index], subxval, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate, subval multiplication" << endl;
-    status = vectorMulC_f64(stepxoff, littleA[index], stepxval, numfrstrides);
-    if (status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate, stepval multiplication" << endl;
-    status = vectorAddC_f64_I(littleB[index], subxval, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate, subval addition!!!" << endl;
 
     // Do the main work here
     // Loop over each frequency and to the fringe rotation and FFT of the data
@@ -567,8 +609,6 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
     // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
 
-    //std::cout << "lo freq: " << lofreq << std::endl;
-
     // OK, now let's put some actual GPU in here
 
 /* The actual calculation that is going on for the linear case is as follows:
@@ -584,44 +624,6 @@ void GPUMode::preprocess(int index, int subloopindex) {
 
  And a, b are computed outside the recordedfreq loop (variable i)
 */
-
-    status = vectorMulC_f64(subxval, lofreq, subphase, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate lofreq sub multiplication!!!" << status << endl;
-    status = vectorMulC_f64(stepxval, lofreq, stepphase, numfrstrides);
-    if (status != vecNoErr)
-        csevere << startl << "Error in linearinterpolate lofreq step multiplication!!!" << status << endl;
-    if (fractionalLoFreq) {
-        status = vectorAddC_f64_I((lofreq - int(lofreq)) * double(integerDelay[index]), subphase, arraystridelength);
-        if (status != vecNoErr)
-            csevere << startl << "Error in linearinterpolate lofreq non-integer freq addition!!!" << status
-                    << endl;
-    }
-
-    for (int j = 0; j < arraystridelength; j++) { // PWCR - typ 16
-        subarg[j] = -TWO_PI * (subphase[j] - int(subphase[j]));
-    }
-    for (int j = 0; j < numfrstrides; j++) { // PWCR - typ 16
-        steparg[j] = -TWO_PI * (stepphase[j] - int(stepphase[j]));
-    }
-    status = vectorSinCos_f32(subarg, subsin, subcos, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in sin/cos of sub rotate argument!!!" << endl;
-    status = vectorSinCos_f32(steparg, stepsin, stepcos, numfrstrides);
-    if (status != vecNoErr)
-        csevere << startl << "Error in sin/cos of step rotate argument!!!" << endl;
-    status = vectorRealToComplex_f32(subcos, subsin, complexrotator, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error assembling sub into complex!!!" << endl;
-    status = vectorRealToComplex_f32(stepcos, stepsin, stepcplx, numfrstrides);
-    if (status != vecNoErr)
-        csevere << startl << "Error assembling step into complex!!!" << endl;
-    for (int j = 1; j < numfrstrides; j++) {
-        status = vectorMulC_cf32(complexrotator, stepcplx[j], &complexrotator[j * arraystridelength],
-                                 arraystridelength);
-        if (status != vecNoErr)
-            csevere << startl << "Error doing the time-saving complex multiplication!!!" << endl;
-    }
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
     status = vectorMulC_f32(currentsubchannelfreqs,
@@ -665,19 +667,8 @@ void GPUMode::preprocess(int index, int subloopindex) {
                 << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!"
                 << endl;
 
-    double fraclooffset = 0;
-
-    // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
-    // Loop over all recorded bands looking for the matching frequency we should be dealing with
-    for (int j = 0; j < numrecordedbands; j++) {
-        if (config->matchingRecordedBand(configindex, datastreamindex, 0, j)) {
-            bigA_d[subloopindex * numrecordedbands + j] = littleA[index] * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
-            bigB_d[subloopindex * numrecordedbands + j] = littleB[index] * lofreq   // NOTE - no division by /fftchannels here
-                                                          + (lofreq - int(lofreq)) * integerDelay[index]
-                                  - recordedfreqlooffsets[0] * fracWallTime[subloopindex]
-                                  - fraclooffset * intWallTime[subloopindex];
-        }
-    }
+    bigA_d[subloopindex] = littleA[subloopindex] * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffsets[0];
+    bigB_d[subloopindex] = littleB[subloopindex] * lofreq;   // NOTE - no division by /fftchannels here
 }
 
 __global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **const src, const double* const bigA, const double* const bigB, const int* const sampleIndexes, const bool* const validSamples, int fftloop, int startblock, int numblocks, size_t fftchannels) {
@@ -722,8 +713,8 @@ __global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
 
     // Get BigA and BigB
-    double bigAval = bigA[subloopindex * numrecordedbands + bandindex];
-    double bigBval = bigB[subloopindex * numrecordedbands + bandindex];
+    double bigAval = bigA[subloopindex];
+    double bigBval = bigB[subloopindex];
 
     // Calculate
     double bigB_reduced = bigBval - int(bigBval);
@@ -745,8 +736,8 @@ void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, in
     // * Which samples are valid - ie that we need to operate on
 
     // We need to copy the sample indexes, big a and big b on to the gpu
-    checkCuda(cudaMemcpyAsync(gBigA, bigA_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice, cuStream));
-    checkCuda(cudaMemcpyAsync(gBigB, bigB_d, sizeof(double) * cfg_numBufferedFFTs * numrecordedbands, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gBigA, bigA_d, sizeof(double) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    checkCuda(cudaMemcpyAsync(gBigB, bigB_d, sizeof(double) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
     checkCuda(cudaMemcpyAsync(gSampleIndexes, sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
     checkCuda(cudaMemcpyAsync(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
     checkCuda(cudaMemcpyAsync(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
@@ -899,16 +890,6 @@ void GPUMode::runFFT() {
                          cudaMemcpyDeviceToHost, cuStream));
 
     checkCuda(cudaStreamSynchronize(cuStream));
-}
-
-__global__ void _cudaMul_f64(const double *const src, const double by, double *const dest) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    //if(idx > len) return;
-    dest[idx] = src[idx] * by;
-}
-
-void cudaMul_f64(const size_t len, const double *const src, const double by, double *const dest) {
-    _cudaMul_f64<<<1, len>>>(src, by, dest);
 }
 
 __global__ void _gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *const dst) {
