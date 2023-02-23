@@ -266,6 +266,14 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     // Run the rotator
     complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
 
+    for (int subloopindex; subloopindex < numBufferedFFTs; subloopindex++) {
+        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+        if (i >= startblock + numblocks)
+            break; // may not have to fully complete last fftloop
+
+        preprocess(subloopindex);
+    }
+
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     cout << "rotate: " << duration.count() << endl;
@@ -454,36 +462,9 @@ void GPUMode::preprocess(int subloopindex) {
 
     // OK, now let's put some actual GPU in here
 
-/* The actual calculation that is going on for the linear case is as follows:
 
- Calculate complexrotator[j]  (for j = 0 to fftchanels-1) as:
 
- complexrotator[j] = exp( 2 pi i * (A*j + B) )
 
- where:
-
- A = a*lofreq/fftchannels - sampletime*1.0e-6*recordedfreqlooffsets[i]
- B = b*lofreq/fftchannels + fraclofreq*integerdelay - recordedfreqlooffsets[i]*fracwalltime - fraclooffset*intwalltime
-
- And a, b are computed outside the recordedfreq loop (variable i)
-*/
-
-/* Creating a fractional sample rotation array
- *  The actual calculation being performed is as follows:
- *  Assume we know the frequency of every FFT output channel, and it is stored in an array of length fftchannels, called channelfreq
- *  then for every frequency subband f (in the range 0 … numrecordedfreqs), calculate the slope as:
- *  A = fracsampleerror - recordedfreqclockoffsets[f] + recordedfreqclockoffsetsdelta[f]/2
- *  (for the second polarisation, a is identical except subtracting recordedfreqclockoffsetsdelta[f]/2)
- * then calculate complexrotator[j]  (for j = 0 to fftchannels-1) as:
- * complexrotator[j] = exp( 2 pi i * (A*fftchannels[j]) )
- *
- * So how is fftchannels calculated? For “regular data” it is as follows (for j = 0 to fftchannels-1)
- * fftchannels[j] = recordedbandwidth * j / fftchannels
- * For lower sideband data it is:
- * fftchannels[j] = -recordedbandwidth * j / fftchannels
- * For double sideband data it is:
- * fftchannels[j] = recordedbandwidth * j / fftchannels - recordedbandwidth/2.0
- */
 
     // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
     status = vectorMulC_f32(currentsubchannelfreqs,
@@ -583,6 +564,20 @@ __global__ void _gpu_complexrotatorMultiply(
     // Calculate the source index and get the source value
     const size_t srcIndex = (subloopindex * numrecordedbands) + bandindex;
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
+
+    /* The actual calculation that is going on for the linear case is as follows:
+
+     Calculate complexrotator[j]  (for j = 0 to fftchanels-1) as:
+
+     complexrotator[j] = exp( 2 pi i * (A*j + B) )
+
+     where:
+
+     A = a*lofreq/fftchannels - sampletime*1.0e-6*recordedfreqlooffsets[i]
+     B = b*lofreq/fftchannels + fraclofreq*integerdelay - recordedfreqlooffsets[i]*fracwalltime - fraclooffset*intwalltime
+
+     And a, b are computed outside the recordedfreq loop (variable i)
+    */
 
     // Calculate littleA/B
     double d0 = interpolator[0] * index * index + interpolator[1] * index + interpolator[2];
@@ -697,18 +692,35 @@ __global__ void _gpu_resultsrotatorMultiply(
     // Calculate the destination index
     const size_t dataIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
 
-    // Get fracsampleerror - recordedfreqclockoffsets[f] + recordedfreqclockoffsetsdelta[f]/2
+    /* Creating a fractional sample rotation array
+     *  The actual calculation being performed is as follows:
+     *  Assume we know the frequency of every FFT output channel, and it is stored in an array of length fftchannels, called channelfreq
+     *  then for every frequency subband f (in the range 0 … numrecordedfreqs), calculate the slope as:
+     *  A = fracsampleerror - recordedfreqclockoffsets[f] + recordedfreqclockoffsetsdelta[f]/2
+     *  (for the second polarisation, a is identical except subtracting recordedfreqclockoffsetsdelta[f]/2)
+     * then calculate complexrotator[j]  (for j = 0 to fftchannels-1) as:
+     * complexrotator[j] = exp( 2 pi i * (A*fftchannels[j]) )
+     *
+     * So how is fftchannels calculated? For “regular data” it is as follows (for j = 0 to fftchannels-1)
+     * fftchannels[j] = recordedbandwidth * j / fftchannels
+     * For lower sideband data it is:
+     * fftchannels[j] = -recordedbandwidth * j / fftchannels
+     * For double sideband data it is:
+     * fftchannels[j] = recordedbandwidth * j / fftchannels - recordedbandwidth/2.0
+    */
+
+    // Calculate fracsampleerror - recordedfreqclockoffsets[f] + recordedfreqclockoffsetsdelta[f]/2
     double bigAval = fracSampleError[subloopindex] - recordedfreqclockoffset + recordedfreqclockoffsetdelta/2;
 
-    // Generate fftchannels[j] = recordedbandwidth * j / fftchannels
+    // Calculate fftchannels[j] = recordedbandwidth * j / fftchannels
     double subFreq = recordedbandwidth * channelindex / fftchannels;
 
     // Calculate
     double exponent = bigAval * subFreq;
     exponent -= int(exponent);
     cuFloatComplex cr;
-    sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
-    srcdest[dataIndex] = cuCmulf(srcdest[dataIndex], cr);
+    sincosf(TWO_PI * exponent, &cr.y, &cr.x);
+//    srcdest[dataIndex] = cuCmulf(srcdest[dataIndex], cr);
 }
 
 void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
@@ -734,6 +746,8 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
         fftchannels_block = fftchannels;
         fftchannels_grid = 1;
     }
+
+    cout << recordedbandchannels << " ? " << fftchannels << endl;
 
     _gpu_resultsrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>
             (
@@ -796,15 +810,15 @@ void GPUMode::postprocess(int index, int subloopindex) {
             //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
 
 
-//            //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-//            if (deltapoloffsets == false || config->getDRecordedBandPol(configindex, datastreamindex, j) == 'R') {
-//                status = vectorMul_cf32_I(fracsamprotatorA_array[subloopindex], fftoutputs[j][subloopindex], recordedbandchannels);
-//            } else {
-//                NOT_SUPPORTED("fracsamplerotatorB");
-//            }
+            //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
+            if (deltapoloffsets == false || config->getDRecordedBandPol(configindex, datastreamindex, j) == 'R') {
+                status = vectorMul_cf32_I(fracsamprotatorA_array[subloopindex], fftoutputs[j][subloopindex], recordedbandchannels);
+            } else {
+                NOT_SUPPORTED("fracsamplerotatorB");
+            }
 
-//            if (status != vecNoErr)
-//                csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
+            if (status != vecNoErr)
+                csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
 
             //do the conjugation
             status = vectorConj_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex],
