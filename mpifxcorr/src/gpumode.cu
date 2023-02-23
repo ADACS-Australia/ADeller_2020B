@@ -674,6 +674,82 @@ void GPUMode::preprocess(int index, int subloopindex) {
     }
 }
 
+__global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **const src, const double* const bigA, const double* const bigB, const int* const sampleIndexes, const bool* const validSamples, int fftloop, int startblock, int numblocks, size_t fftchannels) {
+    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
+
+    // blockIdx.x in this case is the subloopindex index [0 .. numBufferedFFTs]
+    // blockIdx.y in this case is the fftchannels_grid. The actual fftchannels value is calculated by fftchannels_grid idx * fftchannels_block size + fftchannels idx (blockIdx.y * blockDim.y) + threadIdx.y
+    // threadIdx.x in this case is the numrecordedbands index [0 .. numrecordedbands]
+    // threadIdx.y in this case is the fftchannels_block index [0 .. fftchannels_block]
+    // blockDim.x in this case is the numrecordedbands size
+    // blockDim.y in this case is the fftchannels_block size
+    // gridDim.x in this case is the numBufferedFFTs size
+    // gridDim.y in this case is the fftchannels_grid size
+
+    // Check if this subloopindex is valid
+    const size_t subloopindex = blockIdx.x;
+    if (!validSamples[subloopindex]) {
+        // Not valid, so don't do anything
+        return;
+    }
+
+    // Check if we should bother processing this sample
+    size_t index = fftloop * gridDim.x + subloopindex + startblock;
+    if (index >= startblock + numblocks) {
+        // May not have to fully complete last fftloop, drop out
+        return;
+    }
+
+    const size_t bandindex = threadIdx.x;
+    const size_t channelindex = (blockIdx.y * blockDim.y) + threadIdx.y;
+    const size_t numrecordedbands = blockDim.x;
+
+    if (channelindex >= fftchannels) {
+        return;
+    }
+
+    // Calculate the destination index
+    const size_t destIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
+
+    // Calculate the source index and get the source value
+    const size_t srcIndex = (subloopindex * numrecordedbands) + bandindex;
+    const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
+
+    // Get BigA and BigB
+    double bigAval = bigA[subloopindex * numrecordedbands + bandindex];
+    double bigBval = bigB[subloopindex * numrecordedbands + bandindex];
+
+    // Calculate
+    double bigB_reduced = bigBval - int(bigBval);
+    double exponent = (bigAval * channelindex + bigB_reduced);
+    exponent -= int(exponent);
+    cuFloatComplex cr;
+    sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
+    cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
+    dest[destIndex] = cuCmulf(c, cr);
+}
+
+void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks, cudaStream_t cuStream) {
+    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
+    size_t fftchannels_block;
+    size_t fftchannels_grid;
+
+    size_t divisor = 1024 / numrecordedbands;
+    if (fftchannels > divisor) {
+        fftchannels_block = divisor;
+        fftchannels_grid = (fftchannels / divisor);
+
+        if (fftchannels % divisor != 0) {
+            fftchannels_grid++;
+        }
+    } else {
+        fftchannels_block = fftchannels;
+        fftchannels_grid = 1;
+    }
+
+    _gpu_complexrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks, fftchannels);
+}
+
 void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
 
     // At this point we have
@@ -851,61 +927,6 @@ void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const s
     checkCuda(cudaMemset(dst, 0x0, len * sizeof(cuFloatComplex)));
     checkCuda(cudaMemcpy2D(dst, sizeof(cuFloatComplex), src, sizeof(float), sizeof(float), len,
                            cudaMemcpyHostToDevice));
-}
-
-__global__ void _gpu_complexrotatorMultiply(cuFloatComplex* const dest, float **const src, const double* const bigA, const double* const bigB, const int* const sampleIndexes, const bool* const validSamples, int fftloop, int startblock, int numblocks) {
-    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
-
-    // blockIdx.x in this case is the subloopindex index [0 .. numBufferedFFTs]
-    // threadIdx.x in this case is the numrecordedbands index [0 .. numrecordedbands]
-    // threadIdx.y in this case is the fftchannels index [0 .. fftchannels]
-    // blockDim.x in this case is the numrecordedbands size
-    // blockDim.y in this case is the fftchannels size
-    // gridDim.x in this case is the numBufferedFFTs size
-
-    // Check if this subloopindex is valid
-    const size_t subloopindex = blockIdx.x;
-    if (!validSamples[subloopindex]) {
-        // Not valid, so don't do anything
-        return;
-    }
-
-    // Check if we should bother processing this sample
-    size_t index = fftloop * gridDim.x + subloopindex + startblock;
-    if (index >= startblock + numblocks) {
-        // May not have to fully complete last fftloop, drop out
-        return;
-    }
-
-    const size_t bandindex = threadIdx.x;
-    const size_t channelindex = threadIdx.y;
-    const size_t numrecordedbands = blockDim.x;
-    const size_t fftchannels = blockDim.y;
-
-    // Calculate the destination index
-    const size_t destIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
-
-    // Calculate the source index and get the source value
-    const size_t srcIndex = (subloopindex * numrecordedbands) + bandindex;
-    const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
-
-    // Get BigA and BigB
-    double bigAval = bigA[subloopindex * numrecordedbands + bandindex];
-    double bigBval = bigB[subloopindex * numrecordedbands + bandindex];
-
-    // Calculate
-    double bigB_reduced = bigBval - int(bigBval);
-    double exponent = (bigAval * channelindex + bigB_reduced);
-    exponent -= int(exponent);
-    cuFloatComplex cr;
-    sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
-    cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
-    dest[destIndex] = cuCmulf(c, cr);
-}
-
-void gpu_complexrotatorMultiply(size_t fftchannels, cuFloatComplex *dest, float **src, const double *bigA, const double *bigB, const int *sampleIndexes, const bool *validSamples, int numrecordedbands, int fftloop, int numBufferedFFTs, int startblock, int numblocks, cudaStream_t cuStream) {
-    // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
-    _gpu_complexrotatorMultiply<<<numBufferedFFTs, dim3(numrecordedbands, fftchannels), 0, cuStream>>>(dest, src, bigA, bigB, sampleIndexes, validSamples, fftloop, startblock, numblocks);
 }
 
 void *gpu_malloc(const size_t amt) {
