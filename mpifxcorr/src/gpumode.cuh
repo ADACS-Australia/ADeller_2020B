@@ -29,10 +29,8 @@ public:
     void postprocess(int index, int subloopindex);
     void runFFT();
     void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
-    void postprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
-    void calculateLittleAB(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
-    void preprocess_gpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
 protected:
     int cudaMaxThreadsPerBlock;
@@ -45,49 +43,28 @@ protected:
 
     size_t estimatedbytes_gpu;
 
-    cuFloatComplex *complexrotator_gpu;
-
     // Remember how long the 'unpackedarrays' are -- norally this would be
     // 'unpacksamples' but e.g. the Mk5Mode implementation overwrites that
     size_t unpackedarrays_elem_count;
 
     cf32** fracsamprotatorA_array;
 
-    double* bigA_d;
-    double* bigB_d;
     int* sampleIndexes;
     bool* validSamples;
 
-    double *gBigA, *gBigB;
     int *gSampleIndexes;
     bool *gValidSamples;
     float** gUnpackedArraysGpu;
 
     cudaStream_t cuStream;
 
-    // calculate A/B
     double* gInterpolator;
-    double* littleA;
-    double* littleB;
-    double* gLittleA;
-    double* gLittleB;
-    int* integerDelay;
-    int* gIntegerDelay;
 
     // precalc
     float* fracSampleError;
-    double* fracWallTime;
-    int* intWallTime;
+    float* gFracSampleError;
+
     int* nearestSample;
-
-    // preprocess
-    double* gSubXOff;
-    double* gSubXVal;
-    double* subxval_cpu;
-
-    double* gStepXOff;
-    double* gStepXVal;
-    double* stepxval_cpu;
 private:
 
     cufftHandle fft_plan;
