@@ -65,11 +65,6 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
         }
     }
 
-    fracsamprotatorA_array = new cf32 *[cfg_numBufferedFFTs];
-    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
-        fracsamprotatorA_array[j] = vectorAlloc_cf32(recordedbandchannels);
-    }
-
     sampleIndexes = new int[cfg_numBufferedFFTs];
     validSamples = new bool[cfg_numBufferedFFTs];
 
@@ -263,16 +258,8 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     start = high_resolution_clock::now();
 
-    // Run the rotator
+    // Run the fringe rotation
     complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
-
-    for (int subloopindex; subloopindex < numBufferedFFTs; subloopindex++) {
-        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
-        if (i >= startblock + numblocks)
-            break; // may not have to fully complete last fftloop
-
-        preprocess(subloopindex);
-    }
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -290,6 +277,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     start = high_resolution_clock::now();
 
+    // do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
     rotateResults(fftloop, numBufferedFFTs, startblock, numblocks);
 
     int numfftsprocessed = 0;
@@ -440,77 +428,6 @@ void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock,
     checkCuda(cudaMemcpyAsync(gFracSampleError, fracSampleError, sizeof(float) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
 }
 
-void GPUMode::preprocess(int subloopindex) {
-    int status;
-
-    if (!validSamples[subloopindex]) {
-        return;
-    }
-
-    // Do the main work here
-    // Loop over each frequency and to the fringe rotation and FFT of the data
-
-    //updated so that Nyquist channel is not accumulated for either USB or LSB data
-    //and is excised entirely, so both USB and LSB data start at the same place (no sidebandoffset)
-    f32* currentstepchannelfreqs = stepchannelfreqs;
-    f32* currentsubchannelfreqs = subchannelfreqs;
-    if (config->getDRecordedLowerSideband(configindex, datastreamindex, 0)) {
-        currentstepchannelfreqs = lsbstepchannelfreqs;
-    }
-
-    // For double-sideband data, the LO frequency is at the centre of the band, not the band edge
-
-    // OK, now let's put some actual GPU in here
-
-
-
-
-
-    // Note recordedfreqclockoffsetsdata will usually be zero, but avoiding if statement
-    status = vectorMulC_f32(currentsubchannelfreqs,
-                            fracSampleError[subloopindex] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
-                            subfracsamparg, arraystridelength);
-    if (status != vecNoErr) {
-        csevere << startl << "Error in frac sample correction, arg generation (sub)!!!" << status << endl;
-        exit(1);
-    }
-    status = vectorMulC_f32(currentstepchannelfreqs,
-                            fracSampleError[subloopindex] - recordedfreqclockoffsets[0] + recordedfreqclockoffsetsdelta[0] / 2,
-                            stepfracsamparg, numfracstrides / 2);
-    if (status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, arg generation (step)!!!" << status << endl;
-
-    //create the fractional sample correction array
-    status = vectorSinCos_f32(subfracsamparg, subfracsampsin, subfracsampcos, arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-    status = vectorSinCos_f32(stepfracsamparg, stepfracsampsin, stepfracsampcos, numfracstrides / 2);
-    if (status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, sin/cos (sub)!!!" << status << endl;
-    status = vectorRealToComplex_f32(subfracsampcos, subfracsampsin, fracsamprotatorA_array[subloopindex], arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, real to complex (sub)!!!" << status << endl;
-    status = vectorRealToComplex_f32(stepfracsampcos, stepfracsampsin, stepfracsampcplx, numfracstrides / 2);
-    if (status != vecNoErr)
-        csevere << startl << "Error in frac sample correction, real to complex (step)!!!" << status << endl;
-    for (int j = 1; j < numfracstrides / 2; j++) {
-        status = vectorMulC_cf32(fracsamprotatorA_array[subloopindex], stepfracsampcplx[j], &(fracsamprotatorA_array[subloopindex][j * arraystridelength]),
-                                 arraystridelength);
-        if (status != vecNoErr)
-            csevere << startl << "Error doing the time-saving complex multiplication in frac sample correction!!!"
-                    << endl;
-    }
-
-    // now do the first arraystridelength elements (which are different from fracsampptr1 for LSB case)
-    status = vectorMulC_cf32_I(stepfracsampcplx[0], fracsamprotatorA_array[subloopindex], arraystridelength);
-    if (status != vecNoErr)
-        csevere << startl
-                << "Error doing the first bit of the time-saving complex multiplication in frac sample correction!!!"
-                << endl;
-
-
-}
-
 __global__ void _gpu_complexrotatorMultiply(
         cuFloatComplex* const dest,
         float **const src,
@@ -574,7 +491,7 @@ __global__ void _gpu_complexrotatorMultiply(
      where:
 
      A = a*lofreq/fftchannels - sampletime*1.0e-6*recordedfreqlooffsets[i]
-     B = b*lofreq/fftchannels + fraclofreq*integerdelay - recordedfreqlooffsets[i]*fracwalltime - fraclooffset*intwalltime
+     B = b*lofreq + fraclofreq*integerdelay - recordedfreqlooffsets[i]*fracwalltime - fraclooffset*intwalltime
 
      And a, b are computed outside the recordedfreq loop (variable i)
     */
@@ -654,7 +571,8 @@ __global__ void _gpu_resultsrotatorMultiply(
         int fftloop,
         int startblock,
         int numblocks,
-        size_t fftchannels
+        size_t fftchannels,
+        size_t numrecordedfreqs
     ) {
     // numBufferedFFTs(blockIdx.x) * (numrecordedbands(threadIdx.x) * fftchannels(threadIdx.y))
 
@@ -713,20 +631,19 @@ __global__ void _gpu_resultsrotatorMultiply(
     double bigAval = fracSampleError[subloopindex] - recordedfreqclockoffset + recordedfreqclockoffsetdelta/2;
 
     // Calculate fftchannels[j] = recordedbandwidth * j / fftchannels
-    double subFreq = recordedbandwidth * channelindex / fftchannels;
+    double subFreq = recordedbandwidth * channelindex / numrecordedfreqs;
 
     // Calculate
     double exponent = bigAval * subFreq;
     exponent -= int(exponent);
     cuFloatComplex cr;
     sincosf(TWO_PI * exponent, &cr.y, &cr.x);
-//    srcdest[dataIndex] = cuCmulf(srcdest[dataIndex], cr);
+    srcdest[dataIndex] = cuCmulf(srcdest[dataIndex], cr);
 }
 
 void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
     // At this point we have
     // * FFT results on GPU
-    // * Rotator BigA
     // * subchannelfreqs
     // * Which samples are valid - ie that we need to operate on
 
@@ -735,19 +652,17 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
     size_t fftchannels_grid;
 
     size_t divisor = cudaMaxThreadsPerBlock / numrecordedbands;
-    if (fftchannels > divisor) {
+    if (recordedbandchannels > divisor) {
         fftchannels_block = divisor;
-        fftchannels_grid = (fftchannels / divisor);
+        fftchannels_grid = recordedbandchannels / divisor;
 
-        if (fftchannels % divisor != 0) {
+        if (recordedbandchannels % divisor != 0) {
             fftchannels_grid++;
         }
     } else {
-        fftchannels_block = fftchannels;
+        fftchannels_block = recordedbandchannels;
         fftchannels_grid = 1;
     }
-
-    cout << recordedbandchannels << " ? " << fftchannels << endl;
 
     _gpu_resultsrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>
             (
@@ -760,7 +675,8 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
                     fftloop,
                     startblock,
                     numblocks,
-                    fftchannels
+                    fftchannels,
+                    recordedbandchannels
             );
 
     checkCuda(cudaMemcpyAsync(fftd_gpu_out, this->fftd_gpu,
@@ -808,17 +724,6 @@ void GPUMode::postprocess(int index, int subloopindex) {
             //
             // 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
             //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
-
-
-            //do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-            if (deltapoloffsets == false || config->getDRecordedBandPol(configindex, datastreamindex, j) == 'R') {
-                status = vectorMul_cf32_I(fracsamprotatorA_array[subloopindex], fftoutputs[j][subloopindex], recordedbandchannels);
-            } else {
-                NOT_SUPPORTED("fracsamplerotatorB");
-            }
-
-            if (status != vecNoErr)
-                csevere << startl << "Error in application of frac sample correction!!!" << status << endl;
 
             //do the conjugation
             status = vectorConj_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex],

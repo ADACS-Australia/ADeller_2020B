@@ -25,7 +25,6 @@ public:
                     int numblocks) override;  //frac sample error is in microseconds
 
     void process_unpack(int index, int subloopindex);
-    void preprocess(int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
     void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
@@ -46,8 +45,6 @@ protected:
     // Remember how long the 'unpackedarrays' are -- norally this would be
     // 'unpacksamples' but e.g. the Mk5Mode implementation overwrites that
     size_t unpackedarrays_elem_count;
-
-    cf32** fracsamprotatorA_array;
 
     int* sampleIndexes;
     bool* validSamples;
