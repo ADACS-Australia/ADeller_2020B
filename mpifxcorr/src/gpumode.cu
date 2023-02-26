@@ -268,6 +268,9 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // Reset the autocorrelations
     checkCuda(cudaMemsetAsync(temp_autocorrelations_gpu, 0, sizeof(cuFloatComplex) * recordedbandchannels * cfg_numBufferedFFTs * numrecordedbands * 3, cuStream));
+    for (int i = 0; i < numrecordedbands; i++) {
+        checkCuda(cudaMemcpyAsync(&temp_autocorrelations_gpu_out[(i * recordedbandchannels * 3)], autocorrelations[0][i], sizeof(cuFloatComplex) * recordedbandchannels, cudaMemcpyHostToDevice, cuStream));
+    }
 
     // Copy the data to the gpu
     checkCuda(cudaMemcpyAsync(this->unpackedarrays_gpu[0], this->unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
@@ -668,7 +671,7 @@ __global__ void _gpu_resultsrotatorMultiply(
 
         // Calculate the destination index
         const size_t dataIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
-        const size_t autocorrIndex = (subloopindex * numrecordedfreqs * numrecordedbands * 3) + (bandindex * numrecordedfreqs * 3) + channelindex;
+        const size_t autocorrIndex = (bandindex * numrecordedfreqs * 3) + channelindex;
 
 
         /* Creating a fractional sample rotation array
@@ -705,7 +708,7 @@ __global__ void _gpu_resultsrotatorMultiply(
         conjfftoutputs[dataIndex] = cuConjf(fftoutputs[dataIndex]);
 
         // do the autocorrelation (skipping Nyquist channel)
-        autocorrelations[autocorrIndex] = cuCmulf(fftoutputs[dataIndex], conjfftoutputs[dataIndex]);
+        atomicAddFloatComplex(&autocorrelations[autocorrIndex], cuCmulf(fftoutputs[dataIndex], conjfftoutputs[dataIndex]));
     }
 
     if (numrecordedbands > 1) {
@@ -806,6 +809,10 @@ void GPUMode::postprocess(int index, int subloopindex) {
                                  conjfftoutputs[j][subloopindex],
                                  recordedbandchannels);
 
+        status = vectorCopy_cf32(&temp_autocorrelations_gpu_out[(j * recordedbandchannels * 3)],
+                                 autocorrelations[0][j],
+                                 recordedbandchannels);
+
 
         // At this point in the code the array fftoutputs[j] contains complex-valued voltage spectra with the following properties:
         //
@@ -820,8 +827,6 @@ void GPUMode::postprocess(int index, int subloopindex) {
         //
         // 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
         //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
-
-        vectorAdd_cf32_I(&temp_autocorrelations_gpu_out[(subloopindex * recordedbandchannels * numrecordedbands * 3) + (j * recordedbandchannels * 3)], autocorrelations[0][j], recordedbandchannels);
 
         //store the weight for the autocorrelations
         weights[0][j] += dataweight[subloopindex];
