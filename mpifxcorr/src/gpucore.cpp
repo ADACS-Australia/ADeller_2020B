@@ -390,56 +390,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
         //do the baseline-based processing for this batch of FFT chunks
         resultindex = 0;
         for (int f = 0; f < config->getFreqTableLength(); f++) {
-            if (config->phasedArrayOn(procslots[index].configindex)) //phased array processing
-            {
-                freqchannels = config->getFNumChannels(procslots[index].configindex);
-                for (int j = 0; j < config->getFPhasedArrayNumPols(procslots[index].configindex, f); j++) {
-                    papol = config->getFPhaseArrayPol(procslots[index].configindex, f, j);
-
-                    //weight and add the results for each baseline
-                    for (int fftsubloop = 0; fftsubloop < numBufferedFFTs; fftsubloop++) {
-                        for (int k = 0; k < numdatastreams; k++) {
-                            vis1 = 0;
-                            for (int l = 0; l < config->getDNumRecordedBands(procslots[index].configindex, k); l++) {
-                                dsfreqindex = config->getDRecordedFreqIndex(procslots[index].configindex, k, l);
-                                if (dsfreqindex == f &&
-                                    config->getDRecordedBandPol(procslots[index].configindex, k, l) == papol) {
-                                    vis1 = modes[k]->getFreqs(l, fftsubloop);
-                                    break;
-                                }
-                            }
-                            if (vis1 == 0) {
-                                for (int l = 0; l < config->getDNumZoomBands(procslots[index].configindex, k); l++) {
-                                    dsfreqindex = config->getDZoomFreqIndex(procslots[index].configindex, k, l);
-                                    if (dsfreqindex == f &&
-                                        config->getDZoomBandPol(procslots[index].configindex, k, l) == papol) {
-                                        vis1 = modes[k]->getFreqs(
-                                                config->getDNumRecordedBands(procslots[index].configindex, k) + l,
-                                                fftsubloop);
-                                        break;
-                                    }
-                                }
-                            }
-                            if (vis1 != 0) {
-                                //weight the data
-                                status = vectorMulC_f32((f32 *) vis1,
-                                                        config->getFPhasedArrayDWeight(procslots[index].configindex, f,
-                                                                                       k),
-                                                        (f32 *) scratchspace->rotated, freqchannels * 2);
-                                if (status != vecNoErr)
-                                    cerror << startl << "Error trying to scale phased array results!" << endl;
-
-                                //add it to the result
-                                status = vectorAdd_cf32_I(scratchspace->rotated,
-                                                          &(scratchspace->threadcrosscorrs[resultindex]), freqchannels);
-                                if (status != vecNoErr)
-                                    cerror << startl << "Error trying to add phased array results!" << endl;
-                            }
-                        }
-                    }
-                    resultindex += freqchannels;
-                }
-            } else if (config->isFrequencyUsed(procslots[index].configindex, f)) //normal processing
+            if (config->isFrequencyUsed(procslots[index].configindex, f)) //normal processing
             {
                 //All baseline freq indices into the freq table are determined by the *first* datastream
                 //in the event of correlating USB with LSB data.  Hence all Nyquist offsets/channels etc
@@ -480,63 +431,17 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                                                                              localfreqindex, p),
                                             fftsubloop)[xmacstart]);
 
-                                    weight1 = m1->getDataWeight(
-                                            config->getBDataStream1RecordBandIndex(procslots[index].configindex, j,
-                                                                                   localfreqindex, p), fftsubloop);
-                                    weight2 = m2->getDataWeight(
-                                            config->getBDataStream2RecordBandIndex(procslots[index].configindex, j,
-                                                                                   localfreqindex, p), fftsubloop);
+                                    //not pulsar binning, so this is nice and simple - just cross multiply accumulate
+                                    status = vectorAddProduct_cf32(vis1, vis2,
+                                                                   &(scratchspace->threadcrosscorrs[resultindex +
+                                                                                                    p *
+                                                                                                    xmacstridelength]),
+                                                                   xmacstridelength);
 
-                                    if (procslots[index].pulsarbin) {
-                                        //multiply into scratch space
-                                        status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace,
-                                                                xmacstridelength);
-                                        if (status != vecNoErr)
-                                            csevere << startl << "Error trying to xmac baseline " << j << " frequency "
-                                                    << localfreqindex << " polarisation product " << p << ", status "
-                                                    << status << endl;
-
-                                        //if scrunching, add into temp accumulate space, otherwise add into normal space
-                                        if (procslots[index].scrunchoutput) {
-                                            bweight = weight1 * weight2 / freqchannels;
-                                            destchan = xmacstart;
-                                            for (int l = 0; l < xmacstridelength; l++) {
-                                                //the first zero (the source slot) is because we are limiting to one pulsar ephemeris for now
-                                                destbin = scratchspace->bins[fftsubloop][f][destchan];
-                                                scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][l].re += scratchspace->pulsarscratchspace[l].re;
-                                                scratchspace->pulsaraccumspace[f][x][j][0][p][destbin][l].im += scratchspace->pulsarscratchspace[l].im;
-                                                scratchspace->baselineweight[f][0][j][p] +=
-                                                        bweight * binweights[destbin];
-                                                destchan++;
-                                            }
-                                        } else {
-                                            bweight = weight1 * weight2 / freqchannels;
-                                            destchan = xmacstart;
-                                            for (int l = 0; l < xmacstridelength; l++) {
-                                                destbin = scratchspace->bins[fftsubloop][f][destchan];
-                                                //cindex = resultindex + (scratchspace->bins[freqindex][destchan]*config->getBNumPolProducts(procslots[index].configindex,j,localfreqindex) + p)*(freqchannels+1) + destchan;
-                                                cindex = resultindex + (destbin * config->getBNumPolProducts(
-                                                        procslots[index].configindex, j, localfreqindex) + p) *
-                                                                       xmacstridelength + l;
-                                                scratchspace->threadcrosscorrs[cindex].re += scratchspace->pulsarscratchspace[l].re;
-                                                scratchspace->threadcrosscorrs[cindex].im += scratchspace->pulsarscratchspace[l].im;
-                                                scratchspace->baselineweight[f][destbin][j][p] += bweight;
-                                                destchan++;
-                                            }
-                                        }
-                                    } else {
-                                        //not pulsar binning, so this is nice and simple - just cross multiply accumulate
-                                        status = vectorAddProduct_cf32(vis1, vis2,
-                                                                       &(scratchspace->threadcrosscorrs[resultindex +
-                                                                                                        p *
-                                                                                                        xmacstridelength]),
-                                                                       xmacstridelength);
-
-                                        if (status != vecNoErr)
-                                            csevere << startl << "Error trying to xmac baseline " << j << " frequency "
-                                                    << localfreqindex << " polarisation product " << p << ", status "
-                                                    << status << endl;
-                                    }
+                                    if (status != vecNoErr)
+                                        csevere << startl << "Error trying to xmac baseline " << j << " frequency "
+                                                << localfreqindex << " polarisation product " << p << ", status "
+                                                << status << endl;
                                 }
                             }
                             if (procslots[index].pulsarbin && !procslots[index].scrunchoutput)

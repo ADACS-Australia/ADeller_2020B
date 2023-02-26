@@ -7,6 +7,7 @@
 #include <cufftXt.h>
 #include "mode.h"
 #include <mutex>
+#include <chrono>
 
 class Configuration;
 
@@ -38,7 +39,11 @@ protected:
 
     cuFloatComplex *complexunpacked_gpu;
     cuFloatComplex *fftd_gpu;
+    cuFloatComplex *conj_fftd_gpu;
+    cuFloatComplex *temp_autocorrelations_gpu;
     cf32* fftd_gpu_out;
+    cf32* conj_fftd_gpu_out;
+    cf32* temp_autocorrelations_gpu_out;
 
     size_t estimatedbytes_gpu;
 
@@ -69,6 +74,8 @@ private:
 
     bool is_dataweight_valid(int subloopindex);
     bool is_data_valid(int index, int subloopindex);
+
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::system_clock::duration> constructor_time;
 };
 
 #endif
