@@ -661,11 +661,7 @@ __global__ void _gpu_resultsrotatorMultiply(
         return;
     }
 
-    int indices[10];
-
     for (size_t bandindex = 0; bandindex < numrecordedbands; bandindex++) {
-        indices[bandindex] = bandindex;
-
         // Calculate the destination index
         const size_t dataIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
         const size_t autocorrIndex = (bandindex * recordedbandchannels * 3) + channelindex;
@@ -763,30 +759,31 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
                     numrecordedbands
             );
 
-    checkCuda(cudaMemcpyAsync(fftd_gpu_out, this->fftd_gpu,
-                              sizeof(cuFloatComplex) * this->fftchannels * numrecordedbands * cfg_numBufferedFFTs,
-                              cudaMemcpyDeviceToHost, cuStream));
-
-    checkCuda(cudaMemcpyAsync(conj_fftd_gpu_out, this->conj_fftd_gpu,
-                              sizeof(cuFloatComplex) * this->fftchannels * numrecordedbands * cfg_numBufferedFFTs,
-                              cudaMemcpyDeviceToHost, cuStream));
-
     checkCuda(cudaMemcpyAsync(temp_autocorrelations_gpu_out, this->temp_autocorrelations_gpu,
                               sizeof(cuFloatComplex) * numrecordedbands * recordedbandchannels * 3,
                               cudaMemcpyDeviceToHost, cuStream));
 
     checkCuda(cudaStreamSynchronize(cuStream));
 
-//    for (int j = 0; j < numrecordedbands; j++) {
-//        vectorSum_cf32(&temp_autocorrelations_gpu_out[j * recordedbandchannels],
-//                        autocorrelations[0][j],
-//                        recordedbandchannels);
-//    }
+    for (int j = 0; j < numrecordedbands; j++) {
+        vectorCopy_cf32(&temp_autocorrelations_gpu_out[(j * recordedbandchannels * 3)],
+                        autocorrelations[0][j],
+                        recordedbandchannels);
+    }
+
+    if (numrecordedbands > 1) {
+        //if we need to, do the cross-polar autocorrelations
+        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels],
+                        autocorrelations[1][0],
+                        recordedbandchannels);
+
+        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels * 2],
+                        autocorrelations[1][1],
+                        recordedbandchannels);
+    }
 }
 
 void GPUMode::postprocess(int index, int subloopindex) {
-    int status;
-
     if (!validSamples[subloopindex]) {
         return;
     }
@@ -796,17 +793,6 @@ void GPUMode::postprocess(int index, int subloopindex) {
     for (int j = 0; j < numrecordedbands; j++) {
         // For upper sideband bands, normally just need to copy the fftd channels.
         // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-        vectorCopy_cf32(&fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                                 fftoutputs[j][subloopindex],
-                                 recordedbandchannels);
-
-        vectorCopy_cf32(&conj_fftd_gpu_out[(subloopindex * fftchannels * numrecordedbands) + (j * fftchannels)],
-                                 conjfftoutputs[j][subloopindex],
-                                 recordedbandchannels);
-
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[(j * recordedbandchannels * 3)],
-                                 autocorrelations[0][j],
-                                 recordedbandchannels);
 
 
         // At this point in the code the array fftoutputs[j] contains complex-valued voltage spectra with the following properties:
@@ -828,15 +814,6 @@ void GPUMode::postprocess(int index, int subloopindex) {
     }
 
     if (numrecordedbands > 1) {
-        //if we need to, do the cross-polar autocorrelations
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels],
-                        autocorrelations[1][0],
-                        recordedbandchannels);
-
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels * 2],
-                        autocorrelations[1][1],
-                        recordedbandchannels);
-
         //store the weights
         weights[1][0] += dataweight[subloopindex];
         weights[1][1] += dataweight[subloopindex];

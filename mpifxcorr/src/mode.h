@@ -33,6 +33,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <cuComplex.h>
 
 using namespace std;
 
@@ -170,6 +171,7 @@ public:
   * @return Pointer to the FFT'd data (complex 32 bit float)
   */
   inline const cf32* getFreqs(int outputband, int subloopindex) const { return fftoutputs[outputband][subloopindex]; };
+  virtual const cuFloatComplex* getGpuFreqs() const { return nullptr; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product
@@ -178,6 +180,7 @@ public:
   * @return Pointer to the conjugate of the FFT'd data (complex 32 bit float)
   */
   inline const cf32* getConjugatedFreqs(int outputband, int subloopindex) const { return conjfftoutputs[outputband][subloopindex]; }
+  virtual const cuFloatComplex* getGpuConjugatedFreqs() const { return nullptr; };
 
  /**
   * Returns the estimated number of bytes used by the Mode

@@ -63,7 +63,7 @@
 #include <errno.h>
 
 #ifdef USE_CUDA
-#include "gpucore.h"
+#include "gpucore.cuh"
 #endif
 
 void usage(const char *const argv0);

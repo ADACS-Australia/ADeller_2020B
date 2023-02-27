@@ -49,8 +49,8 @@ set(
         src/datastream.h
         src/fxmanager.cpp
         src/fxmanager.h
-        src/gpucore.cpp
-        src/gpucore.h
+        src/gpucore.cu
+        src/gpucore.cuh
         src/gpumode.cu
         src/gpumode.cuh
         src/gpumode_kernels.cuh

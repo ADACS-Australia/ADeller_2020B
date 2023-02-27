@@ -32,6 +32,8 @@ public:
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
+    const cuFloatComplex* getGpuFreqs() const override { return fftd_gpu; }
+    const cuFloatComplex* getGpuConjugatedFreqs() const override { return conj_fftd_gpu; }
 protected:
     int cudaMaxThreadsPerBlock;
     float **unpackedarrays_gpu;
