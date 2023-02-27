@@ -49,18 +49,6 @@ void gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *con
  */
 void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
 
-/**
- * Typesafe allocation of device (GPU) memory using cudaMalloc, checking to
- * ensure that the allocation was successful.
- * @param T     type of memory to allocate
- * @param elems number of elements of type T (NOT bytes!)
- * @return pointer to the allocated memory region */
-template<typename T>
-T *gpu_malloc(const size_t elems) {
-  T *rv;
-  checkCuda(cudaMalloc(&rv, sizeof(T)*elems));
-  return rv;
-}
 
 #endif
 // vim: shiftwidth=2:softtabstop=2:expandtab

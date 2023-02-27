@@ -369,7 +369,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
 
     checkCuda(cudaStreamCreate(&cuStream));
 
-    checkCuda(cudaMalloc(&threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength));
+    checkCuda(cudaMallocAsync(&threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
     checkCuda(cudaMemsetAsync(threadcrosscorrs_gpu, 0, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
     checkCuda(cudaHostRegister(scratchspace->threadcrosscorrs, sizeof(cuFloatComplex) * maxthreadresultlength, cudaHostRegisterPortable));
 
@@ -516,8 +516,8 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
 
                 char* stream1BandIndexes_gpu;
                 char* stream2BandIndexes_gpu;
-                checkCuda(cudaMalloc(&stream1BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs));
-                checkCuda(cudaMalloc(&stream2BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs));
+                checkCuda(cudaMallocAsync(&stream1BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cuStream));
+                checkCuda(cudaMallocAsync(&stream2BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cuStream));
 
                 auto stream1BandIndexes = new char[numPolarisationProducts * numBufferedFFTs];
                 auto stream2BandIndexes = new char[numPolarisationProducts * numBufferedFFTs];
@@ -575,10 +575,6 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                         cuStream
                 );
 
-                checkCuda(cudaMemcpyAsync(scratchspace->threadcrosscorrs, threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cudaMemcpyDeviceToHost, cuStream));
-
-                checkCuda(cudaStreamSynchronize(cuStream));
-
                 checkCuda(cudaHostUnregister(stream1BandIndexes));
                 checkCuda(cudaHostUnregister(stream2BandIndexes));
                 checkCuda(cudaFree(stream1BandIndexes_gpu));
@@ -592,6 +588,10 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                         xmacstridelength;
             }
         }
+
+        checkCuda(cudaMemcpyAsync(scratchspace->threadcrosscorrs, threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cudaMemcpyDeviceToHost, cuStream));
+
+        checkCuda(cudaStreamSynchronize(cuStream));
 
         cout << "processBaseline calls: " << calls << endl;
 

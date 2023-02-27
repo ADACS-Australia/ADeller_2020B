@@ -37,12 +37,12 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
 
-    complexunpacked_gpu = gpu_malloc<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands);
+    checkCuda(cudaMallocAsync(&complexunpacked_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
     estimatedbytes_gpu += sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands;
 
-    fftd_gpu = gpu_malloc<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands);
-    conj_fftd_gpu = gpu_malloc<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands);
-    temp_autocorrelations_gpu = gpu_malloc<cuFloatComplex>(numrecordedbands * recordedbandchannels * 3);
+    checkCuda(cudaMallocAsync(&fftd_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
+    checkCuda(cudaMallocAsync(&conj_fftd_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
+    checkCuda(cudaMallocAsync(&temp_autocorrelations_gpu, sizeof(cuFloatComplex) * numrecordedbands * recordedbandchannels * 3, cuStream));
     fftd_gpu_out = new cf32[fftchannels * cfg_numBufferedFFTs * numrecordedbands];
     conj_fftd_gpu_out = new cf32[fftchannels * cfg_numBufferedFFTs * numrecordedbands];
     temp_autocorrelations_gpu_out = new cf32[numrecordedbands * recordedbandchannels * 3];
@@ -61,7 +61,7 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     estimatedbytes += sizeof(float *) * numrecordedbands;
 
     big_array = nullptr;
-    checkCuda(cudaMalloc(&big_array, sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs));
+    checkCuda(cudaMallocAsync(&big_array, sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cuStream));
     estimatedbytes_gpu += sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs;
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
         for (size_t i = 0; i < numrecordedbands; i++) {
@@ -73,9 +73,9 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     sampleIndexes = new int[cfg_numBufferedFFTs];
     validSamples = new bool[cfg_numBufferedFFTs];
 
-    checkCuda(cudaMalloc(&gSampleIndexes, sizeof(int) * cfg_numBufferedFFTs));
-    checkCuda(cudaMalloc(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs));
-    checkCuda(cudaMalloc(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs));
+    checkCuda(cudaMallocAsync(&gSampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cuStream));
+    checkCuda(cudaMallocAsync(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs, cuStream));
+    checkCuda(cudaMallocAsync(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cuStream));
 
     checkCuda(cudaMemcpyAsync(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
 
@@ -114,14 +114,14 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     checkCufft(cufftSetStream(fft_plan, cuStream));
 
     // littleA/B
-    checkCuda(cudaMalloc(&gInterpolator, sizeof(double) * 3));
+    checkCuda(cudaMallocAsync(&gInterpolator, sizeof(double) * 3, cuStream));
     checkCuda(cudaHostRegister(interpolator, sizeof(double) * 3, cudaHostRegisterPortable));
 
     // precalc
     fracSampleError = new float[cfg_numBufferedFFTs];
     nearestSamples = new int[cfg_numBufferedFFTs];
 
-    checkCuda(cudaMalloc(&gFracSampleError, sizeof(float) * cfg_numBufferedFFTs));
+    checkCuda(cudaMallocAsync(&gFracSampleError, sizeof(float) * cfg_numBufferedFFTs, cuStream));
 
     checkCuda(cudaHostRegister(fracSampleError, sizeof(float) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
 
@@ -836,9 +836,9 @@ void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const s
                            cudaMemcpyHostToDevice));
 }
 
-void *gpu_malloc(const size_t amt) {
+void *gpu_malloc(const size_t amt, cudaStream_t cuStream) {
     void *rv;
-    checkCuda(cudaMalloc(&rv, amt));
+    checkCuda(cudaMallocAsync(&rv, amt, cuStream));
     return rv;
 }
 
