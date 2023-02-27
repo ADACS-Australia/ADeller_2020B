@@ -20,7 +20,8 @@ endif
 
 if WITH_CUDA
 cuda_files = \
-	gpumode.cu
+	gpumode.cu \
+	gpucore.cu
 else
 cuda_files =
 endif
@@ -31,7 +32,6 @@ mpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
 	core.cpp \
-	gpucore.cpp \
 	datastream.cpp \
 	visibility.cpp \
 	configuration.cpp \
@@ -61,7 +61,6 @@ library_include_HEADERS = \
 	fxmanager.h \
 	pcal.h \
 	core.h \
-	gpucore.h \
 	datastream.h \
 	architecture.h \
 	visibility.h \
@@ -74,6 +73,7 @@ library_include_HEADERS = \
 	mode.h \
 	cpumode.h \
 	gpumode.cuh \
+	gpucore.cuh
 	polyco.h \
 	nativemk5.h \
 	watchdog.h \
@@ -97,7 +97,6 @@ libmpifxcorr_a_SOURCES = \
 	mode.cpp \
 	cpumode.cpp \
 	core.cpp \
-	gpucore.cpp \
 	datastream.cpp \
 	polyco.cpp \
 	mk5.cpp \
@@ -138,7 +137,6 @@ neuteredmpifxcorr_SOURCES = \
 	mpifxcorr.cpp \
 	fxmanager.cpp \
 	core.cpp \
-	gpucore.cpp \
 	datastream.cpp \
 	mathutil.cpp \
 	sysutil.cpp \
