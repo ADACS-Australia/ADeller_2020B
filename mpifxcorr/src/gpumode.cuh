@@ -68,7 +68,7 @@ protected:
     float* fracSampleError;
     float* gFracSampleError;
 
-    int* nearestSample;
+    int* nearestSamples;
 private:
 
     cufftHandle fft_plan;
