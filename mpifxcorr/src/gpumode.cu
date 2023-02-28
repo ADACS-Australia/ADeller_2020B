@@ -1,5 +1,3 @@
-#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
-
 #include "gpumode.cuh"
 #include "alert.h"
 #include <cuda_runtime.h>
@@ -132,13 +130,13 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     constructor_time = high_resolution_clock::now();
 }
 
-unsigned long long avg_unpack;
-unsigned long long avg_copyto;
-unsigned long long avg_rotate;
-unsigned long long avg_fft;
-unsigned long long avg_fracrotate;
-unsigned long long avg_postprocess;
-unsigned long long processing_time;
+static unsigned long long avg_unpack;
+static unsigned long long avg_copyto;
+static unsigned long long avg_rotate;
+static unsigned long long avg_fft;
+static unsigned long long avg_fracrotate;
+static unsigned long long avg_postprocess;
+static unsigned long long processing_time;
 
 int calls = 0;
 
@@ -153,16 +151,16 @@ GPUMode::~GPUMode() {
     checkCuda(cudaHostUnregister(temp_autocorrelations_gpu_out));
     checkCuda(cudaHostUnregister(interpolator));
 
-    checkCuda(cudaFree(complexunpacked_gpu));
-    checkCuda(cudaFree(fftd_gpu));
-    checkCuda(cudaFree(conj_fftd_gpu));
-    checkCuda(cudaFree(temp_autocorrelations_gpu));
-    checkCuda(cudaFree(unpackedarrays_gpu[0]));
-    checkCuda(cudaFree(gSampleIndexes));
-    checkCuda(cudaFree(gValidSamples));
-    checkCuda(cudaFree(gUnpackedArraysGpu));
-    checkCuda(cudaFree(gInterpolator));
-    checkCuda(cudaFree(gFracSampleError));
+    checkCuda(cudaFreeAsync(complexunpacked_gpu, cuStream));
+    checkCuda(cudaFreeAsync(fftd_gpu, cuStream));
+    checkCuda(cudaFreeAsync(conj_fftd_gpu, cuStream));
+    checkCuda(cudaFreeAsync(temp_autocorrelations_gpu, cuStream));
+    checkCuda(cudaFreeAsync(unpackedarrays_gpu[0], cuStream));
+    checkCuda(cudaFreeAsync(gSampleIndexes, cuStream));
+    checkCuda(cudaFreeAsync(gValidSamples, cuStream));
+    checkCuda(cudaFreeAsync(gUnpackedArraysGpu, cuStream));
+    checkCuda(cudaFreeAsync(gInterpolator, cuStream));
+    checkCuda(cudaFreeAsync(gFracSampleError, cuStream));
 
     delete[] unpackedarrays_gpu;
     delete[] fftd_gpu_out;
@@ -437,10 +435,10 @@ bool GPUMode::is_data_valid(int index, int subloopindex) {
 }
 
 void GPUMode::process_unpack(int index, int subloopindex) {
-    // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
-    dataweight[subloopindex] = 0.0;
-
     if (!is_data_valid(index, subloopindex)) {
+        // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
+        dataweight[subloopindex] = 0.0;
+
         validSamples[subloopindex] = false;
         return;
     }
@@ -477,7 +475,6 @@ void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock,
                            (static_cast<long long>(offsetns) - static_cast<long long>(datans)) / 1000.0 + fftstartmicrosec -
                            averagedelay;
         nearestSamples[subloopindex] = int(starttime / sampletime + 0.5);
-
 
         double nearestsampletime = nearestSamples[subloopindex] * sampletime;
         fracSampleError[subloopindex] = float(starttime - nearestsampletime);

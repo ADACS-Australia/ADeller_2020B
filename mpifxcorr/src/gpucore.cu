@@ -16,6 +16,14 @@ GPUCore::GPUCore(const int id, Configuration *const conf, int *const dids, MPI_C
     cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
 }
 
+static unsigned long long avg_preprocess;
+static unsigned long long avg_postprocess;
+int core_calls;
+GPUCore::~GPUCore() {
+    cout << "Average core pre: " << avg_preprocess / core_calls << endl;
+    cout << "Average core post: " << avg_postprocess / core_calls << endl;
+}
+
 void GPUCore::loopprocess(int threadid) {
     int perr, numprocessed, startblock, numblocks, lastconfigindex, numpolycos, maxchan, maxpolycos, stadumpchannels, strideplussteplen, maxrotatestrideplussteplength, maxxmaclength, slen;
     double sec;
@@ -238,13 +246,13 @@ __device__ void atomicAddFloatComplex1(cuFloatComplex* a, cuFloatComplex b){
 }
 
 __global__ void _gpu_processBaselineBased(
-        const cuFloatComplex* const freqData,
-        const cuFloatComplex* const conjFreqData,
+        cuFloatComplex** const gpuM1Freqs,
+        cuFloatComplex** const gpuM2Freqs,
         cuFloatComplex* const threadcrosscorrs_gpu,
         const char* const stream1BandIndexes_gpu,
         const char* const stream2BandIndexes_gpu,
-        int xmacstart,
-        int resultindex,
+        int xmacpasses,
+        int numbaselines,
         int xmacstridelength,
         int fftloop,
         int startblock,
@@ -281,24 +289,31 @@ __global__ void _gpu_processBaselineBased(
         return;
     }
 
-    const size_t crosscorrIndex = resultindex + polidx * xmacstridelength + channelindex;
-    const size_t freqIndex = (subloopindex * fftchannels * numrecordedbands) + (stream1BandIndexes_gpu[subloopindex * numPolarisationProducts + polidx] * fftchannels) + channelindex + xmacstart;
-    const size_t conjIndex = (subloopindex * fftchannels * numrecordedbands) + (stream2BandIndexes_gpu[subloopindex * numPolarisationProducts + polidx] * fftchannels) + channelindex + xmacstart;
+    for (auto x = 0; x < xmacpasses; x++) {
+        for (auto j = 0; j < numbaselines; j++) {
+            size_t resultindex = (x * numbaselines + j) * numPolarisationProducts * xmacstridelength;
+            const size_t crosscorrIndex = resultindex + polidx * xmacstridelength + channelindex;
 
-    atomicAddFloatComplex1(&threadcrosscorrs_gpu[crosscorrIndex], cuCmulf(freqData[freqIndex], conjFreqData[conjIndex]));
+            auto xmacstart = x * xmacstridelength;
+
+            const size_t freqIndex = (subloopindex * fftchannels * numrecordedbands) + (stream1BandIndexes_gpu[(subloopindex * numPolarisationProducts * numbaselines) + (j * numPolarisationProducts) + polidx] * fftchannels) + channelindex + xmacstart;
+            const size_t conjIndex = (subloopindex * fftchannels * numrecordedbands) + (stream2BandIndexes_gpu[(subloopindex * numPolarisationProducts * numbaselines) + (j * numPolarisationProducts) + polidx] * fftchannels) + channelindex + xmacstart;
+
+            atomicAddFloatComplex1(&threadcrosscorrs_gpu[crosscorrIndex], cuCmulf(gpuM1Freqs[j][freqIndex], gpuM2Freqs[j][conjIndex]));
+        }
+    }
 }
 
 void GPUCore::processBaselineBased(
-        const cuFloatComplex* freqData,
-        const cuFloatComplex* conjFreqData,
+        cuFloatComplex** gpuM1Freqs,
+        cuFloatComplex** gpuM2Freqs,
         char* stream1BandIndexes_gpu,
         char* stream2BandIndexes_gpu,
         cuFloatComplex* threadcrosscorrs_gpu,
         int xmacstridelength,
         int numPolarisationProducts,
         int numBufferedFFTs,
-        int xmacstart,
-        int resultindex,
+        int xmacpasses,
         int fftloop,
         int startblock,
         int numblocks,
@@ -326,13 +341,13 @@ void GPUCore::processBaselineBased(
     _gpu_processBaselineBased<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numPolarisationProducts,
                                                                               fftchannels_block), 0, cuStream>>>
             (
-                    freqData,
-                    conjFreqData,
+                    gpuM1Freqs,
+                    gpuM2Freqs,
                     threadcrosscorrs_gpu,
                     stream1BandIndexes_gpu,
                     stream2BandIndexes_gpu,
-                    xmacstart,
-                    resultindex,
+                    xmacpasses,
+                    numbaselines,
                     xmacstridelength,
                     fftloop,
                     startblock,
@@ -345,33 +360,25 @@ void GPUCore::processBaselineBased(
 void
 GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, Mode **modes, Polyco *currentpolyco,
                         threadscratchspace *scratchspace) {
-    static int nth_call = 0;
-    ++nth_call;
-    std::cout << "called GPUCore::processgpudata for the " << nth_call << " time, index: " << index << ", startblock: "
+    ++core_calls;
+
+    auto start = high_resolution_clock::now();
+
+    std::cout << "called GPUCore::processgpudata for the " << core_calls << " time, index: " << index << ", startblock: "
               << startblock << ", numblocks: " << numblocks << std::endl;
 
 #ifndef NEUTERED_DIFX
     int status, i, numfftloops, numfftsprocessed;
-    int resultindex, ds1index, ds2index, binloop;
+    int binloop;
     int xcblockcount, maxxcblocks, xcshiftcount;
     int acblockcount, maxacblocks, acshiftcount;
-    int xmacstridelength, xmacpasses, xmacstart, localfreqindex;
+    int xmacstridelength, localfreqindex;
     double blockns;
     f32 bweight;
-    const Mode *m1, *m2;
     int numBufferedFFTs;
     float weight1, weight2;
 #endif
     int perr;
-
-    cudaStream_t cuStream;
-    cuFloatComplex* threadcrosscorrs_gpu;
-
-    checkCuda(cudaStreamCreate(&cuStream));
-
-    checkCuda(cudaMallocAsync(&threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
-    checkCuda(cudaMemsetAsync(threadcrosscorrs_gpu, 0, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
-    checkCuda(cudaHostRegister(scratchspace->threadcrosscorrs, sizeof(cuFloatComplex) * maxthreadresultlength, cudaHostRegisterPortable));
 
 //following statement used to cut all all processing for "Neutered DiFX"
 #ifndef NEUTERED_DIFX
@@ -468,9 +475,41 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                  << maxacblocks * blockns << " ns" << endl;
     }
 
+    cudaStream_t cuStream;
+    cuFloatComplex* threadcrosscorrs_gpu;
+
+    checkCuda(cudaStreamCreate(&cuStream));
+
+    checkCuda(cudaMallocAsync(&threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
+    checkCuda(cudaMemsetAsync(threadcrosscorrs_gpu, 0, sizeof(cuFloatComplex) * maxthreadresultlength, cuStream));
+    checkCuda(cudaHostRegister(scratchspace->threadcrosscorrs, sizeof(cuFloatComplex) * maxthreadresultlength, cudaHostRegisterPortable));
+
+    cuFloatComplex** gpuM1Freqs;
+    cuFloatComplex** gpuM2Freqs;
+    checkCuda(cudaMallocAsync(&gpuM1Freqs, sizeof(cuFloatComplex*) * numbaselines, cuStream));
+    checkCuda(cudaMallocAsync(&gpuM2Freqs, sizeof(cuFloatComplex*) * numbaselines, cuStream));
+
+    auto numPolarisationProducts = config->getBNumPolProducts(procslots[index].configindex, 0, 0);
+
+    char* stream1BandIndexes_gpu;
+    char* stream2BandIndexes_gpu;
+    checkCuda(cudaMallocAsync(&stream1BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs * numbaselines, cuStream));
+    checkCuda(cudaMallocAsync(&stream2BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs * numbaselines, cuStream));
+
+    auto stream1BandIndexes = new char[numPolarisationProducts * numBufferedFFTs * numbaselines];
+    auto stream2BandIndexes = new char[numPolarisationProducts * numBufferedFFTs * numbaselines];
+
+    checkCuda(cudaHostRegister(stream1BandIndexes, numPolarisationProducts * numBufferedFFTs * numbaselines, cudaHostRegisterPortable));
+    checkCuda(cudaHostRegister(stream2BandIndexes, numPolarisationProducts * numBufferedFFTs * numbaselines, cudaHostRegisterPortable));
+
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+
+    avg_preprocess += duration.count();
+
     // process each chunk of FFTs in turn
     for (int fftloop = 0; fftloop < numfftloops; fftloop++) {
-        auto start = high_resolution_clock::now();
+        start = high_resolution_clock::now();
 
         numfftsprocessed = 0;   // not strictly needed, but to prevent compiler warning
 
@@ -487,113 +526,85 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
             t.join();
         }
 
-        auto stop = high_resolution_clock::now();
-        auto duration = duration_cast<microseconds>(stop - start);
+        stop = high_resolution_clock::now();
+        duration = duration_cast<microseconds>(stop - start);
         cout << "total processing: " << duration.count() << endl;
         start = high_resolution_clock::now();
-
-        //do the baseline-based processing for this batch of FFT chunks
-        resultindex = 0;
-
-        int calls = 0;
 
         //All baseline freq indices into the freq table are determined by the *first* datastream
         //in the event of correlating USB with LSB data.  Hence all Nyquist offsets/channels etc
         //are determined by the freq corresponding to the *first* datastream
-        xmacpasses = config->getNumXmacStrides(procslots[index].configindex, 0);
-        for (int x = 0; x < xmacpasses; x++) {
-            xmacstart = x * xmacstridelength;
+        auto xmacpasses = config->getNumXmacStrides(procslots[index].configindex, 0);
 
-            //do the cross multiplication - gets messy for the pulsar binning
-            for (int j = 0; j < numbaselines; j++) {
-                //get the two modes that contribute to this baseline
-                ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-                ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-                m1 = modes[ds1index];
-                m2 = modes[ds2index];
+        //do the cross multiplication - gets messy for the pulsar binning
+        for (int j = 0; j < numbaselines; j++) {
+            //get the two modes that contribute to this baseline
+            auto ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
+            auto ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+            auto m1 = modes[ds1index];
+            auto m2 = modes[ds2index];
 
-                auto numPolarisationProducts = config->getBNumPolProducts(procslots[index].configindex, j, 0);
+            auto f = m1->getGpuFreqs();
+            auto c = m2->getGpuConjugatedFreqs();
+            checkCuda(cudaMemcpyAsync(&gpuM1Freqs[j], &f, sizeof(cuFloatComplex*), cudaMemcpyHostToDevice, cuStream));
+            checkCuda(cudaMemcpyAsync(&gpuM2Freqs[j], &c, sizeof(cuFloatComplex*), cudaMemcpyHostToDevice, cuStream));
 
-                char* stream1BandIndexes_gpu;
-                char* stream2BandIndexes_gpu;
-                checkCuda(cudaMallocAsync(&stream1BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cuStream));
-                checkCuda(cudaMallocAsync(&stream2BandIndexes_gpu, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cuStream));
+            if (numPolarisationProducts != config->getBNumPolProducts(procslots[index].configindex, j, 0)) {
+                NOT_SUPPORTED("Different values for numPolarisationProducts");
+            }
 
-                auto stream1BandIndexes = new char[numPolarisationProducts * numBufferedFFTs];
-                auto stream2BandIndexes = new char[numPolarisationProducts * numBufferedFFTs];
+            //do the baseline-based processing for this batch of FFT chunks
+            for (int fftsubloop = 0; fftsubloop < numBufferedFFTs; fftsubloop++) {
+                i = fftloop * numBufferedFFTs + fftsubloop + startblock;
+                if (i >= startblock + numblocks)
+                    break; //may not have to fully complete last fftloop
 
-                checkCuda(cudaHostRegister(stream1BandIndexes, numPolarisationProducts * numBufferedFFTs, cudaHostRegisterPortable));
-                checkCuda(cudaHostRegister(stream2BandIndexes, numPolarisationProducts * numBufferedFFTs, cudaHostRegisterPortable));
+                //add the desired results into the resultsbuffer, for each polarisation pair [and pulsar bin]
+                //loop through each polarisation for this frequency
+                for (int p = 0; p < numPolarisationProducts; p++) {
+                    stream1BandIndexes[(fftsubloop * numPolarisationProducts * numbaselines) + (j * numPolarisationProducts) + p] =
+                            config->getBDataStream1BandIndex(
+                                    procslots[index].configindex,
+                                    j,
+                                    0,
+                                    p
+                            );
 
-                //do the baseline-based processing for this batch of FFT chunks
-                for (int fftsubloop = 0; fftsubloop < numBufferedFFTs; fftsubloop++) {
-                    i = fftloop * numBufferedFFTs + fftsubloop + startblock;
-                    if (i >= startblock + numblocks)
-                        break; //may not have to fully complete last fftloop
-
-                    //add the desired results into the resultsbuffer, for each polarisation pair [and pulsar bin]
-                    //loop through each polarisation for this frequency
-                    for (int p = 0; p < numPolarisationProducts; p++) {
-                        stream1BandIndexes[fftsubloop * numPolarisationProducts + p] =
-                                config->getBDataStream1BandIndex(
-                                        procslots[index].configindex,
-                                        j,
-                                        0,
-                                        p
-                                );
-
-                        stream2BandIndexes[fftsubloop * numPolarisationProducts + p] =
-                                config->getBDataStream2BandIndex(
-                                        procslots[index].configindex,
-                                        j,
-                                        0,
-                                        p
-                                );
-                    }
+                    stream2BandIndexes[(fftsubloop * numPolarisationProducts * numbaselines) + (j * numPolarisationProducts) + p] =
+                            config->getBDataStream2BandIndex(
+                                    procslots[index].configindex,
+                                    j,
+                                    0,
+                                    p
+                            );
                 }
-
-                checkCuda(cudaMemcpyAsync(stream1BandIndexes_gpu, stream1BandIndexes, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
-                checkCuda(cudaMemcpyAsync(stream2BandIndexes_gpu, stream2BandIndexes, sizeof(char) * numPolarisationProducts * numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
-
-                calls++;
-                processBaselineBased(
-                        m1->getGpuFreqs(),
-                        m2->getGpuConjugatedFreqs(),
-                        stream1BandIndexes_gpu,
-                        stream2BandIndexes_gpu,
-                        threadcrosscorrs_gpu,
-                        xmacstridelength,
-                        numPolarisationProducts,
-                        numBufferedFFTs,
-                        xmacstart,
-                        resultindex,
-                        fftloop,
-                        startblock,
-                        numblocks,
-                        config->getFNumChannels(0) * 2,
-                        config->getDNumRecordedBands(0, 0),
-                        cuStream
-                );
-
-                checkCuda(cudaHostUnregister(stream1BandIndexes));
-                checkCuda(cudaHostUnregister(stream2BandIndexes));
-                checkCuda(cudaFree(stream1BandIndexes_gpu));
-                checkCuda(cudaFree(stream2BandIndexes_gpu));
-
-                delete[] stream1BandIndexes;
-                delete[] stream2BandIndexes;
-
-                resultindex +=
-                        config->getBNumPolProducts(procslots[index].configindex, j, 0) *
-                        xmacstridelength;
             }
         }
+
+        checkCuda(cudaMemcpyAsync(stream1BandIndexes_gpu, stream1BandIndexes, sizeof(char) * numPolarisationProducts * numBufferedFFTs * numbaselines, cudaMemcpyHostToDevice, cuStream));
+        checkCuda(cudaMemcpyAsync(stream2BandIndexes_gpu, stream2BandIndexes, sizeof(char) * numPolarisationProducts * numBufferedFFTs * numbaselines, cudaMemcpyHostToDevice, cuStream));
+
+        processBaselineBased(
+                gpuM1Freqs,
+                gpuM2Freqs,
+                stream1BandIndexes_gpu,
+                stream2BandIndexes_gpu,
+                threadcrosscorrs_gpu,
+                xmacstridelength,
+                numPolarisationProducts,
+                numBufferedFFTs,
+                xmacpasses,
+                fftloop,
+                startblock,
+                numblocks,
+                config->getFNumChannels(0) * 2,
+                config->getDNumRecordedBands(0, 0),
+                cuStream
+        );
 
         checkCuda(cudaMemcpyAsync(scratchspace->threadcrosscorrs, threadcrosscorrs_gpu, sizeof(cuFloatComplex) * maxthreadresultlength, cudaMemcpyDeviceToHost, cuStream));
 
         checkCuda(cudaStreamSynchronize(cuStream));
-
-        cout << "processBaseline calls: " << calls << endl;
 
         stop = high_resolution_clock::now();
         duration = duration_cast<microseconds>(stop - start);
@@ -635,10 +646,10 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                         for (int j = 0; j < numbaselines; j++) {
                             localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, j, f);
                             if (localfreqindex >= 0) {
-                                ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
-                                ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
-                                m1 = modes[ds1index];
-                                m2 = modes[ds2index];
+                                auto ds1index = config->getBOrderedDataStream1Index(procslots[index].configindex, j);
+                                auto ds2index = config->getBOrderedDataStream2Index(procslots[index].configindex, j);
+                                auto m1 = modes[ds1index];
+                                auto m2 = modes[ds2index];
                                 for (int p = 0; p < config->getBNumPolProducts(procslots[index].configindex, j,
                                                                                localfreqindex); p++) {
                                     int ds1recordbandindex, ds2recordbandindex;
@@ -674,7 +685,17 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
         cout << "baseline weight: " << duration.count() << endl;
     }
 
-    checkCuda(cudaFree(threadcrosscorrs_gpu));
+    start = high_resolution_clock::now();
+
+    checkCuda(cudaHostUnregister(stream1BandIndexes));
+    checkCuda(cudaHostUnregister(stream2BandIndexes));
+    checkCuda(cudaFreeAsync(stream1BandIndexes_gpu, cuStream));
+    checkCuda(cudaFreeAsync(stream2BandIndexes_gpu, cuStream));
+
+    delete[] stream1BandIndexes;
+    delete[] stream2BandIndexes;
+
+    checkCuda(cudaFreeAsync(threadcrosscorrs_gpu, cuStream));
     checkCuda(cudaHostUnregister(scratchspace->threadcrosscorrs));
     checkCuda(cudaStreamDestroy(cuStream));
 
@@ -705,7 +726,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
             for (int i = 0; i < numbaselines; i++) {
                 localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, i, f);
                 if (localfreqindex >= 0) {
-                    resultindex = config->getCoreResultBWeightOffset(procslots[index].configindex, f, i) * 2;
+                    auto resultindex = config->getCoreResultBWeightOffset(procslots[index].configindex, f, i) * 2;
                     for (int b = 0; b < binloop; b++) {
                         for (int j = 0;
                              j < config->getBNumPolProducts(procslots[index].configindex, i, localfreqindex); j++) {
@@ -719,7 +740,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                 for (int i = 0; i < numbaselines; i++) {
                     localfreqindex = config->getBLocalFreqIndex(procslots[index].configindex, i, f);
                     if (localfreqindex >= 0) {
-                        resultindex = config->getCoreResultBShiftDecorrOffset(procslots[index].configindex, f, i) * 2;
+                        auto resultindex = config->getCoreResultBShiftDecorrOffset(procslots[index].configindex, f, i) * 2;
                         for (int s = 0; s < model->getNumPhaseCentres(procslots[index].offsets[0]); s++) {
                             procslots[index].floatresults[resultindex] += scratchspace->baselineshiftdecorr[f][i][s];
                             resultindex++;
@@ -753,5 +774,10 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
     if (perr != 0)
         csevere << startl << "PROCESSTHREAD " << mpiid << "/" << threadid << " error trying unlock mutex " << index
                 << endl;
+
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+
+    avg_postprocess += duration.count();
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab

@@ -8,6 +8,7 @@
 class GPUCore : public Core {
 public:
   GPUCore(const int id, Configuration *const conf, int *const dids, MPI_Comm rcomm);
+  ~GPUCore();
 
   virtual void loopprocess(int threadid);
 
@@ -21,16 +22,15 @@ protected:
 
 private:
   void processBaselineBased(
-          const cuFloatComplex* freqData,
-          const cuFloatComplex* conjFreqData,
+          cuFloatComplex** gpuM1Freqs,
+          cuFloatComplex** gpuM2Freqs,
           char* stream1BandIndexes_gpu,
           char* stream2BandIndexes_gpu,
           cuFloatComplex* threadcrosscorrs_gpu,
           int xmacstridelength,
           int numPolarisationProducts,
           int numBufferedFFTs,
-          int xmacstart,
-          int resultindex,
+          int xmacpasses,
           int fftloop,
           int startblock,
           int numblocks,

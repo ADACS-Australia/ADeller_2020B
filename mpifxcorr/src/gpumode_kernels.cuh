@@ -50,5 +50,7 @@ void gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *con
 void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
 
 
+#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
+
 #endif
 // vim: shiftwidth=2:softtabstop=2:expandtab
