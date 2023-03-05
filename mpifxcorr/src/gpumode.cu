@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <cufftXt.h>
 
-#include "gpumode_kernels.cuh"
 #include <chrono>
 #include <omp.h>
 #include <thread>
@@ -35,55 +34,50 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
 
-    checkCuda(cudaMallocAsync(&complexunpacked_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
-    estimatedbytes_gpu += sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands;
+    complexunpacked_gpu = new GpuMemHelper<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream, true);
+    estimatedbytes_gpu += complexunpacked_gpu->size();
 
-    checkCuda(cudaMallocAsync(&fftd_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
-    checkCuda(cudaMallocAsync(&conj_fftd_gpu, sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream));
-    checkCuda(cudaMallocAsync(&temp_autocorrelations_gpu, sizeof(cuFloatComplex) * numrecordedbands * recordedbandchannels * 3, cuStream));
-    fftd_gpu_out = new cf32[fftchannels * cfg_numBufferedFFTs * numrecordedbands];
-    conj_fftd_gpu_out = new cf32[fftchannels * cfg_numBufferedFFTs * numrecordedbands];
-    temp_autocorrelations_gpu_out = new cf32[numrecordedbands * recordedbandchannels * 3];
-    estimatedbytes_gpu += sizeof(cuFloatComplex) * fftchannels * cfg_numBufferedFFTs * numrecordedbands;
+    fftd_gpu = new GpuMemHelper<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream, true);
+    estimatedbytes_gpu += fftd_gpu->size();
 
-    unpackedarrays_cpu = new float *[numrecordedbands * cfg_numBufferedFFTs];
-    float *big_array = new float[unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs];
+    conj_fftd_gpu = new GpuMemHelper<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream, true);
+    estimatedbytes_gpu += conj_fftd_gpu->size();
+
+    temp_autocorrelations_gpu = new GpuMemHelper<cuFloatComplex>(numrecordedbands * recordedbandchannels * 3, cuStream);
+    estimatedbytes_gpu += temp_autocorrelations_gpu->size();
+
+    unpackedarrays_gpu = new GpuMemHelper<float*>(numrecordedbands * cfg_numBufferedFFTs, cuStream);
+    unpackeddata_gpu = new GpuMemHelper<float>(unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cuStream);
+
+    // Need to make sure that this allocation has completed before we try to access the data
+    unpackeddata_gpu->sync();
+
     for (int j = 0; j < cfg_numBufferedFFTs; j++) {
         for (size_t i = 0; i < numrecordedbands; i++) {
-            unpackedarrays_cpu[(j * numrecordedbands) + i] =
-                    big_array + (((j * numrecordedbands) + i) * unpackedarrays_elem_count);
+            unpackedarrays_gpu->ptr()[(j * numrecordedbands) + i] =
+                    unpackeddata_gpu->ptr() + (((j * numrecordedbands) + i) * unpackedarrays_elem_count);
         }
     }
 
-    unpackedarrays_gpu = new float*[numrecordedbands * cfg_numBufferedFFTs];
-    estimatedbytes += sizeof(float *) * numrecordedbands;
+    estimatedbytes_gpu += unpackedarrays_gpu->size();
+    estimatedbytes_gpu += unpackeddata_gpu->size();
 
-    big_array = nullptr;
-    checkCuda(cudaMallocAsync(&big_array, sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cuStream));
-    estimatedbytes_gpu += sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs;
-    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
-        for (size_t i = 0; i < numrecordedbands; i++) {
-            unpackedarrays_gpu[(j * numrecordedbands) + i] =
-                    big_array + (((j * numrecordedbands) + i) * unpackedarrays_elem_count);
-        }
+    // Copy the unpacked gpu arrays to the device - these won't change again
+    unpackedarrays_gpu->copyToDevice();
+
+    gSampleIndexes = new GpuMemHelper<int>(cfg_numBufferedFFTs, cuStream);
+    gValidSamples = new GpuMemHelper<bool>(cfg_numBufferedFFTs, cuStream);
+    gInterpolator = new GpuMemHelper<double>(interpolator, 3, cuStream);
+    gFracSampleError = new GpuMemHelper<float>(cfg_numBufferedFFTs, cuStream);
+
+    gLoFreqs = new GpuMemHelper<double>(numrecordedfreqs, cuStream);
+
+    // Copy the lofreq values to the GPU
+    for (auto i = 0; i < numrecordedfreqs; i++) {
+        gLoFreqs->ptr()[i] = config->getDRecordedFreq(configindex, datastreamindex, i);
     }
 
-    sampleIndexes = new int[cfg_numBufferedFFTs];
-    validSamples = new bool[cfg_numBufferedFFTs];
-
-    checkCuda(cudaMallocAsync(&gSampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cuStream));
-    checkCuda(cudaMallocAsync(&gValidSamples, sizeof(bool) * cfg_numBufferedFFTs, cuStream));
-    checkCuda(cudaMallocAsync(&gUnpackedArraysGpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cuStream));
-
-    checkCuda(cudaMemcpyAsync(gUnpackedArraysGpu, unpackedarrays_gpu, sizeof(float*) * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
-
-    // Register host ram used to copy data to gpu
-    checkCuda(cudaHostRegister(unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(fftd_gpu_out, sizeof(cf32) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(conj_fftd_gpu_out, sizeof(cf32) * fftchannels * cfg_numBufferedFFTs * numrecordedbands, cudaHostRegisterPortable));
-    checkCuda(cudaHostRegister(temp_autocorrelations_gpu_out, sizeof(cf32) * numrecordedbands * recordedbandchannels * 3, cudaHostRegisterPortable));
+    gLoFreqs->copyToDevice();
 
     int n[] = {fftchannels};
     int istride = 1;
@@ -111,17 +105,9 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     );
     checkCufft(cufftSetStream(fft_plan, cuStream));
 
-    // littleA/B
-    checkCuda(cudaMallocAsync(&gInterpolator, sizeof(double) * 3, cuStream));
-    checkCuda(cudaHostRegister(interpolator, sizeof(double) * 3, cudaHostRegisterPortable));
 
     // precalc
-    fracSampleError = new float[cfg_numBufferedFFTs];
     nearestSamples = new int[cfg_numBufferedFFTs];
-
-    checkCuda(cudaMallocAsync(&gFracSampleError, sizeof(float) * cfg_numBufferedFFTs, cuStream));
-
-    checkCuda(cudaHostRegister(fracSampleError, sizeof(float) * cfg_numBufferedFFTs, cudaHostRegisterPortable));
 
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
@@ -143,33 +129,19 @@ int calls = 0;
 GPUMode::~GPUMode() {
     auto start = high_resolution_clock::now();
 
-    checkCuda(cudaHostUnregister(unpackedarrays_cpu[0]));
-    checkCuda(cudaHostUnregister(sampleIndexes));
-    checkCuda(cudaHostUnregister(validSamples));
-    checkCuda(cudaHostUnregister(fftd_gpu_out));
-    checkCuda(cudaHostUnregister(conj_fftd_gpu_out));
-    checkCuda(cudaHostUnregister(temp_autocorrelations_gpu_out));
-    checkCuda(cudaHostUnregister(interpolator));
+    delete complexunpacked_gpu;
+    delete fftd_gpu;
+    delete conj_fftd_gpu;
+    delete temp_autocorrelations_gpu;
+    delete unpackedarrays_gpu;
+    delete unpackeddata_gpu;
 
-    checkCuda(cudaFreeAsync(complexunpacked_gpu, cuStream));
-    checkCuda(cudaFreeAsync(fftd_gpu, cuStream));
-    checkCuda(cudaFreeAsync(conj_fftd_gpu, cuStream));
-    checkCuda(cudaFreeAsync(temp_autocorrelations_gpu, cuStream));
-    checkCuda(cudaFreeAsync(unpackedarrays_gpu[0], cuStream));
-    checkCuda(cudaFreeAsync(gSampleIndexes, cuStream));
-    checkCuda(cudaFreeAsync(gValidSamples, cuStream));
-    checkCuda(cudaFreeAsync(gUnpackedArraysGpu, cuStream));
-    checkCuda(cudaFreeAsync(gInterpolator, cuStream));
-    checkCuda(cudaFreeAsync(gFracSampleError, cuStream));
+    delete gSampleIndexes;
+    delete gValidSamples;
+    delete gInterpolator;
+    delete gFracSampleError;
 
-    delete[] unpackedarrays_gpu;
-    delete[] fftd_gpu_out;
-    delete[] conj_fftd_gpu_out;
-    delete[] temp_autocorrelations_gpu_out;
-    delete[] sampleIndexes;
-    delete[] validSamples;
     delete[] nearestSamples;
-    delete[] fracSampleError;
 
     checkCufft(cufftDestroy(fft_plan));
     checkCuda(cudaStreamDestroy(cuStream));
@@ -211,16 +183,14 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
         NOT_SUPPORTED("fringerotationorder = " + to_string(fringerotationorder));
     }
 
-    if (1 != numrecordedfreqs) {
-        NOT_SUPPORTED("a value for 'numrecordedfreqs' other than 1");
-    }
-
     if (usedouble) {
         NOT_SUPPORTED("usedouble branch");
     }
 
-    if (recordedfreqlooffsets[0] > 0.0 || recordedfreqlooffsets[0] < 0.0) {
-        NOT_SUPPORTED("lo offsets");
+    for (auto i = 0; i < numrecordedfreqs; i++) {
+        if (recordedfreqlooffsets[i] > 0.0 || recordedfreqlooffsets[i] < 0.0) {
+            NOT_SUPPORTED("lo offsets");
+        }
     }
 
     if (usecomplex && usedouble) {
@@ -250,10 +220,10 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     auto start = high_resolution_clock::now();
 
     // Reset the autocorrelations
-    checkCuda(cudaMemsetAsync(temp_autocorrelations_gpu, 0, sizeof(cf32) * numrecordedbands * recordedbandchannels * 3, cuStream));
+    checkCuda(cudaMemsetAsync(temp_autocorrelations_gpu->gpuPtr(), 0, sizeof(cf32) * numrecordedbands * recordedbandchannels * 3, cuStream));
 
     // Update the interpolator
-    checkCuda(cudaMemcpyAsync(gInterpolator, interpolator, sizeof(double) * 3, cudaMemcpyHostToDevice, cuStream));
+    gInterpolator->copyToDevice();
 
     calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
@@ -274,11 +244,11 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     start = high_resolution_clock::now();
 
     // Copy the data to the gpu
-    checkCuda(cudaMemcpyAsync(unpackedarrays_gpu[0], unpackedarrays_cpu[0], sizeof(float) * unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    unpackeddata_gpu->copyToDevice();
 
     // We need to copy the sample indexes to the gpu
-    checkCuda(cudaMemcpyAsync(gSampleIndexes, sampleIndexes, sizeof(int) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
-    checkCuda(cudaMemcpyAsync(gValidSamples, validSamples, sizeof(bool) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    gSampleIndexes->copyToDevice();
+    gValidSamples->copyToDevice();
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
@@ -291,7 +261,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     start = high_resolution_clock::now();
 
     // Run the fringe rotation
-    complexRotate(fftloop, numBufferedFFTs, startblock, numblocks);
+    fringeRotation(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
@@ -316,7 +286,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     start = high_resolution_clock::now();
 
     // do the frac sample correct (+ phase shifting if applicable, + fringe rotate if its post-f)
-    rotateResults(fftloop, numBufferedFFTs, startblock, numblocks);
+    fractionalRotation(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
@@ -340,22 +310,23 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // This synchronise is really needed, as we need the GPU processing/memcpys to finish before we read the result
     // data in to the autocorrelation vectors
-    checkCuda(cudaStreamSynchronize(cuStream));
+    temp_autocorrelations_gpu->sync();
 
     // Copy over the autocorrs
     for (int j = 0; j < numrecordedbands; j++) {
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[(j * recordedbandchannels * 3)],
-                        autocorrelations[0][j],
-                        recordedbandchannels);
+        vectorCopy_cf32(
+                reinterpret_cast<const cf32*>(&temp_autocorrelations_gpu->ptr()[(j * recordedbandchannels * 3)]),
+                autocorrelations[0][j],
+                recordedbandchannels);
     }
 
     if (numrecordedbands > 1) {
         //if we need to, do the cross-polar autocorrelations
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels],
+        vectorCopy_cf32(reinterpret_cast<const cf32*>(&temp_autocorrelations_gpu->ptr()[recordedbandchannels]),
                         autocorrelations[1][0],
                         recordedbandchannels);
 
-        vectorCopy_cf32(&temp_autocorrelations_gpu_out[recordedbandchannels * 2],
+        vectorCopy_cf32(reinterpret_cast<const cf32*>(&temp_autocorrelations_gpu->ptr()[recordedbandchannels * 2]),
                         autocorrelations[1][1],
                         recordedbandchannels);
     }
@@ -439,11 +410,11 @@ void GPUMode::process_unpack(int index, int subloopindex) {
         // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
         dataweight[subloopindex] = 0.0;
 
-        validSamples[subloopindex] = false;
+        gValidSamples->ptr()[subloopindex] = false;
         return;
     }
 
-    validSamples[subloopindex] = true;
+    gValidSamples->ptr()[subloopindex] = true;
 
     if (nearestSamples[subloopindex] == -1) {
         nearestSamples[subloopindex] = 0;
@@ -452,10 +423,10 @@ void GPUMode::process_unpack(int index, int subloopindex) {
         //need to unpack more data
         dataweight[subloopindex] = unpack(nearestSamples[subloopindex], subloopindex);
 
-    sampleIndexes[subloopindex] = nearestSamples[subloopindex] - unpackstartsamples;
+    gSampleIndexes->ptr()[subloopindex] = nearestSamples[subloopindex] - unpackstartsamples;
 
     if (!is_dataweight_valid(subloopindex)) {
-        validSamples[subloopindex] = false;
+        gValidSamples->ptr()[subloopindex] = false;
     }
 }
 
@@ -477,21 +448,23 @@ void GPUMode::calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock,
         nearestSamples[subloopindex] = int(starttime / sampletime + 0.5);
 
         double nearestsampletime = nearestSamples[subloopindex] * sampletime;
-        fracSampleError[subloopindex] = float(starttime - nearestsampletime);
+        gFracSampleError->ptr()[subloopindex] = float(starttime - nearestsampletime);
     }
 
-    checkCuda(cudaMemcpyAsync(gFracSampleError, fracSampleError, sizeof(float) * cfg_numBufferedFFTs, cudaMemcpyHostToDevice, cuStream));
+    // Start copying the fracSampleErrors to the gpu
+    gFracSampleError->copyToDevice();
 }
 
-__global__ void _gpu_complexrotatorMultiply(
+__global__ void _gpu_fringeRotation(
         cuFloatComplex* const dest,
         float **const src,
         const double* const interpolator,
         const int* const sampleIndexes,
         const bool* const validSamples,
-        double lofreq,
+        const double* const lofreqs,
         double sampletime,
         double recordedfreqlooffset,
+        int numrecordedfreqs,
         int fftloop,
         int startblock,
         int numblocks,
@@ -558,22 +531,24 @@ __global__ void _gpu_complexrotatorMultiply(
 
     double a = d2 - d0;
     double b = d0 + (d1 - (a * 0.5 + d0)) / 3.0;
-    
-    // Calculate BigA/B
-    double bigAval = a * lofreq / fftchannels - sampletime * 1.e-6 * recordedfreqlooffset;
-    double bigBval = b * lofreq;
 
-    // Calculate
-    double bigB_reduced = bigBval - int(bigBval);
-    double exponent = (bigAval * channelindex + bigB_reduced);
-    exponent -= int(exponent);
-    cuFloatComplex cr;
-    sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
-    cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
-    dest[destIndex] = cuCmulf(c, cr);
+    for (size_t i = 0; i < numrecordedfreqs; i++) {
+        // Calculate BigA/B
+        double bigAval = a * lofreqs[i] / fftchannels - sampletime * 1.e-6 * recordedfreqlooffset;
+        double bigBval = b * lofreqs[i];
+
+        // Calculate
+        double bigB_reduced = bigBval - int(bigBval);
+        double exponent = (bigAval * channelindex + bigB_reduced);
+        exponent -= int(exponent);
+        cuFloatComplex cr;
+        sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
+        cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
+        dest[destIndex] = cuCmulf(c, cr);
+    }
 }
 
-void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+void GPUMode::fringeRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
 
     // At this point we have
     // * Unpacked data on GPU
@@ -599,21 +574,26 @@ void GPUMode::complexRotate(int fftloop, int numBufferedFFTs, int startblock, in
         fftchannels_grid = 1;
     }
 
-    _gpu_complexrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(numrecordedbands, fftchannels_block), 0, cuStream>>>
-    (
-             complexunpacked_gpu,
-             gUnpackedArraysGpu,
-             gInterpolator,
-             sampleIndexes,
-             validSamples,
-             config->getDRecordedFreq(configindex, datastreamindex, 0),
-             sampletime,
-             recordedfreqlooffsets[0],
-             fftloop,
-             startblock,
-             numblocks,
-             fftchannels
-     );
+    _gpu_fringeRotation<<<
+        dim3(numBufferedFFTs, fftchannels_grid),
+        dim3(numrecordedbands,fftchannels_block),
+        0, cuStream
+    >>>
+            (
+                    complexunpacked_gpu->gpuPtr(),
+                    unpackedarrays_gpu->gpuPtr(),
+                    gInterpolator->gpuPtr(),
+                    gSampleIndexes->gpuPtr(),
+                    gValidSamples->gpuPtr(),
+                    gLoFreqs->gpuPtr(),
+                    sampletime,
+                    recordedfreqlooffsets[0],
+                    numrecordedfreqs,
+                    fftloop,
+                    startblock,
+                    numblocks,
+                    fftchannels
+            );
 }
 
 // Adapted from https://forums.developer.nvidia.com/t/atomic-add-for-complex-numbers/39757
@@ -728,7 +708,7 @@ __global__ void _gpu_resultsrotatorMultiply(
     }
 }
 
-void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
+void GPUMode::fractionalRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
     // At this point we have
     // * FFT results on GPU
     // * subchannelfreqs
@@ -753,11 +733,11 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
 
     _gpu_resultsrotatorMultiply<<<dim3(numBufferedFFTs, fftchannels_grid), dim3(fftchannels_block), 0, cuStream>>>
             (
-                    fftd_gpu,
-                    conj_fftd_gpu,
-                    temp_autocorrelations_gpu,
-                    gFracSampleError,
-                    validSamples,
+                    fftd_gpu->gpuPtr(),
+                    conj_fftd_gpu->gpuPtr(),
+                    temp_autocorrelations_gpu->gpuPtr(),
+                    gFracSampleError->gpuPtr(),
+                    gValidSamples->gpuPtr(),
                     recordedbandwidth,
                     recordedfreqclockoffsets[0],
                     recordedfreqclockoffsetsdelta[0],
@@ -769,14 +749,12 @@ void GPUMode::rotateResults(int fftloop, int numBufferedFFTs, int startblock, in
                     numrecordedbands
             );
 
-    checkCuda(cudaMemcpyAsync(temp_autocorrelations_gpu_out, temp_autocorrelations_gpu,
-                              sizeof(cuFloatComplex) * numrecordedbands * recordedbandchannels * 3,
-                              cudaMemcpyDeviceToHost, cuStream));
-
+    // Start copying the autocorrelations back to the host
+    temp_autocorrelations_gpu->copyToHost();
 }
 
 void GPUMode::postprocess(int index, int subloopindex) {
-    if (!validSamples[subloopindex]) {
+    if (!gValidSamples->ptr()[subloopindex]) {
         return;
     }
 
@@ -813,60 +791,5 @@ void GPUMode::postprocess(int index, int subloopindex) {
 }
 
 void GPUMode::runFFT() {
-    checkCufft(cufftExecC2C(fft_plan, complexunpacked_gpu, fftd_gpu, CUFFT_FORWARD));
+    checkCufft(cufftExecC2C(fft_plan, complexunpacked_gpu->gpuPtr(), fftd_gpu->gpuPtr(), CUFFT_FORWARD));
 }
-
-__global__ void _gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *const dst) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    dst[idx] = cuCmulf(dst[idx], src[idx]);
-}
-
-void gpu_inPlaceMultiply_cf(const cuFloatComplex *const dst, cuFloatComplex *const bydst, const size_t len) {
-    _gpu_inPlaceMultiply_cf<<<1, len>>>(dst, bydst);
-}
-
-// Copy from host to device, converting from float to cuFloatComplex
-// (initialising all imaginary parts as zero) as you go
-void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len) {
-    checkCuda(cudaMemset(dst, 0x0, len * sizeof(cuFloatComplex)));
-    checkCuda(cudaMemcpy2D(dst, sizeof(cuFloatComplex), src, sizeof(float), sizeof(float), len,
-                           cudaMemcpyHostToDevice));
-}
-
-void *gpu_malloc(const size_t amt, cudaStream_t cuStream) {
-    void *rv;
-    checkCuda(cudaMallocAsync(&rv, amt, cuStream));
-    return rv;
-}
-
-__global__ void _cudaMul_f64_many(double *const src, double *const dest, double *const a, int vecElems, int numVecs) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(idx >= vecElems * numVecs)
-        return;
-
-    dest[idx] = src[idx % vecElems] * a[idx / vecElems];
-}
-
-void cudaMul_f64_many(double *const src, double *const dest, double *const a, int vecElems, int numVecs, int cudaMaxThreadsPerBlock, cudaStream_t cuStream) {
-    size_t elems_block;
-    size_t elems_grid;
-
-    size_t elems = vecElems * numVecs;
-
-    if (elems > cudaMaxThreadsPerBlock) {
-        elems_block = cudaMaxThreadsPerBlock;
-        elems_grid = (elems / cudaMaxThreadsPerBlock);
-
-        if (elems % cudaMaxThreadsPerBlock != 0) {
-            elems_grid++;
-        }
-    } else {
-        elems_block = elems;
-        elems_grid = 1;
-    }
-
-    _cudaMul_f64_many<<<elems_grid, elems_block, 0, cuStream>>>(src, dest, a, vecElems, numVecs);
-}
-
-

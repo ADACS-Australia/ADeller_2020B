@@ -93,7 +93,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   }
   else
   {
-    goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, &unpackedarrays_cpu[subloopindex * numrecordedbands], samplestounpack);
+    goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, &unpackedarrays_gpu->ptr()[subloopindex * numrecordedbands], samplestounpack);
   }
   if(mark5stream->samplegranularity > 1)
     { // CHRIS not sure what this is mean to do
@@ -103,16 +103,16 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
     mungedoffset = sampleoffset % mark5stream->samplegranularity;
     for(int i = 0; i < mungedoffset; i++) {
       for(int b = subloopindex * numrecordedbands; b < subloopindex * numrecordedbands + mark5stream->nchan; ++b) {
-        if(unpackedarrays_cpu[b][i] != 0.0) {
-          unpackedarrays_cpu[b][i] = 0.0;
+        if(unpackedarrays_gpu->ptr()[b][i] != 0.0) {
+            unpackedarrays_gpu->ptr()[b][i] = 0.0;
           erasedsamples++;
         }
       }
     }
     for(int i = unpacksamples + mungedoffset; i < samplestounpack; i++) {
       for(int b = subloopindex * numrecordedbands; b < subloopindex * numrecordedbands + mark5stream->nchan; ++b) {
-        if(unpackedarrays_cpu[b][i] != 0.0) {
-          unpackedarrays_cpu[b][i] = 0.0;
+        if(unpackedarrays_gpu->ptr()[b][i] != 0.0) {
+            unpackedarrays_gpu->ptr()[b][i] = 0.0;
           erasedsamples++;
         }
       }

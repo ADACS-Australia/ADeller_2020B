@@ -5,6 +5,8 @@
 #include <cuComplex.h>
 #include <cufft.h>
 
+#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
+
 #define checkCuda(err) __checkCuda(err, (char *)__FILE__, __LINE__)
 inline cudaError_t __checkCuda(cudaError_t err, char *file, int line) {
   if (err != cudaSuccess) {
@@ -28,29 +30,81 @@ inline cufftResult_t __checkCufft(const cufftResult_t err, const char *const fil
   return err;
 }
 
-// CUDA kernels
-void cudaMul_f64(const size_t len, const double *const src, const double by, double *const dest);
+template <class T>
+class GpuMemHelper {
+public:
+    GpuMemHelper(size_t nElems, cudaStream_t stream) : managed(true), nBytes(sizeof(T) * nElems), cuStream(stream) {
+        cpuData = new T[nElems];
+        checkCuda(cudaHostRegister(cpuData, nBytes, cudaHostRegisterPortable));
+        checkCuda(cudaMallocAsync(&gpuData, nBytes, cuStream));
+    }
 
-// gpu_inPlaceMultiply_cf(complexrotator_gpu, complexunpacked_gpu, fftchannels);
-/**
- * In-place complex multiplication. Multiply src by 'bydest' and store in
- * 'bydest'.
- * @param src Source buffer
- * @param dst Destination buffer
- * @param len Number of samples to multiply. */
-void gpu_inPlaceMultiply_cf(const cuFloatComplex *const src, cuFloatComplex *const bydst, const size_t len);
+    GpuMemHelper(T* hostPtr, size_t nElems, cudaStream_t stream) : managed(false), cpuData(hostPtr), nBytes(sizeof(T) * nElems), cuStream(stream) {
+        checkCuda(cudaHostRegister(cpuData, nBytes, cudaHostRegisterPortable));
+        checkCuda(cudaMallocAsync(&gpuData, nBytes, cuStream));
+    }
 
-/**
- * Copy a real, host buffer to a complex, device buffer, initalising the
- * imaginary components to zero.
- * @param src Source buffer
- * @param dst Destination buffer
- * @param len Number of samples to copy
- */
-void gpu_host2DevRtoC(cuFloatComplex *const dst, const float *const src, const size_t len);
+    GpuMemHelper(size_t nElems, cudaStream_t stream, bool gpuOnly) : managed(false), cpuData(nullptr), nBytes(sizeof(T) * nElems), cuStream(stream) {
+        checkCuda(cudaMallocAsync(&gpuData, nBytes, cuStream));
+    }
 
+    ~GpuMemHelper() {
+        if (cpuData) {
+            checkCuda(cudaHostUnregister(cpuData));
 
-#define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
+            if (managed) {
+                delete[] cpuData;
+                cpuData = nullptr;
+            }
+        }
+
+        if (gpuData) {
+            checkCuda(cudaFreeAsync(gpuData, cuStream));
+            gpuData = nullptr;
+        }
+    }
+
+    inline GpuMemHelper* copyToDevice() {
+        checkCpuData();
+
+        checkCuda(cudaMemcpyAsync(gpuData, cpuData, nBytes, cudaMemcpyHostToDevice, cuStream));
+
+        return this;
+    }
+
+    inline GpuMemHelper* copyToHost() {
+        checkCpuData();
+
+        checkCuda(cudaMemcpyAsync(cpuData, gpuData, nBytes, cudaMemcpyDeviceToHost, cuStream));
+
+        return this;
+    }
+
+    inline GpuMemHelper* sync() {
+        checkCuda(cudaStreamSynchronize(cuStream));
+
+        return this;
+    }
+
+    inline T* ptr() { return cpuData; }
+    inline T* gpuPtr() { return gpuData; }
+
+    inline size_t size() { return nBytes; }
+
+private:
+    T* cpuData;
+    T* gpuData;
+    cudaStream_t cuStream;
+    bool managed;
+    size_t nBytes;
+
+    void checkCpuData() {
+        if (!cpuData) {
+            cout << "Attempt to use null cpuData in GpuMemHelper" << endl;
+            exit(1);
+        }
+    }
+};
 
 #endif
 // vim: shiftwidth=2:softtabstop=2:expandtab

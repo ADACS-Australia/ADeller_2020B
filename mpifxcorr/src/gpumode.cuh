@@ -6,6 +6,7 @@
 #include <cufft.h>
 #include <cufftXt.h>
 #include "mode.h"
+#include "gpumode_kernels.cuh"
 #include <mutex>
 #include <chrono>
 
@@ -28,24 +29,21 @@ public:
     void process_unpack(int index, int subloopindex);
     void postprocess(int index, int subloopindex);
     void runFFT();
-    void complexRotate(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void fringeRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
-    void rotateResults(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
+    void fractionalRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
 
-    const cuFloatComplex* getGpuFreqs() const override { return fftd_gpu; }
-    const cuFloatComplex* getGpuConjugatedFreqs() const override { return conj_fftd_gpu; }
+    [[nodiscard]] const cuFloatComplex* getGpuFreqs() const override { return fftd_gpu->gpuPtr(); }
+    [[nodiscard]] const cuFloatComplex* getGpuConjugatedFreqs() const override { return conj_fftd_gpu->gpuPtr(); }
 protected:
     int cudaMaxThreadsPerBlock;
-    float **unpackedarrays_gpu;
-    float **unpackedarrays_cpu;
+    GpuMemHelper<float*> *unpackedarrays_gpu;
+    GpuMemHelper<float> *unpackeddata_gpu;
 
-    cuFloatComplex *complexunpacked_gpu;
-    cuFloatComplex *fftd_gpu;
-    cuFloatComplex *conj_fftd_gpu;
-    cuFloatComplex *temp_autocorrelations_gpu;
-    cf32* fftd_gpu_out;
-    cf32* conj_fftd_gpu_out;
-    cf32* temp_autocorrelations_gpu_out;
+    GpuMemHelper<cuFloatComplex> *complexunpacked_gpu;
+    GpuMemHelper<cuFloatComplex> *fftd_gpu;
+    GpuMemHelper<cuFloatComplex> *conj_fftd_gpu;
+    GpuMemHelper<cuFloatComplex> *temp_autocorrelations_gpu;
 
     size_t estimatedbytes_gpu;
 
@@ -53,21 +51,15 @@ protected:
     // 'unpacksamples' but e.g. the Mk5Mode implementation overwrites that
     size_t unpackedarrays_elem_count;
 
-    int* sampleIndexes;
-    bool* validSamples;
-
-    int *gSampleIndexes;
-    bool *gValidSamples;
-    float** gUnpackedArraysGpu;
+    GpuMemHelper<int> *gSampleIndexes;
+    GpuMemHelper<bool> *gValidSamples;
+    GpuMemHelper<double> *gInterpolator;
+    GpuMemHelper<float> *gFracSampleError;
+    GpuMemHelper<double> *gLoFreqs;
 
     cudaStream_t cuStream;
 
-    double* gInterpolator;
-
     // precalc
-    float* fracSampleError;
-    float* gFracSampleError;
-
     int* nearestSamples;
 private:
 
