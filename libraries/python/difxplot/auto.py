@@ -1,4 +1,4 @@
-"""Contains the plotting classes for difxPlot.py"""
+"""Contains the plotting classes used for autocorrelations by difxPlot.py"""
 import os
 import itertools
 from time import sleep
@@ -16,9 +16,6 @@ class Plot:
     """Base plotting class"""
     def __init__(self, exp_info):
         self.exp_info = exp_info
-        # make list of all baselines (telescope pairs)
-        self.baselines = list(itertools.combinations(exp_info.telescopes, 2))
-        exp_info.baselines = self.baselines
         self.bl_plots = {}
         self.nrows = 0
         self.ncols = 0
@@ -30,96 +27,65 @@ class Plot:
         self.app = QtGui.QApplication([])
         self.view = pg.GraphicsView()
         self.win = pg.GraphicsLayout()
-        self.app.setApplicationDisplayName(f"Baseline Fringes for {self.exp_info.source_name}")
+        self.app.setApplicationDisplayName(f"Autocorrelations for {self.exp_info.source_name}")
         self.view.setCentralItem(self.win)
         self.view.resize(1900, 1000)
         self.win.layout.setSpacing(0.0)
+
+        # make list of all baselines (telescope pairs) we still want this even though only plotting autos so that the averages doesn't care
+        # though we only need to make the scope-scope 'baselines'
+#        self.baselines = list(itertools.combinations(exp_info.telescopes, 2))
+        self.baselines=[]
+        for scope in exp_info.telescopes:
+            self.baselines.append((scope,deepcopy(scope)))
+        exp_info.baselines = self.baselines
 
     def calc_ncols(self, ncols=False):
         """returns the number of columns desired for graph setup"""
         if ncols:
             self.ncols = ncols
-        elif self.exp_info.numbaselines in [6, 9]:
+        elif len(self.baselines) in [6, 9]:
             self.ncols = 3
-        elif self.exp_info.numbaselines > 30:
+        elif len(self.baselines) > 30:
             self.ncols = 5
         else:
             self.ncols = 4
 
-        if self.exp_info.numbaselines < self.ncols:
-            self.ncols = self.exp_info.numbaselines
+        if len(self.baselines) < self.ncols:
+            self.ncols = len(self.baselines)
 
     def setup_plots(self):
         """sets up the plots"""
         red_pen = pg.mkPen(color=(255, 0, 0), width=2)
         blue_pen = pg.mkPen(color=(0, 0, 255), width=2)
-        baseline = 0
+        scope = 0
+            
         for row in range(self.nrows):
             for col in range(self.ncols):
-                # dictionary containing one plot per pol, per frequency (subband) for each of phases amps lags
-                plots = {"Phases": [], "Amps": [], "Lags": []}
-                if baseline < self.exp_info.numbaselines:
+                # dictionary containing one plot per pol, per frequency (subband) 
+                plots = {"Amps": []}
+                if scope < len(self.baselines):
                     title_string = (
-                        self.baselines[baseline][0].name
+                        self.baselines[scope][0].name
                         + "-"
-                        + self.baselines[baseline][1].name
+                        + self.baselines[scope][1].name
                     )
                 else:
                     title_string = ""
 
-                phases = self.win.addPlot(row=row * 5, col=col, rowspan=1)
-                amps = self.win.addPlot(row=row * 5 + 1, col=col, rowspan=2)
-                lags = self.win.addPlot(row=row * 5 + 3, col=col, rowspan=2)
-                phases.setTitle(
-                    title_string
-                )  # We set a title for the phases which also separates the plots
+                amps = self.win.addPlot(row=row, col=col)
                 for _ in range(self.exp_info.numfreqs):
-                    p1 = phases.plot(
-                        pen=None,
-                        symbolBrush=(255, 0, 0),
-                        symbol="o",
-                        symbolSize=2,
-                        symbolPen=(255, 0, 0),
-                    )
-                    plots["Phases"].append(p1)
-
                     a1 = amps.plot(pen=red_pen)
                     plots["Amps"].append(a1)
-
-                    l1 = lags.plot(pen=red_pen)
-                    plots["Lags"].append(l1)
-
-                    p2 = phases.plot(
-                        pen=None,
-                        symbolBrush=(0, 0, 255),
-                        symbol="o",
-                        symbolSize=2,
-                        symbolPen=(0, 0, 255),
-                    )
-                    plots["Phases"].append(p2)
 
                     a2 = amps.plot(pen=blue_pen)
                     plots["Amps"].append(a2)
 
-                    l2 = lags.plot(pen=blue_pen)
-                    plots["Lags"].append(l2)
                 self.bl_plots[title_string] = plots
-                # link the axes but we also need to define a width for the labels (seWidth) or y axis will shift
-                amps.setXLink(phases)
-                lags.setXLink(phases)
-                phases.getAxis("left").setWidth(w=40)
-                amps.getAxis("left").setWidth(w=40)
-                lags.getAxis("left").setWidth(w=40)
-                # Don't show labels for the freqaxis except for the lags (bottom most plot)
-                phases.getAxis("bottom").setStyle(showValues=False)
-                amps.getAxis("bottom").setStyle(showValues=False)
-                # don't scale the y limits for phases...
-                phases.setYRange(-3.5, 3.5, update=False)
-                # Make amp/lag plot twice as big as phases
-                self.win.layout.setRowStretchFactor(row * 5, 1)
-                self.win.layout.setRowStretchFactor(row * 5 + 1, 2)
-                self.win.layout.setRowStretchFactor(row * 5 + 3, 2)
-                baseline += 1
+                amps.setTitle(
+                    title_string
+                )  
+                scope += 1
 
     def plot(self, vis):
         """plots the vis given to the correct plot..."""
@@ -128,13 +94,9 @@ class Plot:
         )
         axis = self.bl_plots[vis.baseline_name]
         if vis.polpair == "RR":
-            axis["Phases"][vis.freq_index * 2].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2].setData(xs, vis.lags)
         elif vis.polpair == "LL":
-            axis["Phases"][vis.freq_index * 2 + 1].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2 + 1].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2 + 1].setData(xs, vis.lags)
 
 
 class PlotAll(Plot):
@@ -143,7 +105,7 @@ class PlotAll(Plot):
     def __init__(self, exp_info, ncols=False):
         super().__init__(exp_info)
         self.calc_ncols(ncols)
-        self.nrows = int(numpy.ceil(exp_info.numbaselines / self.ncols))
+        self.nrows = int(numpy.ceil(exp_info.numtelescopes / self.ncols))
         self.setup_plots()
 
 
@@ -162,8 +124,8 @@ class PlotRef(Plot):
             if (x[0].name == self.refant) or (x[1].name == self.refant)
         ]
         self.exp_info.baselines = self.baselines
-        self.calc_ncols(ncols)
-        self.nrows = int(numpy.ceil(exp_info.numbaselines / self.ncols))
+        self.ncols = 1
+        self.nrows = 1
         self.setup_plots()
 
 class PlotAllSplit(Plot):
@@ -181,7 +143,7 @@ class PlotAllSplit(Plot):
         self.baselines = new_bl
         self.exp_info.baselines = self.baselines
         self.calc_ncols(ncols)
-        self.nrows = int(numpy.ceil(exp_info.numbaselines / self.ncols))
+        self.nrows = int(numpy.ceil(exp_info.numtelescopes*2 / self.ncols))
         self.setup_plots()
 
     def plot(self, vis):
@@ -195,13 +157,9 @@ class PlotAllSplit(Plot):
         else:
             axis = self.bl_plots[vis.baseline_name]
         if vis.polpair == "RR":
-            axis["Phases"][vis.freq_index * 2].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2].setData(xs, vis.lags)
         elif vis.polpair == "LL":
-            axis["Phases"][vis.freq_index * 2 + 1].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2 + 1].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2 + 1].setData(xs, vis.lags)
 
 class PlotRefSplit(Plot):
     """subclass of Plot, handle plotting baseline pairs, to a refant but split frequencies"""
@@ -227,8 +185,8 @@ class PlotRefSplit(Plot):
             new_bl.append(bl_edit)
         self.baselines = new_bl
         self.exp_info.baselines = self.baselines
-        self.calc_ncols(ncols)
-        self.nrows = int(numpy.ceil(exp_info.numbaselines / self.ncols))
+        self.ncols=1
+        self.nrows = 2
         self.setup_plots()
 
     def plot(self, vis):
@@ -242,16 +200,12 @@ class PlotRefSplit(Plot):
         else:
             axis = self.bl_plots[vis.baseline_name]
         if vis.polpair == "RR":
-            axis["Phases"][vis.freq_index * 2].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2].setData(xs, vis.lags)
         elif vis.polpair == "LL":
-            axis["Phases"][vis.freq_index * 2 + 1].setData(xs, vis.phases())
             axis["Amps"][vis.freq_index * 2 + 1].setData(xs, vis.amps())
-            axis["Lags"][vis.freq_index * 2 + 1].setData(xs, vis.lags)
 
-class PlotDifx:
-    """Plots a difx file."""
+class PlotAuto:
+    """Plots autocorrs from a difx file."""
     def __init__(self, input_base, wait_for_file=False, refant=False, aver=1, live=False, ncols=4, write_fringes = False):
         self.fin = None
         self.input_base = input_base
@@ -288,7 +242,7 @@ class PlotDifx:
             
     def choose_plot(self):
         """Chooses the plot type depending on if a refant is set and if S/X mode or similar is used"""
-        split_plot = self.max_diff([f.freq for f in self.exp_info.freqs if f.freq !=0.999]) > 300 #MHz so split if subbands have a split of more than 300 MHz, also ignore dummy zoom band freqs
+        split_plot = self.max_diff([f.freq for f in self.exp_info.freqs if f.freq != 0.999]) > 300 #MHz so split if subbands have a split of more than 300 MHz, ignore dummy zoom band freq
         if self.refant:
             if split_plot:
                 plot = PlotRefSplit(self.exp_info, self.refant)
@@ -341,7 +295,7 @@ class PlotDifx:
                     continue
                 print("EOF")
                 break
-            if current_vis.is_auto_corr() or current_vis.polpair in ["RL", "LR"]:
+            if (not current_vis.is_auto_corr()) or current_vis.polpair in ["RL", "LR"]:
                 continue
             self.averager.handle(current_vis)
         QtGui.QApplication.instance().exec_()
