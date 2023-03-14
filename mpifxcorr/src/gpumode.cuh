@@ -27,7 +27,6 @@ public:
                     int numblocks) override;  //frac sample error is in microseconds
 
     void process_unpack(int index, int subloopindex);
-    void postprocess(int index, int subloopindex);
     void runFFT();
     void fringeRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
     void calculatePre_cpu(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
@@ -56,6 +55,7 @@ protected:
     GpuMemHelper<double> *gInterpolator;
     GpuMemHelper<float> *gFracSampleError;
     GpuMemHelper<double> *gLoFreqs;
+    GpuMemHelper<int> *indices;
 
     cudaStream_t cuStream;
 

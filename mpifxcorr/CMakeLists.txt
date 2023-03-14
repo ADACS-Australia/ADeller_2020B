@@ -117,7 +117,6 @@ set(
         ippcore
 
         mpi
-        mpi_cxx
 )
 
 set_property(TARGET mpifxcorr PROPERTY CUDA_ARCHITECTURES OFF)

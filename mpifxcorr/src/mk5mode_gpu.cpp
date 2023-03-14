@@ -121,7 +121,23 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   }
   if(perbandweights)
   {
-      NOT_SUPPORTED("per band weights");
+      if(usecomplex)
+      {
+          NOT_SUPPORTED("unpack - usecomplex");
+      }
+      else
+      {
+          blank_vdif_EDV4(data, unpackstartsamples, &unpackedarrays_gpu->ptr()[subloopindex * numrecordedbands], samplestounpack, invalid);
+      }
+
+      int totalinvalid = 0;
+      for(int b = 0; b < mark5stream->nchan; ++b)
+      {
+          perbandweights[subloopindex][b] = (goodsamples - invalid[b])/(float)unpacksamples;
+          totalinvalid += invalid[b];
+      }
+
+      goodsamples -= (float)totalinvalid/(float)(mark5stream->nchan);
   }
 
   if(goodsamples < 0)

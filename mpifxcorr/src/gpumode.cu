@@ -72,6 +72,8 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     gLoFreqs = new GpuMemHelper<double>(numrecordedfreqs, cuStream);
 
+    indices = new GpuMemHelper<int>(10, cuStream);
+
     // Copy the lofreq values to the GPU
     for (auto i = 0; i < numrecordedfreqs; i++) {
         gLoFreqs->ptr()[i] = config->getDRecordedFreq(configindex, datastreamindex, i);
@@ -171,10 +173,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 //    std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
 
     // Sanity checks
-    if (perbandweights) {
-        NOT_SUPPORTED("per band weights");
-    }
-
     if (!(config->getDPhaseCalIntervalMHz(configindex, datastreamindex) == 0)) {
         NOT_SUPPORTED("DPhaseCal");
     }
@@ -228,12 +226,13 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // First unpack all the data
-    for (int subloopindex = 0; subloopindex < numBufferedFFTs; subloopindex++) {
-        int i = fftloop * numBufferedFFTs + subloopindex + startblock;
+    int numfftsprocessed = 0;
+    for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
+        int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
         if (i >= startblock + numblocks)
             break; // may not have to fully complete last fftloop
 
-        process_unpack(i, subloopindex);
+        process_unpack(i, numfftsprocessed);
     }
 
     auto stop = high_resolution_clock::now();
@@ -297,16 +296,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     avg_fracrotate += duration.count();
 
     start = high_resolution_clock::now();
-
-    int numfftsprocessed = 0;
-    // Do stuff with the FFT results
-    for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
-        int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
-        if (i >= startblock + numblocks)
-            break; // may not have to fully complete last fftloop
-
-        postprocess(i, numfftsprocessed);
-    }
 
     // This synchronise is really needed, as we need the GPU processing/memcpys to finish before we read the result
     // data in to the autocorrelation vectors
@@ -406,6 +395,15 @@ bool GPUMode::is_data_valid(int index, int subloopindex) {
 }
 
 void GPUMode::process_unpack(int index, int subloopindex) {
+    // Clear the perbandweights for this subloopindex
+    if(perbandweights)
+    {
+        for(int b = 0; b < numrecordedbands; ++b)
+        {
+            perbandweights[subloopindex][b] = 0.0;
+        }
+    }
+
     if (!is_data_valid(index, subloopindex)) {
         // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
         dataweight[subloopindex] = 0.0;
@@ -427,6 +425,58 @@ void GPUMode::process_unpack(int index, int subloopindex) {
 
     if (!is_dataweight_valid(subloopindex)) {
         gValidSamples->ptr()[subloopindex] = false;
+    } else {
+        for (int i = 0; i < numrecordedfreqs; i++) {
+            int count = 0;
+            // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
+            // Loop over all recorded bands looking for the matching frequency we should be dealing with
+            for (int j = 0; j < numrecordedbands; j++) {
+                // For upper sideband bands, normally just need to copy the fftd channels.
+                // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
+
+                if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
+                    indices->ptr()[count++] = j;
+
+                    // At this point in the code the array fftoutputs[j] contains complex-valued voltage spectra with the following properties:
+                    //
+                    // 1. The zero element corresponds to the lowest sky frequency.  That is:
+                    //    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Complex Lower Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
+                    //
+                    // 2. The frequency increases monotonically with index
+                    //
+                    // 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
+                    //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
+
+                    //store the weight for the autocorrelations
+                    if(perbandweights)
+                    {
+                        weights[0][j] += perbandweights[subloopindex][j];
+                    }
+                    else
+                    {
+                        weights[0][j] += dataweight[subloopindex];
+                    }
+                }
+            }
+
+            if (count > 1) {
+                //store the weights
+                if(perbandweights)
+                {
+                    weights[1][indices->ptr()[0]] += perbandweights[subloopindex][indices->ptr()[0]]*perbandweights[subloopindex][indices->ptr()[1]];
+                    weights[1][indices->ptr()[1]] += perbandweights[subloopindex][indices->ptr()[0]]*perbandweights[subloopindex][indices->ptr()[1]];
+                }
+                else
+                {
+                    weights[1][indices->ptr()[0]] += dataweight[subloopindex];
+                    weights[1][indices->ptr()[1]] += dataweight[subloopindex];
+                }
+            }
+        }
     }
 }
 
@@ -751,43 +801,6 @@ void GPUMode::fractionalRotation(int fftloop, int numBufferedFFTs, int startbloc
 
     // Start copying the autocorrelations back to the host
     temp_autocorrelations_gpu->copyToHost();
-}
-
-void GPUMode::postprocess(int index, int subloopindex) {
-    if (!gValidSamples->ptr()[subloopindex]) {
-        return;
-    }
-
-    // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
-    // Loop over all recorded bands looking for the matching frequency we should be dealing with
-    for (int j = 0; j < numrecordedbands; j++) {
-        // For upper sideband bands, normally just need to copy the fftd channels.
-        // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
-
-
-        // At this point in the code the array fftoutputs[j] contains complex-valued voltage spectra with the following properties:
-        //
-        // 1. The zero element corresponds to the lowest sky frequency.  That is:
-        //    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
-        //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
-        //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Complex Lower Sideband)
-        //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
-        //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
-        //
-        // 2. The frequency increases monotonically with index
-        //
-        // 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
-        //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
-
-        //store the weight for the autocorrelations
-        weights[0][j] += dataweight[subloopindex];
-    }
-
-    if (numrecordedbands > 1) {
-        //store the weights
-        weights[1][0] += dataweight[subloopindex];
-        weights[1][1] += dataweight[subloopindex];
-    }
 }
 
 void GPUMode::runFFT() {

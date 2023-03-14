@@ -73,7 +73,7 @@ library_include_HEADERS = \
 	mode.h \
 	cpumode.h \
 	gpumode.cuh \
-	gpucore.cuh
+	gpucore.cuh \
 	polyco.h \
 	nativemk5.h \
 	watchdog.h \
