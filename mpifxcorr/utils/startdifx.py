@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #**************************************************************************
-#   Copyright (C) 2008-2021 by Walter Brisken and Helge Rottmann          *
+#   Copyright (C) 2008-2023 by Walter Brisken and Helge Rottmann          *
 #                                                                         *
 #   This program is free software; you can redistribute it and/or modify  *
 #   it under the terms of the GNU General Public License as published by  *
@@ -21,17 +21,17 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: startdifx.py 10854 2022-12-16 20:09:23Z WalterBrisken $
+# $Id: startdifx.py 10919 2023-03-15 23:16:12Z WalterBrisken $
 # $HeadURL: $
-# $LastChangedRevision: 10854 $
+# $LastChangedRevision: 10919 $
 # $Author: WalterBrisken $
-# $LastChangedDate: 2022-12-17 07:09:23 +1100 (Sat, 17 Dec 2022) $
+# $LastChangedDate: 2023-03-16 10:16:12 +1100 (Thu, 16 Mar 2023) $
 #
 #============================================================================
 
 PROGRAM = 'startdifx'
 VERSION = '3.0.7'
-VERDATE = '20221216'
+VERDATE = '20230316'
 AUTHOR  = 'Walter Brisken and Helge Rottmann'
 
 defaultgroup = "224.2.2.1"
@@ -876,7 +876,7 @@ for fileBase in fileBaseList:
                 nBad += 1
 
 if args.logFile != None:
-        print('All command line output is being redirected to log file %s' % args.logFile)
+        print('All command line output is being redirected to log file(s) %s' % args.logFile.replace('%b', '<filebase>'))
 
 if nBad > 0:
         exit(1)

@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6DiskDevice.cpp 10541 2022-07-18 11:25:16Z HelgeRottmann $
+// $Id: Mark6DiskDevice.cpp 10909 2023-03-15 14:15:01Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 10541 $
+// $LastChangedRevision: 10909 $
 // $Author: HelgeRottmann $
-// $LastChangedDate: 2022-07-18 21:25:16 +1000 (Mon, 18 Jul 2022) $
+// $LastChangedDate: 2023-03-16 01:15:01 +1100 (Thu, 16 Mar 2023) $
 //
 //============================================================================
 #include "Mark6DiskDevice.h"
@@ -101,7 +101,6 @@ std::string Mark6DiskDevice::getName() const {
  */
 bool Mark6DiskDevice::isValid()
 {
-    //clog << diskId_m << " " << controllerId_m << endl;
     if (diskId_m == -1)
         return(false);
     if (controllerId_m == -1)

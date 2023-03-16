@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: visibility.cpp 10634 2022-09-14 08:10:19Z JanWagner $
+// $Id: visibility.cpp 10916 2023-03-15 23:05:38Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/visibility.cpp $
-// $LastChangedRevision: 10634 $
-// $Author: JanWagner $
-// $LastChangedDate: 2022-09-14 18:10:19 +1000 (Wed, 14 Sep 2022) $
+// $LastChangedRevision: 10916 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-03-16 10:05:38 +1100 (Thu, 16 Mar 2023) $
 //
 //============================================================================
 #include <mpi.h>
@@ -946,7 +946,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
               freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
             }
           }
-          if(config->isFrequencyOutput(currentconfigindex, i, freqindex)) {
+          if(config->isFrequencyOutput(currentconfigindex, freqindex)) {
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             if(autocorrweights[i][j][k] > 0.0)
             {
