@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6.cpp 10833 2022-11-19 11:38:40Z JanWagner $
+// $Id: Mark6.cpp 10909 2023-03-15 14:15:01Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 10833 $
-// $Author: JanWagner $
-// $LastChangedDate: 2022-11-19 22:38:40 +1100 (Sat, 19 Nov 2022) $
+// $LastChangedRevision: 10909 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-03-16 01:15:01 +1100 (Thu, 16 Mar 2023) $
 //
 //============================================================================
 #include <poll.h>
@@ -829,7 +829,7 @@ int Mark6::readControllerConfig()
             if (line.rfind("#", 0) == 0) 
                 continue;
             for(std::size_t i = 0; i < controllers_m.size(); ++i) {
-                if (line.rfind(controllers_m[i].getName(), 0) == 0) 
+                if (line.compare (controllers_m[i].getName()) == 0) 
                 {
                     controllers_m[i].setOrder(count);
                     break;
@@ -843,6 +843,10 @@ int Mark6::readControllerConfig()
     {
         return(-1);
     }
+
+    /*for(std::size_t i = 0; i < controllers_m.size(); ++i) {
+        clog << controllers_m[i].getName() << " " << controllers_m[i].getOrder() << endl;
+    }*/
 
     return(count);
 }
@@ -947,7 +951,6 @@ int Mark6::enumerateDevices()
 
 				if (sasaddress != NULL)
 					disk.setDiskId(parseDiskId(string(sasaddress)));
-
 				if (devpath != NULL)
 					disk.setControllerId( parseControllerId(string(devpath)) );
 				if (serial != NULL)
@@ -1076,7 +1079,6 @@ int Mark6::parseControllerId(string devpath)
             name = devpath.substr(found, end-found);
         }
     }
-
 
     // lookup controller id
     for(std::size_t i = 0; i < controllers_m.size(); ++i) {

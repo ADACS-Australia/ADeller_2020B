@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: core.cpp 10798 2022-11-08 15:31:34Z JanWagner $
+// $Id: core.cpp 10921 2023-03-16 00:51:17Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/core.cpp $
-// $LastChangedRevision: 10798 $
-// $Author: JanWagner $
-// $LastChangedDate: 2022-11-09 02:31:34 +1100 (Wed, 09 Nov 2022) $
+// $LastChangedRevision: 10921 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-03-16 11:51:17 +1100 (Thu, 16 Mar 2023) $
 //
 //============================================================================
 #include <mpi.h>
@@ -1359,13 +1359,13 @@ void Core::averageAndSendAutocorrs(int index, int threadid, double nsoffset, dou
             {
               if(config->getDLocalRecordedFreqIndex(procslots[index].configindex, j, l) == parentfreqindex && config->getDZoomBandPol(procslots[index].configindex, j, k-numrecordedbands) == config->getDRecordedBandPol(procslots[index].configindex, j, l))
               {
-                procslots[index].floatresults[resultindex] += modes[j]->getWeight(false, l);
+                procslots[index].floatresults[resultindex] += modes[j]->getWeight(true, l);
               }
             }
           }
           else
           {
-            procslots[index].floatresults[resultindex] += modes[j]->getWeight(false, k);
+            procslots[index].floatresults[resultindex] += modes[j]->getWeight(true, k);
           }
           resultindex++;
         }
