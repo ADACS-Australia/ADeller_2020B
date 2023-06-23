@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: Common.py 10549 2022-07-26 12:21:49Z HelgeRottmann $
+# $Id: Common.py 10966 2023-05-09 06:52:03Z JanWagner $
 # $HeadURL: $
-# $LastChangedRevision: 10549 $
-# $Author: HelgeRottmann $
-# $LastChangedDate: 2022-07-26 22:21:49 +1000 (Tue, 26 Jul 2022) $
+# $LastChangedRevision: 10966 $
+# $Author: JanWagner $
+# $LastChangedDate: 2023-05-09 16:52:03 +1000 (Tue, 09 May 2023) $
 #
 #============================================================================
 
@@ -343,7 +343,7 @@ def get_datastreamtable_info(inputfile):
         if "TCAL" in lines[1]:
             lines = lines[1:]
         val, lines = nextinputline(lines[1:])
-        datastreams[-1].phasecalint = int(val)
+        datastreams[-1].phasecalint = float(val)
         val, lines = nextinputline(lines[1:])
         datastreams[-1].nrecfreq = int(val)
         datastreams[-1].recfreqpols = []
@@ -412,7 +412,7 @@ def put_datastreamtable_info(fo,ds):
         fo.write("%-20s%s\n" % ("DATA SAMPLING:",d.datasampling))
         fo.write("%-20s%s\n" % ("DATA SOURCE:",d.datasource))
         fo.write("%-20s%s\n" % ("FILTERBANK USED:","FALSE")) # TODO
-        fo.write("%-20s%d\n" % ("PHASE CAL INT (MHZ):",d.phasecalint))
+        fo.write("%-20s%.5g\n" % ("PHASE CAL INT (MHZ):",d.phasecalint))
         fo.write("%-20s%d\n" % ("NUM RECORDED FREQS:",d.nrecfreq))
         for n in range(d.nrecfreq):
             fo.write("%-20s%d\n" % ("REC FREQ INDEX %d:"%(n),d.recfreqindex[n]))

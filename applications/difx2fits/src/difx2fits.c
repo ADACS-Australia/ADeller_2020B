@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2022 by Walter Brisken & Helge Rottmann            *
+ *   Copyright (C) 2008-2023 by Walter Brisken & Helge Rottmann            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx2fits.c 10863 2022-12-29 19:23:42Z WalterBrisken $
+// $Id: difx2fits.c 10996 2023-06-21 14:20:13Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/difx2fits.c $
-// $LastChangedRevision: 10863 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedRevision: 10996 $
+// $Author: JanWagner $
+// $LastChangedDate: 2023-06-22 00:20:13 +1000 (Thu, 22 Jun 2023) $
 //
 //============================================================================
 #include <stdio.h>
@@ -162,6 +162,8 @@ static void usage(const char *pgm)
 	fprintf(stderr, "  --relabelCircular   Change naming of all polarizations to R/L\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --vanVleck          Force difx2fits to apply van Vleck correction\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --bandpass          Write baseline-based bandpass to .bandpass file\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "%s responds to the following environment variables:\n", program);
 	fprintf(stderr, "    DIFX_GROUP_ID             If set, run with umask(2).\n");
@@ -376,6 +378,10 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 			else if(strcmp(argv[i], "--vanVleck") == 0)
 			{
 				opts->doVanVleck = 1;
+			}
+			else if(strcmp(argv[i], "--bandpass") == 0)
+			{
+				opts->writeBandpass = 1;
 			}
 			else if(i+1 < argc) /* one parameter arguments */
 			{
@@ -980,7 +986,7 @@ static void relabelCircular(DifxInput *D)
 			}
 			if(D->datastream[i].recBandPolName[j] == 'Y' || D->datastream[i].recBandPolName[j] == 'V')
 			{
-				D->datastream[i].recBandPolName[j] = 'Y';
+				D->datastream[i].recBandPolName[j] = 'L';
 			}
 		}
 
@@ -992,7 +998,7 @@ static void relabelCircular(DifxInput *D)
 			}
 			if(D->datastream[i].zoomBandPolName[j] == 'Y' || D->datastream[i].zoomBandPolName[j] == 'V')
 			{
-				D->datastream[i].zoomBandPolName[j] = 'Y';
+				D->datastream[i].zoomBandPolName[j] = 'L';
 			}
 		}
 	}
