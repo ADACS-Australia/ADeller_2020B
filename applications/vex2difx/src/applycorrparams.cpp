@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: applycorrparams.cpp 10530 2022-07-06 22:18:31Z WalterBrisken $
+ * $Id: applycorrparams.cpp 10966 2023-05-09 06:52:03Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 10530 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2022-07-07 08:18:31 +1000 (Thu, 07 Jul 2022) $
+ * $LastChangedRevision: 10966 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2023-05-09 16:52:03 +1000 (Tue, 09 May 2023) $
  *
  *==========================================================================*/
 
@@ -655,7 +655,7 @@ static void applyCorrParams_PulseCal(VexData *V, const CorrParams &params, unsig
 		if(as->toneSelection == ToneSelectionNone)
 		{
 			// change to having no injected tones
-			V->setPhaseCalInterval(A->name, -1);
+			V->setPhaseCalInterval(A->name, -1.0f);
 
 			continue;
 		}

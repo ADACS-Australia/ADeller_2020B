@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsUV.c 10863 2022-12-29 19:23:42Z WalterBrisken $
+// $Id: fitsUV.c 10996 2023-06-21 14:20:13Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsUV.c $
-// $LastChangedRevision: 10863 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedRevision: 10996 $
+// $Author: JanWagner $
+// $LastChangedDate: 2023-06-22 00:20:13 +1000 (Thu, 22 Jun 2023) $
 //
 //============================================================================
 #include "fits.h"
@@ -982,6 +982,20 @@ int DifxVisNewUVData(DifxVis *dv, const struct CommandLineOptions *opts)
 	dv->sourceId = scan->phsCentreSrcs[dv->phaseCentre];
 	dv->freqId   = config->freqSetId;
 	dv->bandId   = dfs->freqId2IF[freqId];
+	if (opts->relabelCircular)
+	{
+		for(i = 0; i < 2; ++i)
+		{
+			if (polPair[i] == 'X')
+			{
+				polPair[i] = 'R';
+			}
+			else if (polPair[i] == 'Y')
+			{
+				polPair[i] = 'L';
+			}
+		}
+	}
 	dv->polId    = getPolProdId(dv, polPair, opts);
 
 	/* freqId should correspond to the freqId table for the actual sideband produced in the 
@@ -1531,7 +1545,7 @@ const DifxInput *DifxInput2FitsUV(const DifxInput *D, struct fits_keywords *p_fi
 	    (opts->phaseCentre == 0 || opts->sniffAllPhaseCentres) &&
 	    opts->sniffTime > 0.0 )
 	{
-		S = newSniffer(D, dv->nComplex, fileBase, opts->sniffTime);
+		S = newSniffer(D, dv->nComplex, fileBase, opts->sniffTime, opts->writeBandpass);
 		if(S && opts->verbose > 1)
 		{
 			printf("    Sniffer memory usage ~= %lldMB\n", getSnifferMemoryUsage(S)/1000000);

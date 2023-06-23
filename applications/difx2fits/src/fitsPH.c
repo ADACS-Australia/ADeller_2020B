@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2022 by Walter Brisken & John Morgan & Leonid Petrov *
+ *   Copyright (C) 2008-2023 by Walter Brisken & John Morgan & Leonid Petrov *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsPH.c 10863 2022-12-29 19:23:42Z WalterBrisken $
+// $Id: fitsPH.c 10952 2023-04-07 18:12:10Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsPH.c $
-// $LastChangedRevision: 10863 $
+// $LastChangedRevision: 10952 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedDate: 2023-04-08 04:12:10 +1000 (Sat, 08 Apr 2023) $
 //
 //============================================================================
 
@@ -1190,7 +1190,6 @@ const DifxInput *DifxInput2FitsPH(const DifxInput *D,
 	if(nTone == 0)
 	{
 		free(pcalSourceFile);
-		free(fitsbuf);
 		free(jobxref);
 		free(originalDsIds);
 

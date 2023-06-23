@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2019 by Walter Brisken                             *
+ *   Copyright (C) 2008-2023 by Walter Brisken                             *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: sniffer.h 8628 2019-01-11 02:51:53Z WalterBrisken $
+// $Id: sniffer.h 10952 2023-04-07 18:12:10Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/sniffer.h $
-// $LastChangedRevision: 8628 $
+// $LastChangedRevision: 10952 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2019-01-11 13:51:53 +1100 (Fri, 11 Jan 2019) $
+// $LastChangedDate: 2023-04-08 04:12:10 +1000 (Sat, 08 Apr 2023) $
 //
 //============================================================================
 #ifndef __SNIFFER_H__
@@ -40,7 +40,7 @@ struct _Sniffer;
 
 typedef struct _Sniffer Sniffer;
 
-Sniffer *newSniffer(const DifxInput *D, int nComplex, const char *filebase, double solint);
+Sniffer *newSniffer(const DifxInput *D, int nComplex, const char *filebase, double solint, int writeBandpass);
 
 void deleteSniffer(Sniffer *S);
 

@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vexload.cpp 10845 2022-12-02 21:37:56Z WalterBrisken $
+ * $Id: vexload.cpp 10966 2023-05-09 06:52:03Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/vexdatamodel/vexload.cpp $
- * $LastChangedRevision: 10845 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2022-12-03 08:37:56 +1100 (Sat, 03 Dec 2022) $
+ * $LastChangedRevision: 10966 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2023-05-09 16:52:03 +1000 (Tue, 09 May 2023) $
  *
  *==========================================================================*/
 
@@ -1289,6 +1289,10 @@ static int collectIFInfo(VexSetup &setup, VexData *V, Vex *v, const char *antDef
 		else if(fabs(phaseCal-200000000.0) < 1.0)
 		{
 			vif.phaseCalIntervalMHz = 200.0f;
+		}
+		else if(fabs(phaseCal-77777000) < 1.0)
+		{
+			vif.phaseCalIntervalMHz = 77.777f;
 		}
 		else
 		{

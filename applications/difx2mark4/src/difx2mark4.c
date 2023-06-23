@@ -384,7 +384,8 @@ int newScan(DifxInput *D, struct CommandLineOptions *opts, char *node, int scanI
          path[DIFXIO_FILENAME_LENGTH+5];
 
     struct stations stns[D->nAntenna];
-    struct fblock_tag fblock[MAX_FPPAIRS];
+    struct fblock_tag* fblock;
+    fblock = (struct fblock_tag*) malloc( MAX_FPPAIRS*sizeof(struct fblock_tag) );
 
     if (first)                  // on first time through get and save time
         {
@@ -465,7 +466,10 @@ int newScan(DifxInput *D, struct CommandLineOptions *opts, char *node, int scanI
         fprintf (stderr, "Could not create type 3 files\n");
         return -1;
         }
+    fprintf (stdout, "    Completed root file %s\n", rootname);
     return(nextScanId);
+    
+    free(fblock);
 }
 
 struct CommandLineOptions *newCommandLineOptions()
