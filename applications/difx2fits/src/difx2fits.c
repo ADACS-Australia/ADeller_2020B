@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx2fits.c 10996 2023-06-21 14:20:13Z JanWagner $
+// $Id: difx2fits.c 11009 2023-06-30 14:25:38Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/difx2fits.c $
-// $LastChangedRevision: 10996 $
-// $Author: JanWagner $
-// $LastChangedDate: 2023-06-22 00:20:13 +1000 (Thu, 22 Jun 2023) $
+// $LastChangedRevision: 11009 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-07-01 00:25:38 +1000 (Sat, 01 Jul 2023) $
 //
 //============================================================================
 #include <stdio.h>
@@ -165,6 +165,8 @@ static void usage(const char *pgm)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --bandpass          Write baseline-based bandpass to .bandpass file\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --applybandpass <file>\n");
+	fprintf(stderr, "                      Read <file> and apply it as a bandpass to the output\n");
 	fprintf(stderr, "%s responds to the following environment variables:\n", program);
 	fprintf(stderr, "    DIFX_GROUP_ID             If set, run with umask(2).\n");
 	fprintf(stderr, "    DIFX_VERSION              The DiFX version to report.\n");
@@ -491,6 +493,13 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 				{
 					++i;
 					opts->historyFile = strdup(argv[i]);
+				}
+				else if(strcmp(argv[i], "--applybandpass") == 0)
+				{
+					++i;
+					opts->applyBandpassFile = argv[i];
+					printf("** Note: the --applybandpass option is experimental at this time.\n");
+					printf("** Use at your own risk.\n");
 				}
 				else
 				{
