@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: blanker_mark5.c 9289 2019-11-14 00:56:26Z WalterBrisken $
+// $Id: blanker_mark5.c 11014 2023-07-17 12:01:51Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/blanker_mark5.c $
-// $LastChangedRevision: 9289 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2019-11-14 11:56:26 +1100 (Thu, 14 Nov 2019) $
+// $LastChangedRevision: 11014 $
+// $Author: JanWagner $
+// $LastChangedDate: 2023-07-17 22:01:51 +1000 (Mon, 17 Jul 2023) $
 //
 //============================================================================
 
@@ -295,6 +295,12 @@ int blanker_vdif(struct mark5_stream *ms)
 
 	nword = ms->databytes/8;
 
+	if (ms->datawindow && (data + nword - 1) >= (unsigned long long *)(ms->datawindow + ms->datawindowsize))
+	{
+		ms->blankzoneendvalid[0] = 0;
+		return 0;
+	}
+
 	/* only 1 zone for VDIF data.  a packet is either good or bad. 
 	 *
 	 * To be good, it cannot have fill pattern at beginning or end 
@@ -331,6 +337,12 @@ int blanker_codif(struct mark5_stream *ms)
 	data = (uint64_t *)ms->payload;
 
 	nword = ms->databytes/8;
+
+	if (ms->datawindow && (data + nword - 1) >= (uint64_t *)(ms->datawindow + ms->datawindowsize))
+	{
+		ms->blankzoneendvalid[0] = 0;
+		return 0;
+	}
 
 	/* only 1 zone for VDIF data.  a packet is either good or bad. 
 	 *

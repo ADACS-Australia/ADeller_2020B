@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: format_vdif.c 10572 2022-08-01 12:51:06Z GeoffreyCrew $
+// $Id: format_vdif.c 11014 2023-07-17 12:01:51Z JanWagner $
 // $HeadURL: $
-// $LastChangedRevision: 10572 $
-// $Author: GeoffreyCrew $
-// $LastChangedDate: 2022-08-01 22:51:06 +1000 (Mon, 01 Aug 2022) $
+// $LastChangedRevision: 11014 $
+// $Author: JanWagner $
+// $LastChangedDate: 2023-07-17 22:01:51 +1000 (Mon, 17 Jul 2023) $
 //
 //============================================================================
 
@@ -7558,9 +7558,17 @@ static int mark5_format_vdif_init(struct mark5_stream *ms)
 		}
 		else if(f->databytesperpacket != dataframelength - f->frameheadersize)
 		{
-			fprintf(m5stderr, "VDIF Warning: Changing databytesperpacket from %d to %d\n",
-				f->databytesperpacket, dataframelength - f->frameheadersize);
-			f->databytesperpacket = dataframelength - f->frameheadersize;
+			if ((((char*)ms->frame) + dataframelength) <= (((char*)ms->datawindowsize) + ms->datawindowsize))
+			{
+				fprintf(m5stderr, "VDIF Warning: Changing databytesperpacket from %d to %d\n",
+					f->databytesperpacket, dataframelength - f->frameheadersize);
+				f->databytesperpacket = dataframelength - f->frameheadersize;
+			}
+			else
+			{
+				fprintf(m5stderr, "VDIF Warning: Ignoring databytesperpacket change from %d to %d as it would exceed buffer\n",
+					f->databytesperpacket, dataframelength - f->frameheadersize);
+			}
 		}
 
 		ms->payloadoffset = f->frameheadersize;
