@@ -16,11 +16,11 @@
 #===========================================================================
 # SVN properties (DO NOT CHANGE)
 #
-# $Id: difxmachines.py 10989 2023-06-19 06:32:04Z JanWagner $
+# $Id: difxmachines.py 11017 2023-07-18 08:46:27Z JanWagner $
 # $HeadURL: https://svn.atnf.csiro.au/difx/libraries/python/trunk/difxfile/difxmachines.py $
-# $LastChangedRevision: 10989 $
+# $LastChangedRevision: 11017 $
 # $Author: JanWagner $
-# $LastChangedDate: 2023-06-19 16:32:04 +1000 (Mon, 19 Jun 2023) $
+# $LastChangedDate: 2023-07-18 18:46:27 +1000 (Tue, 18 Jul 2023) $
 #
 #============================================================================
 
@@ -30,8 +30,8 @@ import os
 import os.path
 #from string import upper,strip
 import re
+import subprocess
 import sys
-
 
 class DifxMachines(object):
 	"""
@@ -62,6 +62,10 @@ class DifxMachines(object):
 				if m > 0:
 					self.nodes[nodename].isInSlurm = True
 					self.nodes[nodename].slurm_maxProc = m
+					self.nodes[nodename].slurm_numProc = 0
+					nstate = self.slurmConf.getNodeState(nodename)
+					if 'CPUAlloc' in nstate:
+						self.nodes[nodename].slurm_numProc = int(nstate['CPUAlloc'])/int(nstate['ThreadsPerCore'])
 
 
 	def __str__(self):
@@ -234,6 +238,19 @@ class DifxMachines(object):
 
 			return data
 
+		def getNodeState(self, difxnodename):
+			"""Return some of 'scontrol show node <difxnodename>' fields as a dictionary"""
+			values = {}
+			try:
+				out = subprocess.check_output(['scontrol', 'show', 'node', difxnodename])
+				out = out.decode('utf8')
+				for line in out.split('\n'):
+					if 'CPUAlloc' in line or 'Threads' in line or 'AllocMem' in line or 'ThreadsPerCore' in line:
+						d = dict(x.split('=') for x in line.strip().split(' '))
+						values.update(d)
+			except Exception as e:
+				pass
+			return values
 
 		def isValid(self):
 			return len(self.nodeDefs) > 0
