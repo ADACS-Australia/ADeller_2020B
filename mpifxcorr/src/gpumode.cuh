@@ -34,14 +34,21 @@ public:
 
     [[nodiscard]] const cuFloatComplex* getGpuFreqs() const override { return fftd_gpu->gpuPtr(); }
     [[nodiscard]] const cuFloatComplex* getGpuConjugatedFreqs() const override { return conj_fftd_gpu->gpuPtr(); }
+    [[nodiscard]] const cf32* getGpuFreqsHost(int outputband, int subloopindex) const override {
+        return (const cf32*) &fftd_gpu->ptr()[(subloopindex * fftchannels * numrecordedbands) + (outputband * fftchannels)];
+    }
+    [[nodiscard]] const cf32* getGpuConjugatedFreqsHost(int outputband, int subloopindex) const override {
+        return (const cf32*) &conj_fftd_gpu->ptr()[(subloopindex * fftchannels * numrecordedbands) + (outputband * fftchannels)];
+    }
+
+    GpuMemHelper<cuFloatComplex> *fftd_gpu;
+    GpuMemHelper<cuFloatComplex> *conj_fftd_gpu;
+
 protected:
     int cudaMaxThreadsPerBlock;
     GpuMemHelper<float*> *unpackedarrays_gpu;
     GpuMemHelper<float> *unpackeddata_gpu;
-
     GpuMemHelper<cuFloatComplex> *complexunpacked_gpu;
-    GpuMemHelper<cuFloatComplex> *fftd_gpu;
-    GpuMemHelper<cuFloatComplex> *conj_fftd_gpu;
     GpuMemHelper<cuFloatComplex> *temp_autocorrelations_gpu;
 
     size_t estimatedbytes_gpu;
@@ -55,7 +62,10 @@ protected:
     GpuMemHelper<double> *gInterpolator;
     GpuMemHelper<float> *gFracSampleError;
     GpuMemHelper<double> *gLoFreqs;
-    GpuMemHelper<int> *indices;
+    GpuMemHelper<unsigned int> *indices;
+    GpuMemHelper<double>* grecordedfreqclockoffsets;
+    GpuMemHelper<double>* grecordedfreqclockoffsetsdelta;
+    GpuMemHelper<double>* grecordedfreqlooffsets;
 
     cudaStream_t cuStream;
 

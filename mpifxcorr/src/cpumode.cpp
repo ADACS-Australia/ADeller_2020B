@@ -1,3 +1,4 @@
+#include <mutex>
 #include "cpumode.h"
 #include "alert.h"
 
@@ -563,7 +564,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
               cfatal << startl << "Post-F (0th order) fringe rotation not currently supported for complex sampled data!" << endl;
               exit(1);
             }
-              
+
             fftptr = (config->getDRecordedLowerSideband(configindex, datastreamindex, i))?conjfftoutputs[j][subloopindex]:fftoutputs[j][subloopindex];
 
             //do the fft
@@ -577,7 +578,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
             else{
               status = vectorDFT_RtoC_f32(&(unpackedarrays[j][nearestsample - unpackstartsamples]), (f32*) fftptr, pDFTSpecR, fftbuffer);
               if (status != vecNoErr)
-                csevere << startl << "Error in DFT!!!" << status << endl;  
+                csevere << startl << "Error in DFT!!!" << status << endl;
             }
             if(config->getDRecordedLowerSideband(configindex, datastreamindex, i))
             {
@@ -658,9 +659,9 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Complex Lower Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
 	//    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
-	// 
+	//
 	// 2. The frequency increases monotonically with index
-	// 
+	//
 	// 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
 	//    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
 
@@ -699,10 +700,10 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
 
 	if (!linear2circular) {
 	  //do the autocorrelation (skipping Nyquist channel)
+      // j is 0..numrecordedbands
 	  status = vectorAddProduct_cf32(fftoutputs[j][subloopindex], conjfftoutputs[j][subloopindex], autocorrelations[0][j], recordedbandchannels);
 	  if(status != vecNoErr)
 	    csevere << startl << "Error in autocorrelation!!!" << status << endl;
-
 	  //store the weight for the autocorrelations
           if(perbandweights)
           {
@@ -767,7 +768,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
 	status = vectorAddProduct_cf32(fftoutputs[indices[1]][subloopindex], conjfftoutputs[indices[0]][subloopindex], autocorrelations[1][indices[1]], recordedbandchannels);
 	if(status != vecNoErr)
 	  csevere << startl << "Error in cross-polar autocorrelation!!!" << status << endl;
-      
+
 	//store the weights
         if(perbandweights)
         {

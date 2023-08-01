@@ -172,6 +172,7 @@ public:
   */
   inline const cf32* getFreqs(int outputband, int subloopindex) const { return fftoutputs[outputband][subloopindex]; };
   virtual const cuFloatComplex* getGpuFreqs() const { return nullptr; };
+  virtual const cf32* getGpuFreqsHost(int outputband, int subloopindex) const { return nullptr; };
 
  /**
   * Returns a pointer to the FFT'd and conjugated data of the specified product
@@ -181,6 +182,7 @@ public:
   */
   inline const cf32* getConjugatedFreqs(int outputband, int subloopindex) const { return conjfftoutputs[outputband][subloopindex]; }
   virtual const cuFloatComplex* getGpuConjugatedFreqs() const { return nullptr; };
+  virtual const cf32* getGpuConjugatedFreqsHost(int outputband, int subloopindex) const { return nullptr; };
 
  /**
   * Returns the estimated number of bytes used by the Mode

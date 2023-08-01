@@ -46,6 +46,11 @@ public:
 
     GpuMemHelper(size_t nElems, cudaStream_t stream, bool gpuOnly) : managed(false), cpuData(nullptr), nBytes(sizeof(T) * nElems), cuStream(stream) {
         checkCuda(cudaMallocAsync(&gpuData, nBytes, cuStream));
+
+        if (!gpuOnly) {
+            cpuData = new T[nElems];
+            checkCuda(cudaHostRegister(cpuData, nBytes, cudaHostRegisterPortable));
+        }
     }
 
     ~GpuMemHelper() {
