@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: format_codif.c 10842 2022-12-01 00:38:49Z ChrisPhillips $
+// $Id: format_codif.c 11096 2023-09-15 15:30:38Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 10842 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2022-12-01 11:38:49 +1100 (Thu, 01 Dec 2022) $
+// $LastChangedRevision: 11096 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-16 01:30:38 +1000 (Sat, 16 Sep 2023) $
 //
 //============================================================================
 
@@ -183,7 +183,7 @@ static int mark5_stream_frame_time_codif(const struct mark5_stream *ms, int *mjd
 	  *sec = getCODIFFrameSecond(header)+fullframens/1000000000 + v->leapsecs;;
 	  if (*sec>86400) { // Could have bumped to next day. Max period ~ 18hrs)
 	    *sec -= 86400;
-	    if(mjd) *mjd++;
+	    if(mjd) (*mjd)++;
 	  }
 	}
 	if(ns)

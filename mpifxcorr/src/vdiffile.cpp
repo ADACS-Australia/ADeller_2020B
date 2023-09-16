@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdiffile.cpp 10466 2022-05-04 14:45:45Z WalterBrisken $
+// $Id: vdiffile.cpp 11063 2023-09-13 23:31:28Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.cpp $
-// $LastChangedRevision: 10466 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2022-05-05 00:45:45 +1000 (Thu, 05 May 2022) $
+// $LastChangedRevision: 11063 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:31:28 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 
@@ -609,8 +609,10 @@ void VDIFDataStream::initialiseFile(int configindex, int fileindex)
 			snprintvdiffilesummary(fileSummaryString, MaxSummaryLength, &fileSummary);
 			cinfo << startl << fileSummaryString << endl;
 
-			// If verbose...
-			printvdiffilesummary(&fileSummary);
+		        if (verbose)	
+                        {
+                          printvdiffilesummary(&fileSummary);
+                        }
 
 			// Here set readseconds to time since beginning of job
 			readseconds = 86400*(vdiffilesummarygetstartmjd(&fileSummary)-corrstartday) + vdiffilesummarygetstartsecond(&fileSummary)-corrstartseconds + intclockseconds;

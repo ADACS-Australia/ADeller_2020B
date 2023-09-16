@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6.h 10540 2022-07-18 11:11:08Z HelgeRottmann $
+// $Id: Mark6.h 11045 2023-08-24 12:15:28Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 10540 $
+// $LastChangedRevision: 11045 $
 // $Author: HelgeRottmann $
-// $LastChangedDate: 2022-07-18 21:11:08 +1000 (Mon, 18 Jul 2022) $
+// $LastChangedDate: 2023-08-24 22:15:28 +1000 (Thu, 24 Aug 2023) $
 //
 //============================================================================
 #ifndef MARK6_H
@@ -91,7 +91,7 @@ private:
         int verifyDevices();
 	void validateMountDevices();
         int parseControllerId(std::string devpath);
-        long parseDiskId(std::string sasAddress);
+        long parseDiskId(std::string sasAddress, std::string driver);
 public:
         Mark6();
 	~Mark6();
@@ -108,6 +108,7 @@ public:
         int getSlot(std::string eMSN);
         void sendStatusMessage();
         void sendSlotStatusMessage();
+        Mark6Controller *getControllerById(int id);
         std::vector<Mark6DiskDevice> getMountedDevices() const {
             return mountedDevices_m;
         }

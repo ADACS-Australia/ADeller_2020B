@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bfile.cpp 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: mark5bfile.cpp 11065 2023-09-13 23:35:59Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.cpp $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 11065 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:35:59 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 #include <cmath>
@@ -337,7 +337,10 @@ void Mark5BDataStream::initialiseFile(int configindex, int fileindex)
 	cinfo << startl << fileSummaryString << endl;
 
 	// If verbose...
-	printmark5bfilesummary(&fileSummary);
+	if (verbose)
+        {
+	    printmark5bfilesummary(&fileSummary);
+        }
 
 
 	// Here set readseconds to time since beginning of job

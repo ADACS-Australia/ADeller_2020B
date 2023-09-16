@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: m6sg_gather.c 9806 2020-11-07 11:38:52Z JanWagner $
+// $Id: m6sg_gather.c 11072 2023-09-14 17:18:24Z WalterBrisken $
 // $HeadURL$
-// $LastChangedRevision: 9806 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-11-07 22:38:52 +1100 (Sat, 07 Nov 2020) $
+// $LastChangedRevision: 11072 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-15 03:18:24 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 //
@@ -164,6 +164,7 @@ int main(int argc, char** argv)
     if (ntotal <= 0)
     {
         fprintf(stderr, "Scan seems to have no data. Stopping.\n");
+	free(buf);
         return 0;
     }
 
