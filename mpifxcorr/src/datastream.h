@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: datastream.h 9674 2020-08-22 21:37:21Z WalterBrisken $
+// $Id: datastream.h 11062 2023-09-13 23:28:15Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/datastream.h $
-// $LastChangedRevision: 9674 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2020-08-23 07:37:21 +1000 (Sun, 23 Aug 2020) $
+// $LastChangedRevision: 11062 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:28:15 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 
@@ -86,6 +86,8 @@ public:
   * @return Estimated memory size of the Datastream (bytes)
   */
   inline long long getEstimatedBytes() const { return estimatedbytes; }
+
+  bool verbose;
 
 #define BUFOFFSET_T int   // Should eventually be changed to uint64_t to avoid 2 GB limit
 

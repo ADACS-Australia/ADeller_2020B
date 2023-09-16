@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_input.c 10862 2022-12-29 19:23:21Z WalterBrisken $
+// $Id: difx_input.c 11076 2023-09-14 17:43:15Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_input.c $
-// $LastChangedRevision: 10862 $
+// $LastChangedRevision: 11076 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:21 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedDate: 2023-09-15 03:43:15 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -3592,7 +3592,7 @@ static int mergeDifxInputFreqSetsUnion(DifxInput *D)
 static int mergeDifxInputFreqSets(DifxInput *D, const DifxMergeOptions *mergeOptions)
 {
 	static const DifxMergeOptions defaultMergeOptions;      /* initialized to zeros */
-	int nError;
+	int nError = 0;
 
 	if(!D)
 	{

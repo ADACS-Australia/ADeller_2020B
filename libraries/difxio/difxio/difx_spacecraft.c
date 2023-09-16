@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_spacecraft.c 10303 2021-10-27 17:15:44Z WalterBrisken $
+// $Id: difx_spacecraft.c 11033 2023-08-08 15:57:56Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/difx_spacecraft.c $
-// $LastChangedRevision: 10303 $
+// $LastChangedRevision: 11033 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2021-10-28 04:15:44 +1100 (Thu, 28 Oct 2021) $
+// $LastChangedDate: 2023-08-09 01:57:56 +1000 (Wed, 09 Aug 2023) $
 //
 //============================================================================
 
@@ -149,9 +149,7 @@ static void TEME2J2000(double et, double state[6])
 	/* Rotate from TEME to J2000 frame */
 	/* Get rotation matrix from TEME @ET (sec past J2000 epoch) to J2000 */
 	/* PRECM is 6x6, goes from J2000 -> TEME */
-	zzteme_(&et, precm);
-	/* Invert state transformation matrix to go from TEME -> J2000 */
-	invstm_(precm, invprecm);
+	zzteme_(&et, precm, invprecm);
 	/* Do transformation of state from EV2LIN's TEME to J2000 */
 	mxvg_(invprecm, state, &six, &six, tmpstate);
 	for(i = 0; i < 6; ++i)

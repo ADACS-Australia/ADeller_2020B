@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # =======================================================================
 # Copyright (C) 2016 Cormac Reynolds
 #
@@ -28,7 +28,7 @@ import os
 import subprocess
 import re
 import optparse
-import espressolib
+from espressolib import espressolib
 import multiprocessing
 #import queue
 

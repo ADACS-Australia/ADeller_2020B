@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difxsend.c 10566 2022-07-29 16:26:50Z HelgeRottmann $
+// $Id: difxsend.c 11092 2023-09-14 23:43:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxsend.c $
-// $LastChangedRevision: 10566 $
-// $Author: HelgeRottmann $
-// $LastChangedDate: 2022-07-30 02:26:50 +1000 (Sat, 30 Jul 2022) $
+// $LastChangedRevision: 11092 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-15 09:43:21 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 #include <stdio.h>
@@ -169,8 +169,8 @@ int difxMessageSendLoad(const DifxMessageLoad *load)
 		  "<cpuLoad>%4.2f</cpuLoad>"
 		  "<totalMemory>%d</totalMemory>"
 		  "<usedMemory>%d</usedMemory>"
-		  "<netRXRate>%d</netRXRate>"
-		  "<netTXRate>%d</netTXRate>"
+		  "<netRXRate>%u</netRXRate>"
+		  "<netTXRate>%u</netTXRate>"
 		  "<nCore>%d</nCore>"
 		"</difxLoad>",
 
@@ -869,8 +869,8 @@ int difxMessageSendMk5Version(const DifxMessageMk5Version *mk5version)
 		    "<PCBSubType>%s</PCBSubType>"
 		    "<FPGAConfig>%s</FPGAConfig>"
 		    "<FPGAConfigVer>%s</FPGAConfigVer>"
-		    "<SerialNum>%d</SerialNum>"
-		    "<NumChannels>%d</NumChannels>"
+		    "<SerialNum>%u</SerialNum>"
+		    "<NumChannels>%u</NumChannels>"
 		  "</DaughterBoard>",
 
 		mk5version->DB_PCBVersion,

@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: mk5daemon.h 10395 2022-02-18 12:37:07Z JanWagner $
+ * $Id: mk5daemon.h 11080 2023-09-14 18:03:22Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/mk5daemon/trunk/src/mk5daemon.h $
- * $LastChangedRevision: 10395 $
- * $Author: JanWagner $
- * $LastChangedDate: 2022-02-18 23:37:07 +1100 (Fri, 18 Feb 2022) $
+ * $LastChangedRevision: 11080 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2023-09-15 04:03:22 +1000 (Fri, 15 Sep 2023) $
  *
  *==========================================================================*/
 
@@ -153,7 +153,7 @@ typedef struct
 	int swapMonInterval;		/* seconds */
 	volatile int dieNow;
 	int activeBank;
-	char vsns[N_BANK][10];
+	char vsns[N_BANK_MARK6][10];
 	char hostName[MK5DAEMON_HOSTNAME_LENGTH];
 	time_t lastMpifxcorrUpdate;
 	time_t lastMark5AUpdate;

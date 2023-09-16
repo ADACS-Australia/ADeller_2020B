@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx_tcal.c 7655 2017-02-20 02:57:56Z WalterBrisken $
+// $Id: difx_tcal.c 11076 2023-09-14 17:43:15Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxio/trunk/difxio/parsevis.h $
-// $LastChangedRevision: 7655 $
+// $LastChangedRevision: 11076 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-02-20 13:57:56 +1100 (Mon, 20 Feb 2017) $
+// $LastChangedDate: 2023-09-15 03:43:15 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -612,7 +612,7 @@ static int loadDifxTcalVLBA(DifxTcal *dt, const char *antenna, const char *recei
 		int g = -1;
 		char lowercaseAntenna[MAX_DIFX_TCAL_ANTENNA_LENGTH];
 
-		for(v = 0; v < MAX_DIFX_TCAL_ANTENNA_LENGTH && antenna[v]; ++v)
+		for(v = 0; v < MAX_DIFX_TCAL_ANTENNA_LENGTH-1 && antenna[v]; ++v)
 		{
 			lowercaseAntenna[v] = tolower(antenna[v]);
 		}

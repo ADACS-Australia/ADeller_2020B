@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vmux.c 10448 2022-04-29 16:13:22Z WalterBrisken $
+// $Id: vmux.c 11098 2023-09-15 22:58:20Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 10448 $
+// $LastChangedRevision: 11098 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-04-30 02:13:22 +1000 (Sat, 30 Apr 2022) $
+// $LastChangedDate: 2023-09-16 08:58:20 +1000 (Sat, 16 Sep 2023) $
 //
 //============================================================================
 
@@ -661,7 +661,7 @@ int main(int argc, char **argv)
 			int64_t nJump = (int64_t)(stats.startFrameNumber - nextFrame);
 			int64_t j;
 
-			fprintf(stderr, "JUMP %zd  %zd %zd\n", nJump, nextFrame/framesPerSecond, nextFrame%framesPerSecond);
+			fprintf(stderr, "JUMP %" PRId64 "  %" PRId64 " %" PRId64 "\n", nJump, nextFrame/framesPerSecond, nextFrame%framesPerSecond);
 
 			/* borrow one output frame of src memory... */
 			memcpy(src, dest, VDIF_HEADER_BYTES);

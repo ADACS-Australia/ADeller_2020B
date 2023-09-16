@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: format_vdif.c 11014 2023-07-17 12:01:51Z JanWagner $
+// $Id: format_vdif.c 11073 2023-09-14 17:28:09Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 11014 $
-// $Author: JanWagner $
-// $LastChangedDate: 2023-07-17 22:01:51 +1000 (Mon, 17 Jul 2023) $
+// $LastChangedRevision: 11073 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-15 03:28:09 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -3131,7 +3131,7 @@ static int vdif_decode_1channel_32bit_decimation1(struct mark5_stream *ms, int n
 		}
 		else
 		{
-			data[0][o] = (le32toh(buf[i]) - (1<<31))/8.0;
+			data[0][o] = (le32toh(buf[i])/8.0 - (1<<28));
 		}
 
 		++i;
@@ -6235,7 +6235,7 @@ static int vdif_complex_decode_1channel_32bit_decimation1(struct mark5_stream *m
 		}
 		else
 		{
-			data[0][o] = (le32toh(buf[i]) - (1<<31))/8.0 + (le32toh(buf[i+1]) - (1<<31))/8.0*I;
+			data[0][o] = (le32toh(buf[i])/8.0 - (1<<28)) + (le32toh(buf[i+1])/8.0 - (1<<28))*I;
 		}
 
 		i += 2;

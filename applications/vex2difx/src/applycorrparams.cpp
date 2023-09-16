@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: applycorrparams.cpp 10966 2023-05-09 06:52:03Z JanWagner $
+ * $Id: applycorrparams.cpp 11032 2023-08-07 21:14:39Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 10966 $
- * $Author: JanWagner $
- * $LastChangedDate: 2023-05-09 16:52:03 +1000 (Tue, 09 May 2023) $
+ * $LastChangedRevision: 11032 $
+ * $Author: WalterBrisken $
+ * $LastChangedDate: 2023-08-08 07:14:39 +1000 (Tue, 08 Aug 2023) $
  *
  *==========================================================================*/
 
@@ -148,7 +148,7 @@ static void applyCorrParams_MultiPhaseCenter(VexData *V, const CorrParams &param
 
 			exit(EXIT_FAILURE);
 		}
-		
+
 		const SourceSetup *ss = params.getSourceSetup(S->defName);
 		if(ss)
 		{
@@ -175,6 +175,9 @@ static void applyCorrParams_MultiPhaseCenter(VexData *V, const CorrParams &param
 						{
 							newS->calCode = pc->calCode;
 						}
+
+						// It seems the call to newSource can change the pointer to the source being iterated over...
+						S = V->getSource(sourceNum);
 					}
 				}
 
@@ -187,7 +190,7 @@ static void applyCorrParams_MultiPhaseCenter(VexData *V, const CorrParams &param
 					{
 						continue;
 					}
-					
+
 					V->deletePhaseCenters(scanNum);
 					if(ss->doPointingCentre)
 					{

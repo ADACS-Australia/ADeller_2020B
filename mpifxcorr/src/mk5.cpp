@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mk5.cpp 9613 2020-07-14 00:30:18Z JanWagner $
+// $Id: mk5.cpp 11064 2023-09-13 23:34:42Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mk5.cpp $
-// $LastChangedRevision: 9613 $
-// $Author: JanWagner $
-// $LastChangedDate: 2020-07-14 10:30:18 +1000 (Tue, 14 Jul 2020) $
+// $LastChangedRevision: 11064 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:34:42 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 #include <cmath>
@@ -356,7 +356,10 @@ void Mk5DataStream::initialiseFile(int configindex, int fileindex)
   // resolve any day ambiguities
   mark5_stream_fix_mjd(syncteststream, corrstartday);
 
-  mark5_stream_print(syncteststream);
+  if (verbose)
+  {
+    mark5_stream_print(syncteststream);
+  }
 
   offset = syncteststream->frameoffset;
   framegranularity = syncteststream->framegranularity;
@@ -436,6 +439,7 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
   struct mark5_stream *mark5stream;
   int offset;
   char * ptr;
+  char fileSummaryString[512];
 
   offset = 0;
   corrday = config->getStartMJD();
@@ -482,7 +486,13 @@ int Mk5DataStream::testForSync(int configindex, int buffersegment)
 
       if (configindex != lastconfig) {
         cinfo << startl << "Config has changed!" << endl;
-        mark5_stream_print(mark5stream);
+        // Put the stream  information into log file
+        mark5_stream_snprint(fileSummaryString, 512, mark5stream);
+        cinfo << startl << fileSummaryString << endl;
+        if (verbose)
+          {
+            mark5_stream_print(mark5stream);
+          } 
         lastconfig = configindex;
         if(switchedpower) {
           switchedpower->flush();

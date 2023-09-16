@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsUV.h 11009 2023-06-30 14:25:38Z WalterBrisken $
+// $Id: fitsUV.h 11039 2023-08-14 21:28:47Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsUV.h $
-// $LastChangedRevision: 11009 $
+// $LastChangedRevision: 11039 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2023-07-01 00:25:38 +1000 (Sat, 01 Jul 2023) $
+// $LastChangedDate: 2023-08-15 07:28:47 +1000 (Tue, 15 Aug 2023) $
 //
 //============================================================================
 #ifndef __FITS_UV_H__
@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include "difxio/parsedifx.h"
 #include "difx2fits.h"
+#include "delaycal.h"
 #include "bandpass.h"
 
 struct __attribute__((packed)) UVrow
@@ -94,7 +95,7 @@ typedef struct
 DifxVis *newDifxVis(const DifxInput *D, int jobId, const struct CommandLineOptions *opts, int pulsarBin, int phaseCentre);
 void deleteDifxVis(DifxVis *dv);
 int DifxVisNextFile(DifxVis *dv);
-int DifxVisNewUVData(DifxVis *dv, const struct CommandLineOptions *opts, const Bandpass *B);
+int DifxVisNewUVData(DifxVis *dv, const struct CommandLineOptions *opts, const DelayCal *DC, DelayCalCache *DCC, const Bandpass *B);
 int DifxVisCollectRandomParams(const DifxVis *dv);
 
 

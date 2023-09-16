@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5bfile.c 9925 2021-02-23 15:43:09Z JanWagner $
+// $Id: mark5bfile.c 11061 2023-09-13 23:25:50Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 9925 $
-// $Author: JanWagner $
-// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
+// $LastChangedRevision: 11061 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:25:50 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 
@@ -56,6 +56,10 @@ void resetmark5bfilesummary(struct mark5b_file_summary *sum)
 	sum->framesPerSecond = 25600;	/* 2 Gbps */
 }
 
+/**
+ * Deprecated. Use snprintmark5bfilesummary instead and
+ * do message output outside mark5access library
+ **/
 void printmark5bfilesummary(const struct mark5b_file_summary *sum)
 {
 	printf("Mark5B file: %s\n", sum->fileName);
