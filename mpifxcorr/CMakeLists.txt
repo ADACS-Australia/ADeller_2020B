@@ -54,6 +54,8 @@ set(
         src/gpumode.cu
         src/gpumode.cuh
         src/gpumode_kernels.cuh
+	src/gpudecode.cu
+	src/gpudecode.cuh
         src/mpifxcorr.cpp
         src/mpifxcorr.h
         src/mark5bfile.cpp
@@ -65,8 +67,8 @@ set(
         src/mk5.h
         src/mk5mode.cpp
         src/mk5mode.h
-        src/mk5mode_gpu.cpp
-        src/mk5mode_gpu.h
+        src/mk5mode_gpu.cu
+        src/mk5mode_gpu.cuh
         src/mode.cpp
         src/mode.h
         src/model.cpp

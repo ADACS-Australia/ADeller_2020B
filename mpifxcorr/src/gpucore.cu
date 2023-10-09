@@ -447,6 +447,8 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
     xcshiftcount = 0;
     acblockcount = 0;
     acshiftcount = 0;
+    // Force a single data transfer to the GPU
+    // numBufferedFFTs = numblocks;
     numfftloops = numblocks / numBufferedFFTs;
     if (numblocks % numBufferedFFTs != 0)
         numfftloops++;
@@ -511,7 +513,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
 
         numfftsprocessed = 0;   // not strictly needed, but to prevent compiler warning
 
-        // do the station-based processing for this batch of FFT chunks
+        // do the station-based processing for this batch of FFT chunks.
         vector<std::thread> streamThreads;
 
         for (int j = 0; j < numdatastreams; j++) {

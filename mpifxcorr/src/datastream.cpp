@@ -139,6 +139,10 @@ void DataStream::initialise()
   consumedbytes = 0;
   lastconsumedbytes = 0;
 
+  std::cout << "maxbytes " << maxbytes << std::endl;
+  std::cout << "bufferfactor " << databufferfactor << std::endl;
+  std::cout << "bufferbytes " << bufferbytes << std::endl;
+
   //cinfo << startl << "******DATASTREAM " << mpiid << ": Initialise. bufferbytes=" << bufferbytes << "  numdatasegments=" << numdatasegments << "  readbytes=" << readbytes << endl;
 
   for(int i=0;i<config->getNumConfigs();i++) {

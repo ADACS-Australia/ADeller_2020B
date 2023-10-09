@@ -13,6 +13,13 @@ using namespace std::chrono;
 
 const int MAX_INDICIES = 10;
 
+__global__ void gpu_allocate_unpacked(float** arrays, float* data, int nchan, int dlen) {
+    // Use arrays to make data into a flattened 2D array
+    for (int i = 0; i < nchan; i++) {
+        arrays[i] = data + i * dlen;
+    }
+}
+
 GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedbandchan, int chanstoavg, int bpersend,
                  int gsamples, int nrecordedfreqs, double recordedbw, double *recordedfreqclkoffs,
                  double *recordedfreqclkoffsdelta, double *recordedfreqphaseoffs, double *recordedfreqlooffs,
@@ -48,24 +55,22 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     temp_autocorrelations_gpu = new GpuMemHelper<cuFloatComplex>(autocorrwidth * numrecordedbands * recordedbandchannels, cuStream);
     estimatedbytes_gpu += temp_autocorrelations_gpu->size();
 
-    unpackedarrays_gpu = new GpuMemHelper<float*>(numrecordedbands * cfg_numBufferedFFTs, cuStream);
-    unpackeddata_gpu = new GpuMemHelper<float>(unpackedarrays_elem_count * numrecordedbands * cfg_numBufferedFFTs, cuStream);
 
-    // Need to make sure that this allocation has completed before we try to access the data
+    size_t buffer_payload_bytes = (config->getMaxDataBytes() / config->getFrameBytes(confindex, dsindex)) * config->getFramePayloadBytes(confindex, dsindex);
+    size_t unpacked_size = buffer_payload_bytes * 8 / (config->getDNumBits(confindex, dsindex) * config->getDNumRecordedBands(confindex, dsindex));
+    // Unpacked data only allocated on GPU
+    unpackedarrays_gpu = new GpuMemHelper<float*>(numrecordedbands, cuStream, true);
+    unpackeddata_gpu = new GpuMemHelper<float>(numrecordedbands * unpacked_size, cuStream, true);
+    std::cout << "Unpacked data size: " << numrecordedbands * unpacked_size << std::endl;
+
+    // Make sure these are allocated
     unpackeddata_gpu->sync();
 
-    for (int j = 0; j < cfg_numBufferedFFTs; j++) {
-        for (size_t i = 0; i < numrecordedbands; i++) {
-            unpackedarrays_gpu->ptr()[(j * numrecordedbands) + i] =
-                    unpackeddata_gpu->ptr() + (((j * numrecordedbands) + i) * unpackedarrays_elem_count);
-        }
-    }
+    // Now launch a kernel to set up the arrays on the GPU
+    gpu_allocate_unpacked<<<1, 1, 0, cuStream>>>(unpackedarrays_gpu->gpuPtr(), unpackeddata_gpu->gpuPtr(), numrecordedbands, unpacked_size);
 
     estimatedbytes_gpu += unpackedarrays_gpu->size();
     estimatedbytes_gpu += unpackeddata_gpu->size();
-
-    // Copy the unpacked gpu arrays to the device - these won't change again
-    unpackedarrays_gpu->copyToDevice();
 
     gSampleIndexes = new GpuMemHelper<int>(cfg_numBufferedFFTs, cuStream);
     gValidSamples = new GpuMemHelper<bool>(cfg_numBufferedFFTs, cuStream);
@@ -148,8 +153,8 @@ GPUMode::~GPUMode() {
     delete fftd_gpu;
     delete conj_fftd_gpu;
     delete temp_autocorrelations_gpu;
-    delete unpackedarrays_gpu;
     delete unpackeddata_gpu;
+    delete unpackedarrays_gpu;
 
     delete gSampleIndexes;
     delete gValidSamples;
@@ -181,9 +186,9 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
 {
     auto begin_time = high_resolution_clock::now();
-
+    std::cout << "processing" << std::endl;
     calls += 1;
-//    std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
+    std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
 
     // Sanity checks
     if (config->getDPhaseCalIntervalMHz(configindex, datastreamindex) != 0) {
@@ -230,6 +235,13 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     auto start = high_resolution_clock::now();
 
+    std::cout << "Copied bytes to GPU " << datalengthbytes << std::endl;
+    std::cout << "data: " << (int)data[0] << "\t" << (int)data[datalengthbytes - 1] << std::endl;
+    packeddata_gpu = new GpuMemHelper<char>((char*)data, datalengthbytes, cuStream);
+    // Copy packed data to device
+    packeddata_gpu->copyToDevice();
+    packeddata_gpu->sync();
+
     // Reset the autocorrelations
     checkCuda(cudaMemsetAsync(temp_autocorrelations_gpu->gpuPtr(), 0,
                               sizeof(cf32) * numrecordedbands * recordedbandchannels * autocorrwidth, cuStream));
@@ -237,40 +249,48 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     // Update the interpolator
     gInterpolator->copyToDevice();
 
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    avg_copyto += duration.count();
+
+    start = high_resolution_clock::now();
+
     calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
-    // First unpack all the data
-    int numfftsprocessed = 0;
-    for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
-        int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
-        if (i >= startblock + numblocks)
-            break; // may not have to fully complete last fftloop
+    // // First unpack all the data
+    // int numfftsprocessed = 0;
+    // for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
+    //     int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
+    //     if (i >= startblock + numblocks)
+    //         break; // may not have to fully complete last fftloop
 
-        process_unpack(i, numfftsprocessed);
-    }
+    //     process_unpack(i, numfftsprocessed);
+    // }
 
-//    static bool printed = false;
-//    if (!printed) {
-//        printed = true;
-//
-//        for (int i = 0; i < numrecordedfreqs; i++) {
-//            for (int j = 0; j < MAX_INDICIES; j++) {
-//                cout << i << " : " << j << " - " << indices->ptr()[(i*MAX_INDICIES) + j] << endl;
-//            }
-//        }
-//    }
+    unpack_all();
+
+    // static bool printed = false;
+    // if (!printed) {
+    //     printed = true;
+
+    //     for (int i = 0; i < numrecordedfreqs; i++) {
+    //         for (int j = 0; j < MAX_INDICIES; j++) {
+    //             std::cout << i << " : " << j << " - " << indices->ptr()[(i*MAX_INDICIES) + j] << std::endl;
+    //         }
+    //     }
+    // }
 
     // Indices are now calculated, so we can copy them to the gpu
     indices->copyToDevice();
 
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
     avg_unpack += duration.count();
 
     start = high_resolution_clock::now();
 
     // Copy the data to the gpu
-    unpackeddata_gpu->copyToDevice();
+    //unpackeddata_gpu->copyToDevice();
 
     // We need to copy the sample indexes to the gpu
     gSampleIndexes->copyToDevice();
@@ -379,13 +399,16 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 //        }
 //    }
 
+    delete packeddata_gpu;
+
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     avg_postprocess += duration.count();
 
     processing_time += duration_cast<microseconds>(stop - begin_time).count();
 
-    return numfftsprocessed;
+    //return numfftsprocessed;
+    return 0;
 }
 
 bool GPUMode::is_dataweight_valid(int subloopindex) {

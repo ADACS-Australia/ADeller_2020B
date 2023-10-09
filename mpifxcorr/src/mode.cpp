@@ -34,6 +34,8 @@
 #include "alert.h"
 #include "pcal.h"
 
+#include <iostream>
+
 //using namespace std;
 const float Mode::TINY = 0.000000001;
 
@@ -806,6 +808,7 @@ void Mode::setData(u8 * d, int dbytes, int dscan, int dsec, int dns)
 {
   data = d;
   datalengthbytes = dbytes;
+  std::cout << "Setting data length as " << dbytes << std::endl;
   datascan = dscan;
   datasec = dsec;
   datans = dns;

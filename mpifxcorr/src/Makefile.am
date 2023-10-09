@@ -21,7 +21,8 @@ endif
 if WITH_CUDA
 cuda_files = \
 	gpumode.cu \
-	gpucore.cu
+	gpucore.cu \
+	gpudecode.cu
 else
 cuda_files =
 endif
@@ -74,6 +75,7 @@ library_include_HEADERS = \
 	cpumode.h \
 	gpumode.cuh \
 	gpucore.cuh \
+	gpudecode.cuh \
 	polyco.h \
 	nativemk5.h \
 	watchdog.h \

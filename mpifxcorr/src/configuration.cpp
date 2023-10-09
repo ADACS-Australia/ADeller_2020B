@@ -35,7 +35,7 @@
 #include "configuration.h"
 #include "cpumode.h"
 #include "mk5mode.h"
-#include "mk5mode_gpu.h"
+#include "mk5mode_gpu.cuh"
 #include "visibility.h"
 #include "alert.h"
 #include "vdifio.h"

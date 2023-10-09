@@ -1,8 +1,12 @@
 #include <mpi.h>
-#include "mk5mode_gpu.h"
+#include "mk5mode_gpu.cuh"
 #include "gpumode_kernels.cuh"
+#include "gpudecode.cuh"
 //#include "mk5.h"
 #include "alert.h"
+#include <iostream>
+#include <bitset>
+#include <unistd.h>
 
 #define NOT_SUPPORTED(x) { std::cerr << "Whoops, we don't support this on the GPU: " << x << std::endl; exit(1); }
 
@@ -91,10 +95,6 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   {
     NOT_SUPPORTED("unpack - usecomplex");
   }
-  else
-  {
-    goodsamples = mark5_unpack_with_offset(mark5stream, data, unpackstartsamples, &unpackedarrays_gpu->ptr()[subloopindex * numrecordedbands], samplestounpack);
-  }
   if(mark5stream->samplegranularity > 1)
     { // CHRIS not sure what this is mean to do
       // WALTER: unpacking of some mark5 modes (those with granularity > 1) must be unpacked not as individual samples but in groups of sample granularity
@@ -149,5 +149,38 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
   }
 
   return goodsamples/(float)unpacksamples;
+}
+
+void Mk5_GPUMode::unpack_all() {
+  // Hacky little workaround to get this number and the stream struct back
+    int *gs;
+    cudaMallocManaged(&gs, sizeof(int));	
+    mark5_stream *tmp_mk5stream;
+    cudaMallocManaged(&tmp_mk5stream, sizeof(mark5_stream));
+    *tmp_mk5stream = *mark5stream;
+
+    // Figure out how many frames in the packed data
+    int framestounpack = datalengthbytes / mark5stream->framebytes;
+    if (datalengthbytes % mark5stream->framebytes != 0) {
+      std::cout << "Buffer contains fraction of a frame :(. This shouldn't happen!" << std::endl;
+    }
+
+    int unpack_threads = 64;
+    int unpack_blocks = (framestounpack + unpack_threads - 1) / unpack_threads;
+    // unpack_threads = 1;
+    // unpack_blocks = 1;
+    // std::cout << "About to call GPU kernel" << std::endl;
+    // std::cout << "packed pointer " << packeddata_gpu->size() << std::endl;
+    // std::cout << "unpacked array pointer " << unpackedarrays_gpu->size() << std::endl;
+    // std::cout << "unpacked data pointer " << unpackeddata_gpu->size() << std::endl;
+    gpu_unpack<<<unpack_blocks, unpack_threads, 0, cuStream>>>(tmp_mk5stream, packeddata_gpu->gpuPtr(), unpackedarrays_gpu->gpuPtr(), framestounpack, gs);
+    // std::cout << "About to sync" << std::endl;
+
+    cudaDeviceSynchronize();
+	  int goodsamples = *gs;
+    *mark5stream = *tmp_mk5stream;
+	  cudaFree(gs);
+    cudaFree(tmp_mk5stream);
+
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab
