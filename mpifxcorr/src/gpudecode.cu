@@ -377,7 +377,7 @@ __device__ int mk5_decode_general_gpu(struct mark5_stream *ms, int nsamp, float 
 
 	int bit_counter = i * 8;
 
-	int decomp_factor = sizeof(float) * 8 / (ms->nbit * ms->nchan);
+	int decomp_factor = 8 / (ms->nbit * ms->nchan);
 
 	//printf("Buffer: %i\nRead pos: %i\nnSamples: %i\nnbit: %i\nnchan: %i\n\n\n", (int)buf, i, nsamp, nbit, nchan);
 
@@ -392,7 +392,8 @@ __device__ int mk5_decode_general_gpu(struct mark5_stream *ms, int nsamp, float 
 	skipped = ((1 << skipped) - nchan) % nchan;
 
 	bool bitreadflag = (nbit == 1) || (nbit == 2);
-	for(o = decomp_factor * ms->databytes * ms->framenum; o < nsamp; o++) {
+	int start = decomp_factor * ms->databytes * ms->framenum;
+	for(o = start; o < start + nsamp; o++) {
 		//printf("o = %i\n", o);
 		if (i >= ms->blankzoneendvalid[0])
 		{

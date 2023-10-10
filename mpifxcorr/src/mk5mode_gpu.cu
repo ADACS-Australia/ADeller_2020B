@@ -167,16 +167,12 @@ void Mk5_GPUMode::unpack_all() {
 
     int unpack_threads = 64;
     int unpack_blocks = (framestounpack + unpack_threads - 1) / unpack_threads;
-    // unpack_threads = 1;
-    // unpack_blocks = 1;
-    // std::cout << "About to call GPU kernel" << std::endl;
-    // std::cout << "packed pointer " << packeddata_gpu->size() << std::endl;
-    // std::cout << "unpacked array pointer " << unpackedarrays_gpu->size() << std::endl;
-    // std::cout << "unpacked data pointer " << unpackeddata_gpu->size() << std::endl;
+
     gpu_unpack<<<unpack_blocks, unpack_threads, 0, cuStream>>>(tmp_mk5stream, packeddata_gpu->gpuPtr(), unpackedarrays_gpu->gpuPtr(), framestounpack, gs);
-    // std::cout << "About to sync" << std::endl;
+
 
     cudaDeviceSynchronize();
+    
 	  int goodsamples = *gs;
     *mark5stream = *tmp_mk5stream;
 	  cudaFree(gs);

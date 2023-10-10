@@ -448,7 +448,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
     acblockcount = 0;
     acshiftcount = 0;
     // Force a single data transfer to the GPU
-    // numBufferedFFTs = numblocks;
+    numBufferedFFTs = numblocks;
     numfftloops = numblocks / numBufferedFFTs;
     if (numblocks % numBufferedFFTs != 0)
         numfftloops++;

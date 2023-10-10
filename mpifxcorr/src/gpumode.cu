@@ -33,8 +33,12 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     auto start = high_resolution_clock::now();
 
-    cfg_numBufferedFFTs = config->getNumBufferedFFTs(confindex);
-    unpackedarrays_elem_count = unpacksamples;
+    size_t buffer_payload_bytes = (config->getMaxDataBytes() / config->getFrameBytes(confindex, dsindex)) * config->getFramePayloadBytes(confindex, dsindex);
+    size_t unpacked_size = buffer_payload_bytes * 8 / (config->getDNumBits(confindex, dsindex) * config->getDNumRecordedBands(confindex, dsindex));
+    // What's the largest number of FFTs we can fit?
+    cfg_numBufferedFFTs = (unpacked_size + fftchannels - 1) / fftchannels;
+    std::cout << "Working on " << cfg_numBufferedFFTs << " FFTs" << std::endl;
+    // cfg_numBufferedFFTs = config->getNumBufferedFFTs(confindex);
 
     cudaDeviceProp prop;
     checkCuda(cudaGetDeviceProperties( &prop, 0));
@@ -42,6 +46,9 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     checkCuda(cudaStreamCreate(&cuStream));
 
     cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
+
+    std::cout << "unpack samples " << unpacksamples << std::endl;
+    std::cout << "fftchannels " << fftchannels << std::endl;
 
     complexunpacked_gpu = new GpuMemHelper<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream, true);
     estimatedbytes_gpu += complexunpacked_gpu->size();
@@ -56,8 +63,6 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
     estimatedbytes_gpu += temp_autocorrelations_gpu->size();
 
 
-    size_t buffer_payload_bytes = (config->getMaxDataBytes() / config->getFrameBytes(confindex, dsindex)) * config->getFramePayloadBytes(confindex, dsindex);
-    size_t unpacked_size = buffer_payload_bytes * 8 / (config->getDNumBits(confindex, dsindex) * config->getDNumRecordedBands(confindex, dsindex));
     // Unpacked data only allocated on GPU
     unpackedarrays_gpu = new GpuMemHelper<float*>(numrecordedbands, cuStream, true);
     unpackeddata_gpu = new GpuMemHelper<float>(numrecordedbands * unpacked_size, cuStream, true);
@@ -186,7 +191,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
 {
     auto begin_time = high_resolution_clock::now();
-    std::cout << "processing" << std::endl;
     calls += 1;
     std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
 
@@ -236,11 +240,9 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     auto start = high_resolution_clock::now();
 
     std::cout << "Copied bytes to GPU " << datalengthbytes << std::endl;
-    std::cout << "data: " << (int)data[0] << "\t" << (int)data[datalengthbytes - 1] << std::endl;
     packeddata_gpu = new GpuMemHelper<char>((char*)data, datalengthbytes, cuStream);
     // Copy packed data to device
     packeddata_gpu->copyToDevice();
-    packeddata_gpu->sync();
 
     // Reset the autocorrelations
     checkCuda(cudaMemsetAsync(temp_autocorrelations_gpu->gpuPtr(), 0,
@@ -257,17 +259,30 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     calculatePre_cpu(fftloop, numBufferedFFTs, startblock, numblocks);
 
-    // // First unpack all the data
-    // int numfftsprocessed = 0;
-    // for (; numfftsprocessed < numBufferedFFTs; numfftsprocessed++) {
-    //     int i = fftloop * numBufferedFFTs + numfftsprocessed + startblock;
-    //     if (i >= startblock + numblocks)
-    //         break; // may not have to fully complete last fftloop
-
-    //     process_unpack(i, numfftsprocessed);
-    // }
-
+    packeddata_gpu->sync();
     unpack_all();
+
+    // Set up the FFT window indices
+    for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
+        gSampleIndexes->ptr()[fftwin] = fftwin * fftchannels;
+
+        // For now just set all samples as valid for testing purposes
+        gValidSamples->ptr()[fftwin] = true;
+    }
+
+    for (int i = 0; i < numrecordedfreqs; i++) {
+        int count = 0;
+        // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
+        // Loop over all recorded bands looking for the matching frequency we should be dealing with
+        for (int j = 0; j < numrecordedbands; j++) {
+            // For upper sideband bands, normally just need to copy the fftd channels.
+            // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
+
+            if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
+                indices->ptr()[(i * MAX_INDICIES) + count++] = j;
+            }
+        }
+    }
 
     // static bool printed = false;
     // if (!printed) {
@@ -280,17 +295,15 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     //     }
     // }
 
-    // Indices are now calculated, so we can copy them to the gpu
-    indices->copyToDevice();
-
+    
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     avg_unpack += duration.count();
 
     start = high_resolution_clock::now();
 
-    // Copy the data to the gpu
-    //unpackeddata_gpu->copyToDevice();
+    // Indices are now calculated, so we can copy them to the gpu
+    indices->copyToDevice();
 
     // We need to copy the sample indexes to the gpu
     gSampleIndexes->copyToDevice();
@@ -298,6 +311,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
+    std::cout << "Data copied and unpacked with code: " << cudaGetLastError() << std::endl;
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -306,10 +320,12 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     start = high_resolution_clock::now();
 
     // Run the fringe rotation
+    std::cout << "Starting processing" << std::endl;
     fringeRotation(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
+    std::cout << "Fringe rotation ended with code: " << cudaGetLastError() << std::endl;
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -321,6 +337,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
+    std::cout << "Data FFTed with code: " << cudaGetLastError() << std::endl;
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -333,6 +350,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
+    std::cout << "Fractional rotate complete with code: " << cudaGetLastError() << std::endl;
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -634,7 +652,7 @@ __global__ void gpu_fringeRotation(
     const size_t destIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
 
     // Calculate the source index and get the source value
-    const size_t srcIndex = (subloopindex * numrecordedbands) + bandindex;
+    const size_t srcIndex = bandindex;
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
 
     /* The actual calculation that is going on for the linear case is as follows:
