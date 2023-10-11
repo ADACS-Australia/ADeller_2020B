@@ -461,6 +461,9 @@ __global__ void gpu_unpack(struct mark5_stream *ms, const void *packed, float **
 	ms->blanker = *blanker_vdif_gpu;
 
 	int index = blockIdx.x * blockDim.x + threadIdx.x;
+	if (index >= nframes) {
+		return;
+	}
 
 	mark5_stream thread_ms = *ms;
 

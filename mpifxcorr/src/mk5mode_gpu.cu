@@ -168,6 +168,8 @@ void Mk5_GPUMode::unpack_all() {
     int unpack_threads = 64;
     int unpack_blocks = (framestounpack + unpack_threads - 1) / unpack_threads;
 
+    // unpack_threads = 1;
+    // unpack_blocks = 1;
     gpu_unpack<<<unpack_blocks, unpack_threads, 0, cuStream>>>(tmp_mk5stream, packeddata_gpu->gpuPtr(), unpackedarrays_gpu->gpuPtr(), framestounpack, gs);
 
 

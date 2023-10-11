@@ -17,6 +17,7 @@ __global__ void gpu_allocate_unpacked(float** arrays, float* data, int nchan, in
     // Use arrays to make data into a flattened 2D array
     for (int i = 0; i < nchan; i++) {
         arrays[i] = data + i * dlen;
+        printf("Channel %i starts at %p\n", i, arrays[i]);
     }
 }
 
@@ -47,7 +48,6 @@ GPUMode::GPUMode(Configuration *conf, int confindex, int dsindex, int recordedba
 
     cudaMaxThreadsPerBlock = prop.maxThreadsPerBlock;
 
-    std::cout << "unpack samples " << unpacksamples << std::endl;
     std::cout << "fftchannels " << fftchannels << std::endl;
 
     complexunpacked_gpu = new GpuMemHelper<cuFloatComplex>(fftchannels * cfg_numBufferedFFTs * numrecordedbands, cuStream, true);
@@ -187,6 +187,16 @@ GPUMode::~GPUMode() {
     cout << "GPUMode lifetime: " << duration.count() / 1000. / 1000. << endl;
 }
 
+__global__ void check_unpack(float** array, int nchan, int nsamp) {
+    printf("Unpacked data:\n");
+    for (int o = 0; o < 10; o++) {
+        for (int c = 0; c < nchan; c++) {
+            printf("%f\t", array[c][o]);
+        }
+        printf("\n");
+    }
+}
+
 int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
 {
@@ -261,6 +271,8 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     packeddata_gpu->sync();
     unpack_all();
+    //checkCuda(cudaStreamSynchronize(cuStream));
+    //check_unpack<<<1,1>>>(unpackedarrays_gpu->gpuPtr(), 2, 10);
 
     // Set up the FFT window indices
     for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
@@ -280,8 +292,12 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
             if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
                 indices->ptr()[(i * MAX_INDICIES) + count++] = j;
+                weights[0][j] = 1;
             }
         }
+
+        weights[1][indices->ptr()[(i * MAX_INDICIES)]] = 1;
+        weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] = 1;
     }
 
     // static bool printed = false;
@@ -426,6 +442,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     processing_time += duration_cast<microseconds>(stop - begin_time).count();
 
     //return numfftsprocessed;
+
     return 0;
 }
 
@@ -648,12 +665,14 @@ __global__ void gpu_fringeRotation(
         return;
     }
 
+    
     // Calculate the destination index
     const size_t destIndex = (subloopindex * fftchannels * numrecordedbands) + (bandindex * fftchannels) + channelindex;
 
     // Calculate the source index and get the source value
     const size_t srcIndex = bandindex;
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
+
 
     /* The actual calculation that is going on for the linear case is as follows:
 
@@ -717,6 +736,9 @@ void GPUMode::fringeRotation(int fftloop, int numBufferedFFTs, int startblock, i
         }
     }
 
+    numBufferedFFTs = 5;
+    fftchannels_grid = 1;
+    fftchannels_block = 1;
     gpu_fringeRotation<<<
         dim3(numBufferedFFTs, fftchannels_grid),
         dim3(numrecordedbands,fftchannels_block),
