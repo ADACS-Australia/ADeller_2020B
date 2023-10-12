@@ -197,6 +197,23 @@ __global__ void check_unpack(float** array, int nchan, int nsamp) {
     }
 }
 
+
+// Little kernel to print out results of the FFT for debugging/checking
+__global__ void print_fft_window(cuFloatComplex* fftd_data, int nchan, int fftchannels, int nffts) {
+    for (int win = 0; win < nffts; win++) {
+        printf("---\tSample %i\t---\n", win);
+        for (int s = 0; s < fftchannels; s++) {
+            for (int c = 0; c < nchan; c++) {
+                int index = win * nchan * fftchannels + c * fftchannels + s;
+                printf("%f\t%f\t|\t", fftd_data[index].x, fftd_data[index].y);
+            }
+            printf("\n");
+        }
+        printf("\n---\t---\t---\n");
+    }
+
+}
+
 int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
                          int numblocks)  //frac sample error is in microseconds
 {
@@ -352,8 +369,11 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     runFFT();
 
     // todo: remove
+    fftd_gpu->copyToHost();
     checkCuda(cudaStreamSynchronize(cuStream));
     std::cout << "Data FFTed with code: " << cudaGetLastError() << std::endl;
+    print_fft_window<<<1,1>>>(fftd_gpu->gpuPtr(), 2, fftchannels, 1);
+    checkCuda(cudaStreamSynchronize(cuStream));
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -441,9 +461,10 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     processing_time += duration_cast<microseconds>(stop - begin_time).count();
 
+    // TODO: the return value might need to change? Not sure how its used
     //return numfftsprocessed;
-
-    return 0;
+    exit(EXIT_SUCCESS);
+    return numBufferedFFTs;
 }
 
 bool GPUMode::is_dataweight_valid(int subloopindex) {
