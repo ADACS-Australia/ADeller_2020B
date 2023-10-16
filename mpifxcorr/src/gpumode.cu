@@ -293,10 +293,12 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // Set up the FFT window indices
     for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
-        gSampleIndexes->ptr()[fftwin] = fftwin * fftchannels;
+        // TODO: posssibly some issues here if sample granularity is weirder than 2
+        gSampleIndexes->ptr()[fftwin] = nearestSamples[fftwin];
+        //std::cout << "sampleInds:\t" << gSampleIndexes->ptr()[fftwin] << "\t" << nearestSamples[fftwin] << std::endl;
 
-        // For now just set all samples as valid for testing purposes
-        gValidSamples->ptr()[fftwin] = true;
+        // Check which data is valid
+        gValidSamples->ptr()[fftwin] = is_data_valid(fftwin, fftwin);   // I think index = subloopindex now since the sublooping should be gone in the GPU version
     }
 
     for (int i = 0; i < numrecordedfreqs; i++) {
@@ -369,10 +371,9 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     runFFT();
 
     // todo: remove
-    fftd_gpu->copyToHost();
     checkCuda(cudaStreamSynchronize(cuStream));
     std::cout << "Data FFTed with code: " << cudaGetLastError() << std::endl;
-    print_fft_window<<<1,1>>>(fftd_gpu->gpuPtr(), 2, fftchannels, 1);
+    //print_fft_window<<<1,1>>>(fftd_gpu->gpuPtr(), 2, fftchannels, 1);
     checkCuda(cudaStreamSynchronize(cuStream));
 
     stop = high_resolution_clock::now();
@@ -693,7 +694,9 @@ __global__ void gpu_fringeRotation(
     // Calculate the source index and get the source value
     const size_t srcIndex = bandindex;
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
-
+    if (subloopindex == 5000) {
+        printf("Putting src[%lu][%lu] = %f into %lu\n", srcIndex, sampleIndexes[subloopindex] + channelindex, srcVal, destIndex);
+    }
 
     /* The actual calculation that is going on for the linear case is as follows:
 
@@ -757,9 +760,6 @@ void GPUMode::fringeRotation(int fftloop, int numBufferedFFTs, int startblock, i
         }
     }
 
-    numBufferedFFTs = 5;
-    fftchannels_grid = 1;
-    fftchannels_block = 1;
     gpu_fringeRotation<<<
         dim3(numBufferedFFTs, fftchannels_grid),
         dim3(numrecordedbands,fftchannels_block),
