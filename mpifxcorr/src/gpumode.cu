@@ -694,9 +694,6 @@ __global__ void gpu_fringeRotation(
     // Calculate the source index and get the source value
     const size_t srcIndex = bandindex;
     const float srcVal = src[srcIndex][sampleIndexes[subloopindex] + channelindex];
-    if (subloopindex == 5000) {
-        printf("Putting src[%lu][%lu] = %f into %lu\n", srcIndex, sampleIndexes[subloopindex] + channelindex, srcVal, destIndex);
-    }
 
     /* The actual calculation that is going on for the linear case is as follows:
 
@@ -735,6 +732,9 @@ __global__ void gpu_fringeRotation(
     sincosf(-TWO_PI * exponent, &cr.y, &cr.x);
     cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
     dest[destIndex] = cuCmulf(c, cr);
+    if (subloopindex == 5000) {
+        printf("Using src[%lu][%lu] = %f to get dest[%lu] = %f + %fi\n", srcIndex, sampleIndexes[subloopindex] + channelindex, srcVal, destIndex, dest[destIndex].x, dest[destIndex].y);
+    }
 }
 
 void GPUMode::fringeRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks) {
