@@ -84,7 +84,7 @@ Mk5_GPUMode::~Mk5_GPUMode()
 
 float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
 {
-  float goodsamples;
+  float goodsamples = 0;
   int mungedoffset = 0;
 
   //work out where to start from
@@ -152,7 +152,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
 }
 
 void Mk5_GPUMode::unpack_all() {
-  // Hacky little workaround to get this number and the stream struct back
+    // Hacky little workaround to get this number and the stream struct back
     int *gs;
     cudaMallocManaged(&gs, sizeof(int));	
     mark5_stream *tmp_mk5stream;

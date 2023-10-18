@@ -473,6 +473,7 @@ __global__ void gpu_unpack(struct mark5_stream *ms, const void *packed, float **
 	thread_ms.framenum = index;
 
 	thread_ms.blanker(&thread_ms);
+	// TODO: need atomic add
 	*goodsamples += thread_ms.decode(&thread_ms, thread_ms.framesamples, unpacked);
 
 }

@@ -222,6 +222,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     std::cout << "Doing the thing. fftloop: " << fftloop << ", numBufferedFFTs: " << numBufferedFFTs << ", numblocks: " << numblocks << ", startblock: " << startblock << std::endl;
 
     // Sanity checks
+    assert(numblocks == config->getNumBufferedFFTs(configindex));     // If this fails then check the input file and change "NUM BUFFERED FFTS"
     if (config->getDPhaseCalIntervalMHz(configindex, datastreamindex) != 0) {
         NOT_SUPPORTED("DPhaseCal");
     }
@@ -293,41 +294,31 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // Set up the FFT window indices
     for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
+        set_weights(fftwin);
         // TODO: posssibly some issues here if sample granularity is weirder than 2
-        gSampleIndexes->ptr()[fftwin] = nearestSamples[fftwin];
+        //gSampleIndexes->ptr()[fftwin] = nearestSamples[fftwin];
         //std::cout << "sampleInds:\t" << gSampleIndexes->ptr()[fftwin] << "\t" << nearestSamples[fftwin] << std::endl;
 
         // Check which data is valid
-        gValidSamples->ptr()[fftwin] = is_data_valid(fftwin, fftwin);   // I think index = subloopindex now since the sublooping should be gone in the GPU version
+        //gValidSamples->ptr()[fftwin] = is_data_valid(fftwin, fftwin);   // I think index = subloopindex now since the sublooping should be gone in the GPU version
     }
 
-    for (int i = 0; i < numrecordedfreqs; i++) {
-        int count = 0;
-        // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
-        // Loop over all recorded bands looking for the matching frequency we should be dealing with
-        for (int j = 0; j < numrecordedbands; j++) {
-            // For upper sideband bands, normally just need to copy the fftd channels.
-            // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
+    // for (int i = 0; i < numrecordedfreqs; i++) {
+    //     int count = 0;
+    //     // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
+    //     // Loop over all recorded bands looking for the matching frequency we should be dealing with
+    //     for (int j = 0; j < numrecordedbands; j++) {
+    //         // For upper sideband bands, normally just need to copy the fftd channels.
+    //         // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
 
-            if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
-                indices->ptr()[(i * MAX_INDICIES) + count++] = j;
-                weights[0][j] = 1;
-            }
-        }
-
-        weights[1][indices->ptr()[(i * MAX_INDICIES)]] = 1;
-        weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] = 1;
-    }
-
-    // static bool printed = false;
-    // if (!printed) {
-    //     printed = true;
-
-    //     for (int i = 0; i < numrecordedfreqs; i++) {
-    //         for (int j = 0; j < MAX_INDICIES; j++) {
-    //             std::cout << i << " : " << j << " - " << indices->ptr()[(i*MAX_INDICIES) + j] << std::endl;
+    //         if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
+    //             indices->ptr()[(i * MAX_INDICIES) + count++] = j;
+    //             weights[0][j] = 1;
     //         }
     //     }
+
+    //     weights[1][indices->ptr()[(i * MAX_INDICIES)]] = 1;
+    //     weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] = 1;
     // }
 
     
@@ -464,7 +455,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // TODO: the return value might need to change? Not sure how its used
     //return numfftsprocessed;
-    exit(EXIT_SUCCESS);
+    //exit(EXIT_SUCCESS);
     return numBufferedFFTs;
 }
 
@@ -558,6 +549,92 @@ void GPUMode::process_unpack(int index, int subloopindex) {
     } else if (nearestSamples[subloopindex] < unpackstartsamples || nearestSamples[subloopindex] > unpackstartsamples + unpacksamples - fftchannels)
         //need to unpack more data
         dataweight[subloopindex] = unpack(nearestSamples[subloopindex], subloopindex);
+
+    gSampleIndexes->ptr()[subloopindex] = nearestSamples[subloopindex] - unpackstartsamples;
+
+    if (!is_dataweight_valid(subloopindex)) {
+        gValidSamples->ptr()[subloopindex] = false;
+    } else {
+        // Todo: This can definitely be cleaned up and improved
+        for (int i = 0; i < numrecordedfreqs; i++) {
+            int count = 0;
+            // PWCR numrecordedbands = 2 for the test; but e.g. 8 is very realistical
+            // Loop over all recorded bands looking for the matching frequency we should be dealing with
+            for (int j = 0; j < numrecordedbands; j++) {
+                // For upper sideband bands, normally just need to copy the fftd channels.
+                // However for complex double upper sideband, the two halves of the frequency space are swapped, so they need to be swapped back
+
+                if (config->matchingRecordedBand(configindex, datastreamindex, i, j)) {
+                    indices->ptr()[(i * MAX_INDICIES) + count++] = j;
+
+                    // At this point in the code the array fftoutputs[j] contains complex-valued voltage spectra with the following properties:
+                    //
+                    // 1. The zero element corresponds to the lowest sky frequency.  That is:
+                    //    fftoutputs[j][0] = Local Oscillator Frequency              (for Upper Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Lower Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth  (for Complex Lower Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Upper Sideband)
+                    //    fftoutputs[j][0] = Local Oscillator Frequency - bandwidth/2(for Complex Double Lower Sideband)
+                    //
+                    // 2. The frequency increases monotonically with index
+                    //
+                    // 3. The last element of the array corresponds to the highest sky frequency minus the spectral resolution.
+                    //    (i.e., the first element beyond the array bound corresponds to the highest sky frequency)
+
+                    //store the weight for the autocorrelations
+                    if (perbandweights) {
+                        weights[0][j] += perbandweights[subloopindex][j];
+                    } else {
+                        weights[0][j] += dataweight[subloopindex];
+                    }
+                }
+            }
+
+            if (count > 1) {
+                //store the weights
+                if (perbandweights) {
+                    weights[1][indices->ptr()[(i * MAX_INDICIES)]] += perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES)]] *
+                                                     perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES) + 1]];
+                    weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] += perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES)]] *
+                                                     perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES) + 1]];
+                } else {
+                    weights[1][indices->ptr()[(i * MAX_INDICIES)]] += dataweight[subloopindex];
+                    weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] += dataweight[subloopindex];
+                }
+            }
+        }
+    }
+}
+
+void GPUMode::set_weights(int subloopindex) {
+    // Not sure if this is still needed. Set to zero for now.
+    unpackstartsamples = 0;
+
+    // Clear the perbandweights for this subloopindex
+    if(perbandweights)
+    {
+        for(int b = 0; b < numrecordedbands; ++b)
+        {
+            perbandweights[subloopindex][b] = 0.0;
+        }
+    }
+
+    if (!is_data_valid(subloopindex, subloopindex)) {
+        // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
+        dataweight[subloopindex] = 0.0;
+
+        gValidSamples->ptr()[subloopindex] = false;
+        return;
+    }
+
+    gValidSamples->ptr()[subloopindex] = true;
+
+    if (nearestSamples[subloopindex] == -1) {
+        nearestSamples[subloopindex] = 0;
+        dataweight[subloopindex] = 0.99;
+    } else if (nearestSamples[subloopindex] < unpackstartsamples || nearestSamples[subloopindex] > unpackstartsamples + unpacksamples - fftchannels)
+        //need to unpack more data
+        dataweight[subloopindex] = 0.99;
 
     gSampleIndexes->ptr()[subloopindex] = nearestSamples[subloopindex] - unpackstartsamples;
 
@@ -733,7 +810,7 @@ __global__ void gpu_fringeRotation(
     cuFloatComplex c = make_cuFloatComplex(srcVal, 0.f);
     dest[destIndex] = cuCmulf(c, cr);
     if (subloopindex == 5000) {
-        printf("Using src[%lu][%lu] = %f to get dest[%lu] = %f + %fi\n", srcIndex, sampleIndexes[subloopindex] + channelindex, srcVal, destIndex, dest[destIndex].x, dest[destIndex].y);
+        //printf("Using src[%lu][%lu] = %f to get dest[%lu] = %f + %fi\n", srcIndex, sampleIndexes[subloopindex] + channelindex, srcVal, destIndex, dest[destIndex].x, dest[destIndex].y);
     }
 }
 

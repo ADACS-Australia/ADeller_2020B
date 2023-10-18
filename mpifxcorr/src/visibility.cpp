@@ -1143,6 +1143,7 @@ void Visibility::multicastweights()
 void Visibility::writeDiFXHeader(ofstream * output, int baselinenum, int dumpmjd, double dumpseconds, int configindex, int sourceindex, int freqindex, const char polproduct[3], int pulsarbin, int flag, float weight, double buvw[3], int filecount)
 {
   double dweight = weight;
+  //dweight = 1.0;     // TODO: TESTING VALUE
   /* *output << setprecision(15);
   *output << "BASELINE NUM:       " << baselinenum << endl;
   *output << "MJD:                " << dumpmjd << endl;

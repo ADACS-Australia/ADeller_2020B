@@ -27,6 +27,7 @@ public:
                     int numblocks) override;  //frac sample error is in microseconds
 
     void process_unpack(int index, int subloopindex);
+    void set_weights(int subloopindex);
     virtual void unpack_all() {}
     void runFFT();
     void fringeRotation(int fftloop, int numBufferedFFTs, int startblock, int numblocks);
