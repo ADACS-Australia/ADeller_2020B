@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2008-2022 by Walter Brisken & Helge Rottmann            *
+ *   Copyright (C) 2008-2023 by Walter Brisken & Helge Rottmann            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difx2fits.c 10863 2022-12-29 19:23:42Z WalterBrisken $
+// $Id: difx2fits.c 11058 2023-09-13 22:41:34Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/difx2fits.c $
-// $LastChangedRevision: 10863 $
+// $LastChangedRevision: 11058 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedDate: 2023-09-14 08:41:34 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 #include <stdio.h>
@@ -163,6 +163,14 @@ static void usage(const char *pgm)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  --vanVleck          Force difx2fits to apply van Vleck correction\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "  --bandpass          Write baseline-based bandpass to .bandpass file\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  --applybandpass <file>\n");
+	fprintf(stderr, "                      Read <file> and apply it as a bandpass to the output\n");
+	fprintf(stderr, "  --applydelaycal <file>\n");
+	fprintf(stderr, "                      Read <file> and apply it as delay corrections to the output\n");
+	fprintf(stderr, "  --sourcelist <list>\n");
+	fprintf(stderr, "                      Only propagate source(s) listed (comma separated)\n");
 	fprintf(stderr, "%s responds to the following environment variables:\n", program);
 	fprintf(stderr, "    DIFX_GROUP_ID             If set, run with umask(2).\n");
 	fprintf(stderr, "    DIFX_VERSION              The DiFX version to report.\n");
@@ -229,6 +237,11 @@ void deleteCommandLineOptions(struct CommandLineOptions *opts)
 		{
 			free(opts->historyFile);
 			opts->historyFile = 0;
+		}
+		if(opts->includeSourceList)
+		{
+			free(opts->includeSourceList);
+			opts->includeSourceList = 0;
 		}
 		free(opts);
 	}
@@ -377,6 +390,10 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 			{
 				opts->doVanVleck = 1;
 			}
+			else if(strcmp(argv[i], "--bandpass") == 0)
+			{
+				opts->writeBandpass = 1;
+			}
 			else if(i+1 < argc) /* one parameter arguments */
 			{
 				if(strcmp(argv[i], "--scale") == 0 ||
@@ -485,6 +502,36 @@ struct CommandLineOptions *parseCommandLine(int argc, char **argv)
 				{
 					++i;
 					opts->historyFile = strdup(argv[i]);
+				}
+				else if(strcmp(argv[i], "--sourcelist") == 0)
+				{
+					int j;
+
+					++i;
+					opts->includeSourceList = strdup(argv[i]);
+
+					/* turn into space-separated list */
+					for(j = 0; opts->includeSourceList[j]; ++j)
+					{
+						if(opts->includeSourceList[j] == ',')
+						{
+							opts->includeSourceList[j] = ' ';
+						}
+					}
+				}
+				else if(strcmp(argv[i], "--applybandpass") == 0)
+				{
+					++i;
+					opts->applyBandpassFile = argv[i];
+					printf("** Note: the --applybandpass option is experimental at this time.\n");
+					printf("** Use at your own risk.\n");
+				}
+				else if(strcmp(argv[i], "--applydelaycal") == 0)
+				{
+					++i;
+					opts->applyDelayCalFile = argv[i];
+					printf("** Note: the --applydelaycal option is experimental at this time.\n");
+					printf("** Use at your own risk.\n");
 				}
 				else
 				{
@@ -980,7 +1027,7 @@ static void relabelCircular(DifxInput *D)
 			}
 			if(D->datastream[i].recBandPolName[j] == 'Y' || D->datastream[i].recBandPolName[j] == 'V')
 			{
-				D->datastream[i].recBandPolName[j] = 'Y';
+				D->datastream[i].recBandPolName[j] = 'L';
 			}
 		}
 
@@ -992,7 +1039,7 @@ static void relabelCircular(DifxInput *D)
 			}
 			if(D->datastream[i].zoomBandPolName[j] == 'Y' || D->datastream[i].zoomBandPolName[j] == 'V')
 			{
-				D->datastream[i].zoomBandPolName[j] = 'Y';
+				D->datastream[i].zoomBandPolName[j] = 'L';
 			}
 		}
 	}

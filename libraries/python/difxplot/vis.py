@@ -1,5 +1,6 @@
 """Holds the classes that deal with Vis data"""
 from copy import deepcopy
+from PyQt5 import QtWidgets
 import pyqtgraph as pg
 import numpy
 import parseDiFX
@@ -37,9 +38,7 @@ class AverageVis:
 
     def handle(self, vis):
         """Deal with a new vis"""
-        if not vis.baseline_name in [
-            b[0].name + "-" + b[1].name for b in self.plot.baselines
-        ]:
+        if not vis.baseline_name in [b[0].name + "-" + b[1].name for b in self.plot.baselines]:
             return
         update_plot = self.add(vis)
         if self.aver_amount != 1:
@@ -47,7 +46,7 @@ class AverageVis:
 #        print(vis)
         self.plot.plot(vis)
         if update_plot:
-            pg.QtGui.QApplication.processEvents()
+            QtWidgets.QApplication.processEvents()
 
     def aver(self, vis_in):
         """handle averaging. vis_in has all the right metadata so we copy it"""

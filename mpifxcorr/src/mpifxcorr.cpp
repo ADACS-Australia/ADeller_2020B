@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mpifxcorr.cpp 10839 2022-11-30 10:46:48Z JanWagner $
+// $Id: mpifxcorr.cpp 11066 2023-09-13 23:37:21Z HelgeRottmann $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/mpifxcorr.cpp $
-// $LastChangedRevision: 10839 $
-// $Author: JanWagner $
-// $LastChangedDate: 2022-11-30 21:46:48 +1100 (Wed, 30 Nov 2022) $
+// $LastChangedRevision: 11066 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:37:21 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 
@@ -277,6 +277,7 @@ int main(int argc, char *argv[])
   bool monitor = false;
   bool nocommandthread = false;
   bool vgoscomplexvdifhack = false;
+  bool verbose = false;
   string monitoropt;
   pthread_t commandthread;
   //pthread_attr_t attr;
@@ -294,6 +295,8 @@ int main(int argc, char *argv[])
   static struct option long_options[] = {
     {"nocommandthread", no_argument,       0, 0 },
     {"usegpu",          no_argument,       0, 0 },
+    {"verbose",         no_argument,       0, 0 },
+    {"vgoscomplex",     no_argument,       0, 0 },
     {"help",            no_argument,       0, 0 },
     {0,                 0,                 0, 0 },
   };
@@ -314,7 +317,14 @@ int main(int argc, char *argv[])
           return EXIT_FAILURE;
 #endif
           break; // --usegpu
-        case 2:
+		case 2:
+		  verbose = true;
+		  break; // --verbose
+		case 3:
+		  cwarn << startl << "Enabling VGOS hack; raw samples of *all* VDIFC stations will have the sign of the imaginary part reversed i.e. the sideband inverted during unpacking!" << endl;
+		  vgoscomplexvdifhack = true;
+		  break; // --vgoscomplex
+        case 4:
           usage(argv[0]);
           return EXIT_SUCCESS;
           break; // --help
@@ -382,7 +392,6 @@ int main(int argc, char *argv[])
   }
 
   cinfo << startl << "MPI Process " << myID << " is running on host " << processor_name << endl;
-
   cinfo << startl << "MPI Process " << myID << " is about to process input file" << endl;
 
   cverbose << startl << "About to process the input file..." << endl;
@@ -463,36 +472,46 @@ int main(int argc, char *argv[])
       int datastreamnum = myID - fxcorr::FIRSTTELESCOPEID;
       if(config->isVDIFFile(datastreamnum)) {
         stream = new VDIFDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening VDIFDataStream" << endl;
 #ifdef HAVE_MARK6SG
       } else if(config->isVDIFMark6(datastreamnum)) {
         stream = new VDIFMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening VDIFMark6DataStream" << endl;
       } else if(config->isMark5BMark6(datastreamnum)) {
         stream = new Mark5BMark6DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening Mark5BMark6DataStream" << endl;
 #endif
       } else if(config->isVDIFNetwork(datastreamnum)) {
         stream = new VDIFNetworkDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening VDIFNetworkDataStream" << endl;
       } else if(config->isVDIFFake(datastreamnum)) {
         stream = new VDIFFakeDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening VDIFFakeDataStream" << endl;
       } else if(config->isMark5BFile(datastreamnum)) {
         stream = new Mark5BDataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
           cverbose << startl << "Opening Mark5BDataStream" << endl;
       } else if(config->isMark5BMark5(datastreamnum)) {
         stream = new Mark5BMark5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening Mark5BMark5DataStream" << endl;
       } else if(config->isMkV(datastreamnum)) {
         stream = new Mk5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
         cverbose << startl << "Opening Mk5DataStream" << endl;
       } else if(config->isNativeMkV(datastreamnum)){
         stream = new NativeMk5DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
           cverbose << startl << "Opening NativeMk5DataStream" << endl;
       }
       else {
         stream = new DataStream(config, datastreamnum, myID, numcores, coreids, config->getDDataBufferFactor(), config->getDNumDataSegments());
+        stream->verbose = verbose;
     cverbose << startl << "Opening generic DataStream" << endl;
     }
 
@@ -562,6 +581,8 @@ void usage(const char *const argv0) {
     " -rNN.N        -- where NN.N = NewStartSec\n"
     " --nocommandthread\n"
     " --usegpu      -- Use GPU acceleration\n"
+	" --verbose     -- Show verbose output of stream summaries\n"
+	" --vgoscomplex -- Enabling VGOS hack; raw samples of *all* VDIFC stations will have the sign of the imaginary part reversed\n"
     << std::endl;
 }
 // vim: shiftwidth=2:softtabstop=2:expandtab

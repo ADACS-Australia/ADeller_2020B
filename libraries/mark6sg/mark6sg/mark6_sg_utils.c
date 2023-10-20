@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2014 by Jan Wagner                                      *
+ *   Copyright (C) 2014-2023 by Jan Wagner                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark6_sg_utils.c 10546 2022-07-26 08:40:49Z JanWagner $
+// $Id: mark6_sg_utils.c 11072 2023-09-14 17:18:24Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark6sg/trunk/mark6sg/mark6_sg_utils.c $
-// $LastChangedRevision: 10546 $
-// $Author: JanWagner $
-// $LastChangedDate: 2022-07-26 18:40:49 +1000 (Tue, 26 Jul 2022) $
+// $LastChangedRevision: 11072 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-15 03:18:24 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 #include "mark6sg.h"
@@ -841,12 +841,19 @@ int mark6_sg_collect_metadata(m6sg_slistmeta_t** list)
         // The JSMN JSON parser does not allocate memory itself. Instead it tells
         // if a parse attempt will fit into a user-provided buffer or not. Need
         // to grow the buffer and "try again" until parser output fits:
-        tok = malloc(sizeof(*tok) * tokcount);
+        tok = (jsmntok_t*)malloc(sizeof(*tok) * tokcount);
         rc  = jsmn_parse(&p, json, json_strlen, tok, tokcount);
         while (rc == JSMN_ERROR_NOMEM)
         {
+	    jsmntok_t *tmptok;
             tokcount = tokcount * 2;
-            tok = realloc(tok, sizeof(*tok) * tokcount);
+            tmptok = (jsmntok_t*)realloc(tok, sizeof(*tok) * tokcount);
+	    if(tmptok == 0) /* realloc failed */
+	    {
+                fprintf(stderr, "mark6_sg_collect_metadata() : Memory realloc error requesting %d bytes.\n", (int)(sizeof(*tok) * tokcount));
+		exit(1);
+	    }
+	    tok = tmptok;
             rc  = jsmn_parse(&p, json, json_strlen, tok, tokcount);
         }
 

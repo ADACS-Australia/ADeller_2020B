@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: autobands.cpp 10661 2022-10-04 12:42:35Z JanWagner $
+ * $Id: autobands.cpp 11013 2023-07-17 11:54:52Z JanWagner $
  * $HeadURL: $
- * $LastChangedRevision: 10661 $
+ * $LastChangedRevision: 11013 $
  * $Author: JanWagner $
- * $LastChangedDate: 2022-10-04 23:42:35 +1100 (Tue, 04 Oct 2022) $
+ * $LastChangedDate: 2023-07-17 21:54:52 +1000 (Mon, 17 Jul 2023) $
  *
  *==========================================================================*/
 
@@ -769,6 +769,12 @@ int AutoBands::lookupDestinationFreq(const freq& inputfreq, const std::vector<fr
 {
 	int outputband_index = -1;
 
+	freq usbFreq = inputfreq;
+	if(usbFreq.sideBand == 'L') {
+		usbFreq.flip();
+		// std::cout << "lookupDestinationFreq(" << inputfreq << "): flipped to usbFreq " << usbFreq << std::endl;
+	}
+
 	// Find 'inputfreq' in constituents
 	for(unsigned n = 0; n < outputbands.size() && outputband_index < 0; n++)
 	{
@@ -776,7 +782,7 @@ int AutoBands::lookupDestinationFreq(const freq& inputfreq, const std::vector<fr
 		for(unsigned m = 0; m < ob.constituents.size(); m++)
 		{
 			// std::cout << "checking: " << inputfreq << " ?= " << ob.constituents[m] << std::endl;
-			if (ob.constituents[m] == inputfreq)
+			if (ob.constituents[m] == usbFreq)
 			{
 				outputband_index = n;
 				break;

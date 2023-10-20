@@ -22,8 +22,8 @@
 // $Id: mark5_stream.h 5533 2013-08-07 05:43:41Z RichardDodson $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_stream.h $
 // $LastChangedRevision: 5533 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2019-11-14 11:56:26 +1100 (Thu, 14 Nov 2019) $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-09-14 09:24:32 +1000 (Thu, 14 Sep 2023) $
 //
 //============================================================================
 
@@ -214,6 +214,7 @@ void delete_mark5_stream(struct mark5_stream *ms);
 int mark5_stream_resync(struct mark5_stream *ms);
 
 int mark5_stream_print(const struct mark5_stream *ms);
+int mark5_stream_snprint(char *str, int maxLength, const struct mark5_stream *ms);
 
 int mark5_stream_get_frame_time(struct mark5_stream *ms, int *mjd, int *sec, double *ns);
 

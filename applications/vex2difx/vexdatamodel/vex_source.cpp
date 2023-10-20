@@ -19,16 +19,18 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex_source.cpp 10363 2022-01-27 22:57:59Z WalterBrisken $
+ * $Id: vex_source.cpp 11032 2023-08-07 21:14:39Z WalterBrisken $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/branches/multidatastream_refactor/src/vex2difx.cpp $
- * $LastChangedRevision: 10363 $
+ * $LastChangedRevision: 11032 $
  * $Author: WalterBrisken $
- * $LastChangedDate: 2022-01-28 09:57:59 +1100 (Fri, 28 Jan 2022) $
+ * $LastChangedDate: 2023-08-08 07:14:39 +1000 (Tue, 08 Aug 2023) $
  *
  *==========================================================================*/
 
 #include <algorithm>
 #include "vex_source.h"
+
+using namespace std;
 
 bool VexSource::hasSourceName(const std::string &name) const
 {
@@ -43,6 +45,7 @@ std::ostream& operator << (std::ostream &os, const VexSource &x)
 	{
 		os << "  name=" << *it << std::endl;
 	}
+
 	switch(x.type)
 	{
 	case VexSource::Star:
@@ -135,3 +138,4 @@ void VexSource::setFixed(double x, double y, double z)
 	Y = y;	// (m)
 	Z = z;	// (m)
 }
+

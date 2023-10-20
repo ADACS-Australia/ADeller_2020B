@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifio.h 9925 2021-02-23 15:43:09Z JanWagner $
+// $Id: vdifio.h 11043 2023-08-23 09:30:08Z JanWagner $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/vdifio/trunk/src/vdifio.h $
-// $LastChangedRevision: 9925 $
+// $LastChangedRevision: 11043 $
 // $Author: JanWagner $
-// $LastChangedDate: 2021-02-24 02:43:09 +1100 (Wed, 24 Feb 2021) $
+// $LastChangedDate: 2023-08-23 19:30:08 +1000 (Wed, 23 Aug 2023) $
 //
 //============================================================================
 	
@@ -41,7 +41,7 @@ extern "C" {
 
 #define VDIF_HEADER_BYTES		32
 #define VDIF_LEGACY_HEADER_BYTES	16
-#define MAX_VDIF_FRAME_BYTES		9032
+#define MAX_VDIF_FRAME_BYTES		32832
 #define VDIF_MAX_THREAD_ID		1023
 
 #define VDIF_SUMMARY_MAX_THREADS	256

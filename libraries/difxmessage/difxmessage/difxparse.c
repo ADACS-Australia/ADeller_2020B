@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: difxparse.c 9014 2019-06-14 07:33:32Z ChrisPhillips $
+// $Id: difxparse.c 11092 2023-09-14 23:43:21Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/difxmessage/trunk/difxmessage/difxparse.c $
-// $LastChangedRevision: 9014 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-06-14 17:33:32 +1000 (Fri, 14 Jun 2019) $
+// $LastChangedRevision: 11092 $
+// $Author: WalterBrisken $
+// $LastChangedDate: 2023-09-15 09:43:21 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 #include <stdio.h>
@@ -1150,8 +1150,8 @@ void difxMessageGenericPrint(const DifxMessageGeneric *G)
 		printf("    cpu load = %f\n", G->body.load.cpuLoad);
 		printf("    total memory = %d kiB\n", G->body.load.totalMemory);
 		printf("    used memory = %d kiB\n", G->body.load.usedMemory);
-		printf("    network Receive Rate = %d B/s\n", G->body.load.netRXRate);
-		printf("    network Transmit Rate = %d B/s\n", G->body.load.netTXRate);
+		printf("    network Receive Rate = %u B/s\n", G->body.load.netRXRate);
+		printf("    network Transmit Rate = %u B/s\n", G->body.load.netTXRate);
 		printf("    nCore = %d\n", G->body.load.nCore);
 		break;
 	case DIFX_MESSAGE_ALERT:
@@ -1198,7 +1198,7 @@ void difxMessageGenericPrint(const DifxMessageGeneric *G)
 			G->body.mk5version.SerialNum);
 		if(G->body.mk5version.DB_PCBVersion[0] != 0)
 		{
-			printf("    Daughter Board:  Serial number = %d  num channels = %d\n",
+			printf("    Daughter Board:  Serial number = %u  num channels = %u\n",
 				G->body.mk5version.DB_SerialNum,
 				G->body.mk5version.DB_NumChannels);
 			printf("    Daughter Board:  Type = %s  Subtype = %s  Version = %s\n",

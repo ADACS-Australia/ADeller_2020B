@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: dirlist_datum_mark6.cpp 7763 2017-05-16 18:18:27Z WalterBrisken $
+// $Id: dirlist_datum_mark6.cpp 11075 2023-09-14 17:40:05Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 7763 $
+// $LastChangedRevision: 11075 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:18:27 +1000 (Wed, 17 May 2017) $
+// $LastChangedDate: 2023-09-15 03:40:05 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -275,8 +275,6 @@ int loadMark6SList(DirList &D, const char *fileName, std::stringstream &error)
 	std::stringstream scanId;	// a number
 	std::stringstream scanData;	// structure of the type to pass to setFromSListString
 
-	const char *str;
-
 	// 0. some initialization
 	error.clear();
 	error.str("");
@@ -309,8 +307,7 @@ int loadMark6SList(DirList &D, const char *fileName, std::stringstream &error)
 
 	// 2. go through state machine
 
-	str = data.str().c_str();
-
+	const std::string &str = data.str();
 	for(int i = 0; str[i]; ++i)
 	{
 		switch(state)

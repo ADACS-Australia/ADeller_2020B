@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fixmark5b.c 7676 2017-03-09 04:28:46Z WalterBrisken $
+// $Id: fixmark5b.c 11073 2023-09-14 17:28:09Z WalterBrisken $
 // $HeadURL: $
-// $LastChangedRevision: 7676 $
+// $LastChangedRevision: 11073 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2017-03-09 15:28:46 +1100 (Thu, 09 Mar 2017) $
+// $LastChangedDate: 2023-09-15 03:28:09 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -66,6 +66,7 @@ int main(int argc, char **argv)
 	if(!out)
 	{
 		printf("Error: cannot open %s\n", argv[4]);
+		fclose(in);
 
 		return 0;
 	}

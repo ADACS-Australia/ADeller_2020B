@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: fitsTS.c 10863 2022-12-29 19:23:42Z WalterBrisken $
+// $Id: fitsTS.c 11082 2023-09-14 20:22:36Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/applications/difx2fits/trunk/src/fitsTS.c $
-// $LastChangedRevision: 10863 $
+// $LastChangedRevision: 11082 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-12-30 06:23:42 +1100 (Fri, 30 Dec 2022) $
+// $LastChangedDate: 2023-09-15 06:22:36 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -71,7 +71,7 @@ static void nanify(float X[2][array_MAX_BANDS])
 static int parseTsys(char *line, char *antName, double *time, float *timeInt, float tSys[])
 {
 	static char tsmAntName[10] = "XX";
-	int p, n, i, nRecBand;
+	int p, n, i, nRecBand = 0;
 	char firstWord[100];
 
 	/* skip comments of various types */

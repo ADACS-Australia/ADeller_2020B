@@ -19,11 +19,11 @@
 /*===========================================================================
  * SVN properties (DO NOT CHANGE)
  *
- * $Id: vex2difx.cpp 10867 2023-01-03 17:22:51Z WalterBrisken $
+ * $Id: vex2difx.cpp 10990 2023-06-19 10:14:03Z JanWagner $
  * $HeadURL: https://svn.atnf.csiro.au/difx/applications/vex2difx/trunk/src/vex2difx.cpp $
- * $LastChangedRevision: 10867 $
- * $Author: WalterBrisken $
- * $LastChangedDate: 2023-01-04 04:22:51 +1100 (Wed, 04 Jan 2023) $
+ * $LastChangedRevision: 10990 $
+ * $Author: JanWagner $
+ * $LastChangedDate: 2023-06-19 20:14:03 +1000 (Mon, 19 Jun 2023) $
  *
  *==========================================================================*/
 
@@ -233,7 +233,7 @@ static DifxAntenna *makeDifxAntennas(const Job &J, const VexData *V, int *n)
 	for(i = 0, a = J.jobAntennas.begin(); a != J.jobAntennas.end(); ++i, ++a)
 	{
 		const VexAntenna *ant = V->getAntenna(*a);
-		
+
 		snprintf(A[i].name, DIFXIO_NAME_LENGTH, "%s", ant->difxName.c_str());
 		A[i].X = ant->x + ant->dx*(mjd-ant->posEpoch)*86400.0;
 		A[i].Y = ant->y + ant->dy*(mjd-ant->posEpoch)*86400.0;
@@ -1808,19 +1808,23 @@ static int fixDatastreamTable(DifxInput *D)
 
 				delta = power2 - ds->nRecBand;
 
+				// FIXME: the below would be tidier if relocated into difxio; padDifxDatastreamFreq(DifxDatastream* srcdst, int deltaNumRecbands)
+				// NB: manually keep the below realloc()'s in sync with any changes made to difx_input.h struct DifxDatastream
 				N = ds->nRecFreq + 1;
 				ds->clockOffset = (double *)realloc(ds->clockOffset, N*sizeof(double));
 				ds->clockOffsetDelta = (double *)realloc(ds->clockOffsetDelta, N*sizeof(double));
 				ds->phaseOffset = (double *)realloc(ds->phaseOffset, N*sizeof(double));
+				ds->freqOffset = (double *)realloc(ds->freqOffset, N*sizeof(double));
 				ds->nRecPol = (int *)realloc(ds->nRecPol, N*sizeof(int));
 				ds->recFreqId = (int *)realloc(ds->recFreqId, N*sizeof(int));
+				ds->recFreqDestId = (int *)realloc(ds->recFreqDestId, N*sizeof(int));
 				ds->clockOffset[N-1] = 0.0;
 				ds->clockOffsetDelta[N-1] = 0.0;
 				ds->phaseOffset[N-1] = 0.0;
 				ds->nRecPol[N-1] = delta;
 				ds->recFreqId[N-1] = addedFreq;
+				ds->recFreqDestId[N-1] = addedFreq;
 				ds->nRecFreq = N;
-
 
 				N = ds->nRecBand + delta;
 				ds->recBandFreqId = (int *)realloc(ds->recBandFreqId, N*sizeof(int));
@@ -2438,19 +2442,37 @@ static int writeJob(const Job& J, const VexData *V, const CorrParams *P, const s
 		}
 
 		// iterate over all antennas and fill in zoom band, LO offset, clock offset details
-		int currDatastream = 0;
 		minChans = corrSetup->minInputChans();
 		for(std::map<std::string,VexSetup>::const_iterator it = mode->setups.begin(); it != mode->setups.end(); ++it)
 		{
 			const std::string &antName = it->first;
 			const VexSetup &setup = it->second;
 			unsigned int startBand, startFreq;
+			int currDatastream;
+
 			startBand = 0;
 			startFreq = 0;
 
 			if(find(J.jobAntennas.begin(), J.jobAntennas.end(), antName) == J.jobAntennas.end())
 			{
 				continue;
+			}
+
+			for(currDatastream = 0; currDatastream < config->nDatastream; ++currDatastream)
+			{
+				int ai = D->datastream[currDatastream].antennaId;
+
+				if(antName == D->antenna[ai].name)
+				{
+					break;
+				}
+			}
+
+			if(currDatastream == -1)
+			{
+				std::cerr << "Developer error: currDatastream=-1  antenna=" << antName << std::endl;
+
+				exit(0);
 			}
 
 			const VexAntenna *antenna = V->getAntenna(antName);

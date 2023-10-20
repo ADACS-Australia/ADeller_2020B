@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # =======================================================================
 # Copyright (C) 2016 Cormac Reynolds
 #
@@ -449,7 +449,8 @@ class batchenv:
         """
 
         if self._style == "slurm":
-            self.launch = "sbatch --parsable --export=ALL"
+            #self.launch = "sbatch --parsable --export=ALL"
+            self.launch = "sbatch --parsable --export=NONE"
             #self.cancel = "scancel -n"
             self.cancel = "scancel"
             self.stats = (

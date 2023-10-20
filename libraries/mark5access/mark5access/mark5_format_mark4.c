@@ -19,11 +19,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: mark5_format_mark4.c 9176 2019-09-19 14:14:48Z ChrisPhillips $
+// $Id: mark5_format_mark4.c 11048 2023-08-29 01:14:36Z ShaoguangGuo $
 // $HeadURL: https://svn.atnf.csiro.au/difx/libraries/mark5access/trunk/mark5access/mark5_format_mark4.c $
-// $LastChangedRevision: 9176 $
-// $Author: ChrisPhillips $
-// $LastChangedDate: 2019-09-20 00:14:48 +1000 (Fri, 20 Sep 2019) $
+// $LastChangedRevision: 11048 $
+// $Author: ShaoguangGuo $
+// $LastChangedDate: 2023-08-29 11:14:36 +1000 (Tue, 29 Aug 2023) $
 //
 //============================================================================
 
@@ -6828,6 +6828,7 @@ static int mark5_format_mark4_init(struct mark5_stream *ms)
 	{
 		if(ms->datawindowsize < ms->framebytes)
 		{
+			fprintf(stderr, "mark5_format_mark4_init: datawindowsize < framebytes\n");
 			return -1;
 		}
 
@@ -6837,6 +6838,7 @@ static int mark5_format_mark4_init(struct mark5_stream *ms)
 		ms->frameoffset = findfirstframe(ms->datawindow, bytes, f->ntrack);
 		if(ms->frameoffset < 0)
 		{
+			fprintf(stderr, "mark5_format_mark4_init: frameoffset<0\n");
 			return -1;
 		}
 

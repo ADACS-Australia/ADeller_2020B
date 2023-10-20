@@ -1506,7 +1506,7 @@ uint64_t PCalExtractorDummy::getFinalPCal(cf32* out)
 pthread_mutex_t FFTinitMutex = PTHREAD_MUTEX_INITIALIZER; // required by non-ipp compile by architecture.h despite not being used
 
 struct tcase_t {
-  long bandwidth, offset, spacing;
+  double bandwidth, offset, spacing;
   Configuration::datasampling data_type;
   Configuration::complextype band_type;
   const char* mode;
@@ -1638,6 +1638,9 @@ void test_pcal_auto()
       { 32e6,   8.4e6,     10e6,   Configuration::REAL, Configuration::SINGLE, "auto",     "VGOS Yebes 10M, tuning xxxx.40 MHz LSB 8.4" },
       { 32e6,   9.4e6,     10e6,   Configuration::REAL, Configuration::SINGLE, "auto",     "VGOS Yebes 10M, tuning xxxx.40 MHz LSB 9.4" },
       { 128e6,   30e6,    200e6,   Configuration::REAL, Configuration::SINGLE, "auto",     "KVN" },
+      { 128e6, 25.438e6,  77.777e6,Configuration::REAL, Configuration::SINGLE, "auto",     "KVN-optical" },
+      { 128e6, 25.466e6,  77.777e6,Configuration::REAL, Configuration::SINGLE, "auto",     "KVN-optical" },
+      { 128e6, 25.818e6,  77.777e6,Configuration::REAL, Configuration::SINGLE, "auto",     "KVN-optical" },
       { 512e6,   30e6,    200e6,   Configuration::REAL, Configuration::SINGLE, "auto",     "KVN" },
       { 32e6,   0.6e6,      5e6,   Configuration::COMPLEX, Configuration::SINGLE, "auto",  "VGOS 5M, complex, xxxx.40 MHz USB 0.6" },
       { 32e6,   1.6e6,      5e6,   Configuration::COMPLEX, Configuration::SINGLE, "auto",  "VGOS 5M, complex, xxxx.40 MHz USB 1.6" },

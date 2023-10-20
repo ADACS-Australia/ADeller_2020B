@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-# Copyright (c) Ivan Marti-Vidal 2015-2022, University of Valencia (Spain)
-#       and Geoffrey Crew 2015-2022, Massachusetts Institute of Technology
+# Copyright (c) Ivan Marti-Vidal 2015-2023, University of Valencia (Spain)
+#       and Geoffrey Crew 2015-2023, Massachusetts Institute of Technology
 #
 # Script to drive PolConvert at the correlators intended for
 # less CASA-aware users.
@@ -12,7 +12,6 @@
 '''
 drivepolconvert.py -- a program to drive the polconvert process
 '''
-
 from __future__ import absolute_import
 from __future__ import print_function
 import argparse
@@ -25,13 +24,34 @@ import stat
 import sys
 import threading
 import time
-# not needed:
-# from six.moves import map
-# from six.moves import range
-# from six.moves import zip
 
-# this Kluge is for re-use by singlepolsolve.py
+# this Kluge is for re-use by singlepolsolve.py:
 # import solvepclib as spc
+
+def getVersion():
+    try:
+        import pcvers
+        return pcvers
+    except:
+        pass
+    difxroot = os.getenv('DIFXROOT')
+    if not type(difxroot) is str: return 'unknown'
+    rcpath = difxroot + '/share/polconvert/runpolconvert.py'
+    if os.path.exists(rcpath):
+        f = open(rcpath,'r')
+        count = 25  # moved earlier in later versions
+        try:
+            while count > 0:
+                x = f.readline()
+                if x[0:6] == 'pcvers':
+                    f.close()
+                    junk,vers = x.split('=')
+                    return vers.strip()
+                count -= 1
+        except:
+            pass
+        f.close()
+    return 'Unknown'
 
 def parseOptions():
     '''
@@ -66,7 +86,7 @@ def parseOptions():
     epi += 'The unconverted *.difx dir is saved as *.save until polconvert'
     epi += 'completes successfully--at which time it is removed.  You can'
     epi += 'keep it by setting keepdifxout=True in your environment'
-    use = '%(prog)s [options] [input_file [...]]\n  Version'
+    use = '%(prog)s [options] [input_file [...]]\n\nVersion ' + getVersion()
     parser = argparse.ArgumentParser(epilog=epi, description=des, usage=use)
     primary = parser.add_argument_group('Primary Options')
     secondy = parser.add_argument_group('Secondary Options')
@@ -93,6 +113,10 @@ def parseOptions():
         default='XY0.APP', metavar='STRING',
         help='Normally the XY phase is captured in ...XY0.APP, but '
         'if an alternate table is needed, you can use, e.g. XY0kcrs.APP')
+    secondy.add_argument('-B', '--BPzphs', dest='BPzphs',
+        default='bandpass-zphs', metavar='STRING',
+        help='Normally bandpass-zphs, but bandpassAPP or bandpass is '
+        'sometimes delivered with QA2; this lets you use it directly.')
     secondy.add_argument('-P', '--parallel', dest='parallel',
         default=6, metavar='INT', type=int,
         help='Number of jobs to run in parallel. '
@@ -287,26 +311,26 @@ def calibrationChecks(o):
         tbwarn = True
     ### production default
     elif o.qa2 == 'v4' or o.qa2 == 'v8': # v3+D-APP/G-APP
-        o.qal = ['ANTENNA', 'calappphase', 'Df0.APP', 'bandpass-zphs',
+        o.qal = ['ANTENNA', 'calappphase', 'Df0.APP', o.BPzphs,
                'flux_inf.APP', 'phase_int.APP', o.XYtable, 'Gxyamp.APP' ]
         o.conlabel = o.label + '.concatenated.ms'
         o.callabel = o.label + '.calibrated.ms'
         if o.qa2 == 'v8': o.qal[5] += '.XYsmooth'
     ### or other desperation plans
     elif o.qa2 == 'v5' or o.qa2 == 'v9': # v3+D-ALMA/G-ALMA
-        o.qal = ['ANTENNA', 'calappphase', 'Df0.ALMA', 'bandpass-zphs',
+        o.qal = ['ANTENNA', 'calappphase', 'Df0.ALMA', o.BPzphs,
                'flux_inf.APP', 'phase_int.APP', o.XYtable, 'Gxyamp.ALMA' ]
         o.conlabel = o.label + '.concatenated.ms'
         o.callabel = o.label + '.calibrated.ms'
         if o.qa2 == 'v9': o.qal[5] += '.XYsmooth'
     elif o.qa2 == 'v6' or o.qa2 == 'v10': # v3+D-ALMA/G-APP
-        o.qal = ['ANTENNA', 'calappphase', 'Df0.ALMA', 'bandpass-zphs',
+        o.qal = ['ANTENNA', 'calappphase', 'Df0.ALMA', o.BPzphs,
                'flux_inf.APP', 'phase_int.APP', o.XYtable, 'Gxyamp.APP' ]
         o.conlabel = o.label + '.concatenated.ms'
         o.callabel = o.label + '.calibrated.ms'
         if o.qa2 == 'v10': o.qal[5] += '.XYsmooth'
     elif o.qa2 == 'v7' or o.qa2 == 'v11': # v3+D-APP/G-ALMA
-        o.qal = ['ANTENNA', 'calappphase', 'Df0.APP', 'bandpass-zphs',
+        o.qal = ['ANTENNA', 'calappphase', 'Df0.APP', o.BPzphs,
                'flux_inf.APP', 'phase_int.APP', o.XYtable, 'Gxyamp.ALMA' ]
         o.conlabel = o.label + '.concatenated.ms'
         o.callabel = o.label + '.calibrated.ms'
@@ -963,6 +987,8 @@ def getInputTemplate(o):
     %simport pylab as pl
     %spl.ioff()
     #
+    # FIXME: matplotlib.use('agg') matplotlib.get_backend() &c.
+    #
     # POLCONVERT_HOME in environment functions as a switch between the
     # CASA task method (task_polconvert.py as in e.g. DiFX-2.6.3) and
     # the code-split for ALMA polconvert_CASA.py version
@@ -1039,10 +1065,10 @@ def getInputTemplate(o):
     print(workdir)
     print(os.getcwd())
     if sys.version_info.major < 3:
-        print('Python 2 execution')
+        print('Python 2 execution requested for runpolconvert')
         execfile(rpcpath)               # Py2 form
     else:
-        print('Python 3 execution')
+        print('Python 3 execution requested for runpolconvert')
         execfile(rpcpath, globals())    # Py3 form
     quit()
     '''
@@ -1099,7 +1125,7 @@ def createCasaCommand(o, job, workdir):
     cmd[4]  = '%s --nologger --nogui -c %s > %s 2>&1 < /dev/null' % (
         o.casa, o.input, o.output)
     cmd[5]  = 'casarc=$?'
-    cmd[6]  = ('if [ "$casarc" == 0 ]; then echo "conversion"; ' +
+    cmd[6]  = ('if [ "$casarc" = 0 ]; then echo "conversion"; ' +
         'else echo "conversion failed with code $casarc"; fi > ./status')
     cmd[7]  = 'mv casa*.log ipython-*.log casa-logs 2>&-'
     # do not move self (basecmd) until self is done.
@@ -1107,7 +1133,7 @@ def createCasaCommand(o, job, workdir):
     cmd[8]  = 'mv %s %s casa-logs' % (o.input, o.output)
     # until CASA tasks are working properly, polconvert.last may not exist
     cmd[9]  = '[ -f polconvert.last ] && mv polconvert.last casa-logs'
-    cmd[10] = ('if [ "$casarc" == 0 ]; then echo "completed"; ' +
+    cmd[10] = ('if [ "$casarc" = 0 ]; then echo "completed"; ' +
         'else echo "failed with code $casarc"; fi > ./status')
     cmd[11] = 'date -u +%Y-%m-%dT%H:%M:%S >> ./timing'
     cmd[12] = ('echo " "CASA for job %s finished with return code $casarc.' %
@@ -1194,9 +1220,10 @@ def createCasaInputParallel(o):
                 continue
             o.workdirs[job] = workdir
             o.workcmds[job] = cmdfile
-            if o.verb: print(' ',fullpath)
+            if o.verb: print('Created CASA execution command\n  ',fullpath)
         else:
             print('*** unable to create workdir or input for job %s ***' % job)
+    if o.verb: print('')
 
 def removeTrash(o, misc):
     '''
@@ -1415,5 +1442,5 @@ if __name__ == '__main__':
     sys.exit(0)
 
 #
-# eof
+# eof vim: set nospell:
 #

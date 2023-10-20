@@ -17,11 +17,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: vdifnetwork.cpp 10466 2022-05-04 14:45:45Z WalterBrisken $
+// $Id: vdifnetwork.cpp 11070 2023-09-14 17:01:40Z WalterBrisken $
 // $HeadURL: https://svn.atnf.csiro.au/difx/mpifxcorr/trunk/src/nativemk5.cpp $
-// $LastChangedRevision: 10466 $
+// $LastChangedRevision: 11070 $
 // $Author: WalterBrisken $
-// $LastChangedDate: 2022-05-05 00:45:45 +1000 (Thu, 05 May 2022) $
+// $LastChangedDate: 2023-09-15 03:01:40 +1000 (Fri, 15 Sep 2023) $
 //
 //============================================================================
 
@@ -222,9 +222,9 @@ void VDIFNetworkDataStream::networkthreadfunction()
 
 		while(!networkthreadstop)
 		{
-			unsigned int bytes;
+			unsigned int bytes = 0;
 			bool endofscan = false;
-			int status;
+			int status = 0;
 
 			// This is where the actual read from the network happens
 			if(tcp || udp)

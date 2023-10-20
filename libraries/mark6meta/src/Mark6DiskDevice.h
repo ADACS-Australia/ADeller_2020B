@@ -16,11 +16,11 @@
 //===========================================================================
 // SVN properties (DO NOT CHANGE)
 //
-// $Id: Mark6DiskDevice.h 7764 2017-05-16 18:23:07Z WalterBrisken $
+// $Id: Mark6DiskDevice.h 11045 2023-08-24 12:15:28Z HelgeRottmann $
 // $HeadURL: $
-// $LastChangedRevision: 7764 $
-// $Author: WalterBrisken $
-// $LastChangedDate: 2017-05-17 04:23:07 +1000 (Wed, 17 May 2017) $
+// $LastChangedRevision: 11045 $
+// $Author: HelgeRottmann $
+// $LastChangedDate: 2023-08-24 22:15:28 +1000 (Thu, 24 Aug 2023) $
 //
 //============================================================================
 #ifndef MARK6DISKDEVICE_H
@@ -70,6 +70,8 @@ public:
     bool isValid();
     int getSlot() const;
     int getPosition() const;
+    void setSasAddress(std::string sasAddress);
+    std::string getSasAddress() const;
     
 
 private:
@@ -82,6 +84,7 @@ private:
     int controllerId_m;
     std::string serial_m;
     Mark6Meta meta_m;
+    std::string sasAddress_m;
     
 };
 
