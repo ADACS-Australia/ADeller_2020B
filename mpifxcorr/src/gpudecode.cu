@@ -306,7 +306,7 @@ __device__ int blanker_vdif_gpu(struct mark5_stream *ms)
 	{
 		//fprintf(m5stderr, "Frame is good\n");
 		ms->blankzoneendvalid[0] = 1<<30;
-		return nword;
+		return 1;
 	}
 }
 
@@ -441,6 +441,7 @@ __device__ int mk5_decode_general_gpu(struct mark5_stream *ms, int nsamp, float 
 
 	ms->readposition = i;
 
+	// Return value is no longer needed but exists because mark5 expects one
 	return nsamp-nblank;
 }
 
@@ -453,7 +454,7 @@ __device__ int mark5_stream_unpacker_next_gpu(struct mark5_stream *ms) {
 	return 1;	// The data is perfect and no one can tell it otherwise
 }
 
-__global__ void gpu_unpack(struct mark5_stream *ms, const void *packed, float **unpacked, int nframes, int *goodsamples) {
+__global__ void gpu_unpack(struct mark5_stream *ms, const void *packed, float **unpacked, int nframes, bool *goodframes) {
 	// Set up the required function pointers
 	ms->decode = *mk5_decode_general_gpu;
     ms->validate = *validate_gpudata;
@@ -472,8 +473,10 @@ __global__ void gpu_unpack(struct mark5_stream *ms, const void *packed, float **
 	thread_ms.readposition = 0;
 	thread_ms.framenum = index;
 
-	thread_ms.blanker(&thread_ms);
-	// TODO: need atomic add
-	*goodsamples += thread_ms.decode(&thread_ms, thread_ms.framesamples, unpacked);
+	// Check whether this frame is valid
+	goodframes[index] = thread_ms.blanker(&thread_ms);
+	
+	// Now actually decode this frame
+	thread_ms.decode(&thread_ms, thread_ms.framesamples, unpacked);
 
 }
