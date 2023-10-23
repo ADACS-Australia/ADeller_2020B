@@ -296,16 +296,14 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     packeddata_gpu->sync();
     unpack_all(framestounpack);
 
-    // Set up the FFT window indices and weights
-    for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
-        set_weights(fftwin, framestounpack);
-    }
-
-
-    
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     avg_unpack += duration.count();
+
+     // Set up the FFT window indices and weights
+    for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
+        set_weights(fftwin, framestounpack);
+    }
 
     start = high_resolution_clock::now();
 
@@ -612,8 +610,8 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
 
     if (nearestSamples[subloopindex] == -1) {
         nearestSamples[subloopindex] = 0;
-        dataweight[subloopindex] = 0.99;
-        cerr << "Why is this happening?" << std::endl;
+        dataweight[subloopindex] = 1.0;
+        cerr << "Why is this happening?" << std::endl;      // I'm not sure what case this branch is for
         abort();
     } else if (subloopindex + 1 == config->getNumBufferedFFTs(configindex)) {
         // We are in the last loop
@@ -625,7 +623,7 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
             dataweight[subloopindex] = (float)valid_frames->ptr()[start_frame];
         }
     } else if (nearestSamples[subloopindex] < unpackstartsamples || nearestSamples[subloopindex] > unpackstartsamples + unpacksamples - fftchannels) {
-        // Standard path
+        // Standard path. TODO: above condition can be simplified I think
         int start_frame = nearestSamples[subloopindex] / config->getFrameSamples(configindex, datastreamindex);
         int end_frame = (nearestSamples[subloopindex + 1] - 1) / config->getFrameSamples(configindex, datastreamindex);
         if (start_frame == end_frame) {
