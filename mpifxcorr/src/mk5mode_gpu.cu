@@ -164,11 +164,11 @@ void Mk5_GPUMode::unpack_all(int framestounpack) {
 
     gpu_unpack<<<unpack_blocks, unpack_threads, 0, cuStream>>>(tmp_mk5stream, packeddata_gpu->gpuPtr(), unpackedarrays_gpu->gpuPtr(), framestounpack, valid_frames->gpuPtr());
 
+    // Unfortunately we have to block here since we need the valid frames to find the correct dataweights
     valid_frames->sync();
     valid_frames->copyToHost();
     valid_frames->sync();
 
-    *mark5stream = *tmp_mk5stream;
     cudaFree(tmp_mk5stream);
 
 }

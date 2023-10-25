@@ -300,7 +300,8 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     duration = duration_cast<microseconds>(stop - start);
     avg_unpack += duration.count();
 
-     // Set up the FFT window indices and weights
+    // Set up the FFT window indices and weights
+    // Ideally this will move to the GPU but it's a bit tricky. Isn't *too* time intensive anyway I think
     for (int fftwin = 0; fftwin < numBufferedFFTs; fftwin++) {
         set_weights(fftwin, framestounpack);
     }
@@ -343,8 +344,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     // todo: remove
     checkCuda(cudaStreamSynchronize(cuStream));
     std::cout << "Data FFTed with code: " << cudaGetLastError() << std::endl;
-    //print_fft_window<<<1,1>>>(fftd_gpu->gpuPtr(), 2, fftchannels, 1);
-    checkCuda(cudaStreamSynchronize(cuStream));
 
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -434,7 +433,6 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 
     // TODO: the return value might need to change? Not sure how its used
     //return numfftsprocessed;
-    //exit(EXIT_SUCCESS);
     return numBufferedFFTs;
 }
 
