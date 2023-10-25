@@ -424,13 +424,13 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
 //        }
 //    }
 
-    delete packeddata_gpu;
-
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
     avg_postprocess += duration.count();
 
     processing_time += duration_cast<microseconds>(stop - begin_time).count();
+
+    delete packeddata_gpu;
 
     // TODO: the return value might need to change? Not sure how its used
     //return numfftsprocessed;
