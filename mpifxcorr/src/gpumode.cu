@@ -636,9 +636,7 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
         } else {
             cerr << "FFT window somehow spans more than two frames. This is suspicious to me but maybe allowed?" << std::endl;
             abort();
-        }
-        //valid_frames[subloopindex]
-        dataweight[subloopindex] = 0.99;
+        };
     }
 
     gSampleIndexes->ptr()[subloopindex] = nearestSamples[subloopindex] - unpackstartsamples;
