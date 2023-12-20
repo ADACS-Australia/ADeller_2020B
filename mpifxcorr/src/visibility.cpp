@@ -43,6 +43,7 @@
 #include <difxmessage.h>
 #include "alert.h"
 #include "mode.h"
+#include <iostream>
 
 Visibility::Visibility(Configuration * conf, int id, int numvis, char * dbuffer, int dbufferlen, int eseconds, int scan, int scanstartsec, int startns, const string * pnames)
   : config(conf), visID(id), currentscan(scan), currentstartseconds(scanstartsec), currentstartns(startns), numvisibilities(numvis), executeseconds(eseconds), todiskbufferlength(dbufferlen), polnames(pnames), todiskbuffer(dbuffer)
@@ -190,6 +191,16 @@ Visibility::~Visibility()
 bool Visibility::addData(cf32* subintresults)
 {
   int status;
+  std::cout << " &&&&&&&& Visibility::addData from this subintegration" << std::endl;
+  int num_zeroes = 0;
+  for(size_t i = 0; i < resultlength; ++i) {
+    if(sqrt(subintresults[i].re*subintresults[i].re + subintresults[i].im*subintresults[i].im) < 1e-8) {
+      ++num_zeroes;
+    }
+  }
+  std::cout << "    &&&&& --> subintresults[113000/4] = " << subintresults[113000/4].re << " + " << subintresults[113000/4].im << "i" << std::endl;
+  std::cout << "    &&&&& --> subintresults[113000/2] = " << subintresults[113000/2].re << " + " << subintresults[113000/2].im << "i" << std::endl;
+  std::cout << "    &&&&& for this one, " << num_zeroes << "/" << resultlength << " are zeroes (in quadrature)" << std::endl;
 
   status = vectorAdd_cf32_I(subintresults, results, resultlength);
   if(status != vecNoErr)
@@ -211,6 +222,7 @@ string sec2time(const int& sec) {
 
 void Visibility::increment()
 {
+  std::cout << " &&&&&&&& Visibility::increment" << std::endl;
   int status, sec;
 
   if (currentscan >= model->getNumScans()) {
@@ -362,6 +374,26 @@ void Visibility::writedata()
   int dumpmjd, intsec;
   double dumpseconds, acw;
 
+  static size_t call_num = 0;
+
+  size_t num_zero = 0;
+  size_t num_nonzero = 0;
+  for(int i = 0; i < 2*this->resultlength; ++i) {
+    if( fabs(this->floatresults[i]) > 1e-8 ) {
+      //std::cout << "this->floatresults[" << i << "] = " << this->floatresults[i] << std::endl;
+      ++num_nonzero;
+    } else {
+      ++num_zero;
+    }
+    if(call_num == 0) {
+      std::cout << " ;;;; 0 " << i << " " << this->floatresults[i] << std::endl;
+    }
+  }
+
+  std::cout << " ***** (call num = " << call_num << ")" << std::endl;
+  ++call_num;
+  std::cout << " ***** num_zero = " << num_zero << std::endl;
+  std::cout << "   *** num_nonzero = " << num_nonzero << std::endl;
 //  cdebug << startl << "Vis. " << visID << " is starting to write out data" << endl;
 
   if(currentscan >= model->getNumScans() || currentstartseconds + model->getScanStartSec(currentscan, expermjd, experseconds) >= executeseconds)
@@ -411,12 +443,17 @@ void Visibility::writedata()
       resultindex = config->getCoreResultBWeightOffset(currentconfigindex, freqindex, i)*2;
       for(int b=0;b<binloop;b++) {
         for(int k=0;k<config->getBNumPolProducts(currentconfigindex, i, j);k++) {
-          if(binloop>1)
+          if(binloop>1) {
+            std::cout << "outcome [1]" << std::endl;
             baselineweights[i][freqindex][b][k] = floatresults[resultindex]/(fftsperintegration*polyco->getBinWidth(b));
-          else if(config->pulsarBinOn(currentconfigindex))
+          } else if(config->pulsarBinOn(currentconfigindex)) {
+            std::cout << "outcome [2]" << std::endl;
             baselineweights[i][freqindex][b][k] = floatresults[resultindex]/(fftsperintegration*binweightdivisor[0]);
-          else
+          } else {
+            std::cout << "outcome [3]" << std::endl;
             baselineweights[i][freqindex][b][k] = floatresults[resultindex]/fftsperintegration;
+            std::cout << "set baselineweights[i][freqindex][b][k] = fr[" << resultindex << "]/... = " << baselineweights[i][freqindex][b][k] << std::endl;
+          }
           baselineweightcounts[i][freqindex][b][k]++;
           if(targetfreqindex != freqindex) {
             baselineweights[i][targetfreqindex][b][k] += baselineweights[i][freqindex][b][k]*config->getFreqTableBandwidth(freqindex)/config->getFreqTableBandwidth(targetfreqindex);
@@ -456,6 +493,7 @@ void Visibility::writedata()
       {
         freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
         if(config->isFrequencyUsed(currentconfigindex, freqindex) || config->isEquivalentFrequencyUsed(currentconfigindex, freqindex)) {
+          std::cout << " ### autocorrweights[" << i << "][" << j << "][" << k << "] = floatresults[" << resultindex << "]/fftsperintegration = " << floatresults[resultindex]/fftsperintegration << std::endl;
           autocorrweights[i][j][k] = floatresults[resultindex]/fftsperintegration;
           resultindex++;
         }
@@ -872,6 +910,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
             coreoffset = (b*numpolproducts + k)*freqchannels;
 
             //open the file for appending in ascii and write the ascii header
+            std::cout << " ))))) baselineweights[i=" << i << "][freqindex=" << freqindex << "][b=" << b << "][k=" << k << "] = " << baselineweights[i][freqindex][b][k] << std::endl;
             if(baselineweights[i][freqindex][b][k] > 0.0)
             {
               //cout << "About to write out baseline[" << i << "][" << s << "][" << k << "] from coreindex " << coreindex+coreoffset << ", whose 6th vis is " << results[coreindex+correoffset+6].re << " + " << results[coreindex+coreoffset+6].im << " i" << endl;
@@ -910,6 +949,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
     {
       sprintf(filename, "%s/DIFX_%05d_%06d.s%04d.b%04d", config->getOutputFilename().c_str(), expermjd, experseconds, s, b);
       output.open(filename, ios::app);
+      std::cout << " << writeDiFX - writing " << todiskmemptrs[filecount]-filecount*(todiskbufferlength/numfiles) << " bytes" << std::endl;
       output.write(&(todiskbuffer[filecount*(todiskbufferlength/numfiles)]), todiskmemptrs[filecount]-filecount*(todiskbufferlength/numfiles));
       output.close();
       if(!output)
@@ -927,6 +967,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
   //now each autocorrelation visibility point if necessary
   if(config->writeAutoCorrs(currentconfigindex))
   {
+    std::cout << " >> in Visiblity::writeDifx, in the ->writeAutCorrs branch" << std::endl;
     buvw[0] = 0.0;
     buvw[1] = 0.0;
     buvw[2] = 0.0;
@@ -938,6 +979,7 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
       {
         for(int k=0;k<config->getDNumTotalBands(currentconfigindex, i); k++)
         {
+          std::cout << " >> in Visiblity::writeDifx, at the k loop" << std::endl;
           freqindex = config->getDTotalFreqIndex(currentconfigindex, i, k);
           if(config->anyUsbXLsb(currentconfigindex) && config->getFreqTableLowerSideband(freqindex) && config->getFreqTableCorrelatedAgainstUpper(freqindex))
           {
@@ -948,9 +990,11 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
             }
           }
           if(config->isFrequencyOutput(currentconfigindex, i, freqindex)) {
+            std::cout << " >> in Visiblity::writeDiFX, in the isFrequencyOutput part, autocorrweights[" << i << "][" << j << "][" << k << "] = " << autocorrweights[i][j][k] << std::endl;
             freqchannels = config->getFNumChannels(freqindex)/config->getFChannelsToAverage(freqindex);
             if(autocorrweights[i][j][k] > 0.0)
             {
+              std::cout << " >> in Visiblity::writeDiFX, at a positive autocorr weight" << std::endl;
               //open, write the header and close
               if(k<config->getDNumRecordedBands(currentconfigindex, i))
                 polpair[0] = config->getDRecordedBandPol(currentconfigindex, i, k);
@@ -975,10 +1019,12 @@ void Visibility::writedifx(int dumpmjd, double dumpseconds)
     }
   }
 
+  std::cout << " >> in Visiblity::writedifx, above the todiskmemptrs; tdmp[0] = " << todiskmemptrs[0] << std::endl;
   if(todiskmemptrs[0] > 0)
   {
     //write out the autocorrelations, all in one hit
     sprintf(filename, "%s/DIFX_%05d_%06d.s%04d.b%04d", config->getOutputFilename().c_str(), expermjd, experseconds, 0, 0);
+    std::cout << " >> in Visiblity::writedifx, filename = " << filename << std::endl;
     output.open(filename, ios::app);
     output.write(todiskbuffer, todiskmemptrs[0]);
     output.close();
@@ -1321,6 +1367,7 @@ void Visibility::changeConfig(int configindex)
       const int localfreqindex = config->getBLocalFreqIndex(configindex, i, j);
       if(localfreqindex >= 0) {
         const int numpolproducts = config->getBNumPolProducts(configindex, i, localfreqindex);
+        //std::cout << " ^^^^^^^^ baseline weights: numpolproducts = " << numpolproducts << std::endl;
         assert(numpolproducts >= 1);
         baselineweights[i][j] = new f32*[pulsarwidth]();
         baselineweightcounts[i][j] = new int*[pulsarwidth]();

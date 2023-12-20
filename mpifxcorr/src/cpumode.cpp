@@ -721,6 +721,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
     if (count>1) {
       // Do linear to circular conversion if required
       if (linear2circular) {
+        std::exit(1);
 
 	// FIXME: Apply gain correction
 
@@ -747,6 +748,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
 
 	  break; 
       } else if (phasepoloffset) {
+        std::exit(20);
 	// Add phase offset to Lcp
 
 	if (config->getDRecordedBandPol(configindex, datastreamindex, indices[0])=='R') {
@@ -774,11 +776,17 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
         {
 	  weights[1][indices[0]] += perbandweights[subloopindex][indices[0]]*perbandweights[subloopindex][indices[1]];
 	  weights[1][indices[1]] += perbandweights[subloopindex][indices[0]]*perbandweights[subloopindex][indices[1]];
+	  //weights[1][indices[0]] = 0;
+	  //weights[1][indices[1]] = 0;
+      //std::cout << "we are in the CPU perbandweight branch" << std::endl;
         }
         else
         {
 	  weights[1][indices[0]] += dataweight[subloopindex];
 	  weights[1][indices[1]] += dataweight[subloopindex];
+	  weights[1][indices[0]] = 0;
+	  weights[1][indices[1]] = 0;
+      //std::cout << "we are in the CPU **dataweight** branch" << std::endl;
         }
       }
     }
@@ -794,6 +802,7 @@ void CPUMode::process(int index, int subloopindex)  //frac sample error is in mi
         if(perbandweights)
         {
 	  weights[0][indices[k]] += perbandweights[subloopindex][indices[k]];
+      std::cout << "in the other place (CPU)" << std::endl;
         }
         else
         {

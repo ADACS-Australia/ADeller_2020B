@@ -336,7 +336,7 @@ int GPUMode::process_gpu(int fftloop, int numBufferedFFTs, int startblock,
     start = high_resolution_clock::now();
 
     // Run the fringe rotation
-    std::cout << "Starting processing" << std::endl;
+    std::cout << "Starting processing; numblocks = " << numblocks << std::endl;
     fringeRotation(fftloop, numBufferedFFTs, startblock, numblocks);
 
     // todo: remove
@@ -512,6 +512,7 @@ bool GPUMode::is_data_valid(int index, int subloopindex) {
 
 void GPUMode::process_unpack(int index, int subloopindex) {
     // Clear the perbandweights for this subloopindex
+	std::cout << "we are in process_unpack" << std::endl;
     if(perbandweights)
     {
         for(int b = 0; b < numrecordedbands; ++b)
@@ -541,7 +542,9 @@ void GPUMode::process_unpack(int index, int subloopindex) {
 
     if (!is_dataweight_valid(subloopindex)) {
         gValidSamples->ptr()[subloopindex] = false;
+		std::cout << "it's not even a valid sample" << std::endl;
     } else {
+		std::cout << "it is a valid sample" << std::endl;
         // Todo: This can definitely be cleaned up and improved
         for (int i = 0; i < numrecordedfreqs; i++) {
             int count = 0;
@@ -570,11 +573,15 @@ void GPUMode::process_unpack(int index, int subloopindex) {
 
                     //store the weight for the autocorrelations
                     if (perbandweights) {
+						std::cout << "we're in the top" << std::endl;
                         weights[0][j] += perbandweights[subloopindex][j];
                     } else {
+						std::cout << "we're in the bottom" << std::endl;
                         weights[0][j] += dataweight[subloopindex];
                     }
-                }
+                } else {
+					std::cout << "it's not a matching band" << std::endl;
+				}
             }
 
             if (count > 1) {
@@ -607,12 +614,15 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
     }
 
     if (!is_data_valid(subloopindex, subloopindex)) {
+		//std::cout << "in the perbandweights branch, !is_data_valid case" << std::endl;
         // since these data weights can be retreived after this processing ends, reset them to a default of zero in case they don't get updated
         dataweight[subloopindex] = 0.0;
 
         gValidSamples->ptr()[subloopindex] = false;
         return;
-    }
+    } else {
+		//std::cout << "in the perbandweights branch, IS_DATA_VALID case" << std::endl;
+	}
 
     gValidSamples->ptr()[subloopindex] = true;
 
@@ -680,9 +690,11 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
 
                     //store the weight for the autocorrelations
                     if (perbandweights) {
-                        weights[0][j] += perbandweights[subloopindex][j];
+                        weights[0][j] += 1;//perbandweights[subloopindex][j];
+						//std::cout << "in pbw, perbandweights[0][j=" << j << "] = " << perbandweights[subloopindex][j] << std::endl;
                     } else {
                         weights[0][j] += dataweight[subloopindex];
+						//std::cout << "in dw, dataweight[0][j=" << j << "] = " << dataweight[subloopindex] << std::endl;
                     }
                 }
             }
@@ -690,10 +702,15 @@ void GPUMode::set_weights(int subloopindex, int nframes) {
             if (count > 1) {
                 //store the weights
                 if (perbandweights) {
+					/*
                     weights[1][indices->ptr()[(i * MAX_INDICIES)]] += perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES)]] *
                                                      perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES) + 1]];
                     weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] += perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES)]] *
                                                      perbandweights[subloopindex][indices->ptr()[(i * MAX_INDICIES) + 1]];
+													 */
+                    weights[1][indices->ptr()[(i * MAX_INDICIES)]] += 1;
+                    weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] += 1;
+					std::cout << "we are going to this place right?? -- weights[1][indicies[" << i * MAX_INDICIES << "]=" << indices->ptr()[(i * MAX_INDICIES) + 1] << "] = " << weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] << std::endl;
                 } else {
                     weights[1][indices->ptr()[(i * MAX_INDICIES)]] += dataweight[subloopindex];
                     weights[1][indices->ptr()[(i * MAX_INDICIES) + 1]] += dataweight[subloopindex];

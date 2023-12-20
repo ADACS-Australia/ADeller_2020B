@@ -170,8 +170,13 @@ void GPUCore::loopprocess(int threadid) {
         }
 
         //process our section of responsibility for this time range
-        processgpudata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco,
+        processgpudata(numprocessed % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco,
                        scratchspace);
+        cudaDeviceSynchronize();
+        //std::cout << "  $$$$ just after processgpudata, numblocks = " << numblocks << std::endl;
+        //std::cout << "   $ -> procslots[.].results[113000/4] = " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/4].re << " + " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/4].im << "i" << std::endl;
+        //std::cout << "   $ -> procslots[.].results[113000/2] = " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/2].re << " + " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/2].im << "i" << std::endl;
+        ++numprocessed;
 
         if (threadid == 0)
             numcomplete++;
@@ -192,6 +197,8 @@ void GPUCore::loopprocess(int threadid) {
             lastconfigindex = currentslot->configindex;
         }
     }
+
+
 
     //fallen out of loop, so must be finished.  Unlock held mutex
 //  cinfo << startl << "PROCESS " << mpiid << "/" << threadid << " process thread about to free resources and exit" << endl;
@@ -618,6 +625,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
 //        checkCuda(cudaStreamSynchronize(cuStream));
 
 
+        std::cout << ",,,,, copying " << numdatastreams << " data streams back from GPU -> host" << std::endl;
         for (int j = 0; j < numdatastreams; j++) {
             ((GPUMode *) modes[j])->fftd_gpu->copyToHost();
             ((GPUMode *) modes[j])->conj_fftd_gpu->copyToHost();
@@ -763,6 +771,7 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
                                         auto bweight = weight1 * weight2;
 
                                         scratchspace->baselineweight[f][0][j][p] += bweight;
+                    //std::cout << "????? for info, ss->baselineweight[f=" << f << "][0][j=" << j << "][" << p << "] = " << scratchspace->baselineweight[f][0][j][p] << std::endl;
                                     }
                                 }
                             }
@@ -842,6 +851,10 @@ GPUCore::processgpudata(int index, int threadid, int startblock, int numblocks, 
             }
         }
     }
+
+    //std::cout << "  !!!! inside gpucore" << std::endl;
+    //std::cout << "   ! -> procslots[.].floatresults[113000/2] = " << procslots[index].floatresults[113000/2+1] << " + " << procslots[index].floatresults[113000/2+1] << "i" << std::endl;
+    //std::cout << "   ! -> procslots[.].floatresults[113000] = " << procslots[index].floatresults[113000+1] << " + " << procslots[index].floatresults[113000+1] << "i" << std::endl;
 
     //unlock the bweight copylock
     perr = pthread_mutex_unlock(&(procslots[index].bweightcopylock));

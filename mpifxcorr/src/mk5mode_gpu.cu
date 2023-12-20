@@ -134,6 +134,7 @@ float Mk5_GPUMode::unpack(int sampleoffset, int subloopindex)
       for(int b = 0; b < mark5stream->nchan; ++b)
       {
           perbandweights[subloopindex][b] = (goodsamples - invalid[b])/(float)unpacksamples;
+          std::cout << "set perbandweights[subloopindex=" << subloopindex << "][b=" << b << "] = " << perbandweights[subloopindex][b] << std::endl;
           totalinvalid += invalid[b];
       }
 
@@ -162,6 +163,8 @@ void Mk5_GPUMode::unpack_all(int framestounpack) {
     int unpack_threads = 64;
     int unpack_blocks = (framestounpack + unpack_threads - 1) / unpack_threads;
 
+    // This line can cause segfaults...
+    //std::cout << " CALL gpu_unpack -- tmp_mk5stream = " << unpack_blocks << "; packeddata_gpu = [" << packeddata_gpu->gpuPtr() << "]; unpackedarrays_gpu = [" << unpackedarrays_gpu->gpuPtr() << "]; framestounpack = " << framestounpack << "; valid_frames = " << valid_frames->gpuPtr() << std::endl;
     gpu_unpack<<<unpack_blocks, unpack_threads, 0, cuStream>>>(tmp_mk5stream, packeddata_gpu->gpuPtr(), unpackedarrays_gpu->gpuPtr(), framestounpack, valid_frames->gpuPtr());
 
     // Unfortunately we have to block here since we need the valid frames to find the correct dataweights

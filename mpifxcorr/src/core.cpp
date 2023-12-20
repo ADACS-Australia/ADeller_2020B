@@ -310,6 +310,11 @@ void Core::execute()
       break;
 
     //send the results back
+    /*
+    std::cout << "  @@@@ Doing MPI_Ssend" << std::endl;
+    std::cout << "   @ -> procslots[.].results[113000/4] = " << procslots[numreceived%RECEIVE_RING_LENGTH].results[113000/4].re << " + " << procslots[numreceived%RECEIVE_RING_LENGTH].results[113000/4].im << "i" << std::endl;
+    std::cout << "   @ -> procslots[.].results[113000/2] = " << procslots[numreceived%RECEIVE_RING_LENGTH].results[113000/2].re << " + " << procslots[numreceived%RECEIVE_RING_LENGTH].results[113000/2].im << "i" << std::endl;
+    */
     MPI_Ssend(procslots[numreceived%RECEIVE_RING_LENGTH].results, procslots[numreceived%RECEIVE_RING_LENGTH].coreresultlength*2, MPI_FLOAT, fxcorr::MANAGERID, procslots[numreceived%RECEIVE_RING_LENGTH].resultsvalid, return_comm);
     if(procslots[numreceived%RECEIVE_RING_LENGTH].configindex != lastconfigindex)
     {
@@ -538,7 +543,11 @@ void Core::loopprocess(int threadid)
     }
 
     //process our section of responsibility for this time range
-    processdata(numprocessed++ % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, scratchspace);
+    processdata(numprocessed % RECEIVE_RING_LENGTH, threadid, startblock, numblocks, modes, currentpolyco, scratchspace);
+    //std::cout << "  $$$$ just after process(cpu)data, numblocks = " << numblocks << std::endl;
+    //std::cout << "   $ -> procslots[.].results[113000/4] = " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/4].re << " + " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/4].im << "i" << std::endl;
+    //std::cout << "   $ -> procslots[.].results[113000/2] = " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/2].re << " + " << procslots[numprocessed%RECEIVE_RING_LENGTH].results[113000/2].im << "i" << std::endl;
+    ++numprocessed;
 
     if(threadid == 0)
       numcomplete++;
@@ -829,6 +838,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
     {
       if(config->phasedArrayOn(procslots[index].configindex)) //phased array processing
       {
+        std::cout << "unexpectedly in the phaseArrayOn section" << std::endl;
+        std::exit(1);
         freqchannels = config->getFNumChannels(procslots[index].configindex);
         for(int j=0;j<config->getFPhasedArrayNumPols(procslots[index].configindex, f);j++)
         {
@@ -925,6 +936,8 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
 
                   if(procslots[index].pulsarbin)
                   {
+                    std::cout << "unexpectedly in the pulsar binning section" << std::endl;
+                    std::exit(1);
                     //multiply into scratch space
                     status = vectorMul_cf32(vis1, vis2, scratchspace->pulsarscratchspace, xmacstrideremain);
                     if(status != vecNoErr)
@@ -1047,6 +1060,7 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
                     bweight = weight1*weight2;
 
                     scratchspace->baselineweight[f][0][j][p] += bweight;
+                    //std::cout << "????? for info, ss->baselineweight[f=" << f << "][0][j=" << j << "][" << p << "] = " << scratchspace->baselineweight[f][0][j][p] << std::endl;
                   }
 		}
 	      }
@@ -1110,6 +1124,10 @@ void Core::processdata(int index, int threadid, int startblock, int numblocks, M
       }
     }
   }
+
+    //std::cout << "  !!!! inside cpucore" << std::endl;
+    //std::cout << "   ! -> procslots[.].floatresults[113000/2] = " << procslots[index].floatresults[113000/2+1] << " + " << procslots[index].floatresults[113000/2+1] << "i" << std::endl;
+    //std::cout << "   ! -> procslots[.].floatresults[113000] = " << procslots[index].floatresults[113000+1] << " + " << procslots[index].floatresults[113000+1] << "i" << std::endl;
 
   //unlock the bweight copylock
   perr = pthread_mutex_unlock(&(procslots[index].bweightcopylock));
